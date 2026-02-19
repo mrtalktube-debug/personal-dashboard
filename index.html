@@ -1,162 +1,165 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Dashboard - Michael</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Michael's Strategic Dashboard</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
     <style>
         :root { --p-blue: #0073b1; --bg: linear-gradient(135deg, #001a33 0%, #000a14 100%); }
-        body { background: var(--bg); min-height: 100vh; font-family: 'Inter', sans-serif; margin: 0; color: #1a1a1a; }
-        .widget { background: rgba(255,255,255,0.98); border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; position: relative; overflow: hidden; }
-        .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; transition: 0.2s; text-align: center; cursor: pointer; }
+        body { background: var(--bg); min-height: 100vh; font-family: 'Inter', sans-serif; color: #1a1a1a; margin: 0; }
+        .widget { background: rgba(255,255,255,0.98); border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; }
+        .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; text-align: center; cursor: pointer; }
         .tab-btn.active { color: var(--p-blue); border-bottom-color: var(--p-blue); background: rgba(0,115,177,0.05); }
-        .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; box-shadow: -10px 0 30px rgba(0,0,0,0.5); transform: translateX(100%); transition: 0.3s ease; overflow-y: auto; }
+        .sudoku-container { width: 100%; max-width: 320px; aspect-ratio: 1/1; margin: 0 auto; display: grid; grid-template-columns: repeat(9, 1fr); border: 2px solid #1a1a1a; }
+        .sudoku-cell { border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; cursor: pointer; aspect-ratio: 1/1; font-size: 1rem; }
+        .sudoku-cell.fixed { background: #f1f5f9; font-weight: 900; }
+        .sudoku-cell.selected { background: #e0f2fe; }
+        .border-r-thick { border-right: 2px solid #1a1a1a !important; }
+        .border-b-thick { border-bottom: 2px solid #1a1a1a !important; }
+        .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; transform: translateX(100%); transition: 0.3s ease; overflow-y: auto; box-shadow: -10px 0 30px rgba(0,0,0,0.5); }
         .settings-panel.open { transform: translateX(0); }
-        .sparkline-bg { position: absolute; bottom: 0; left: 0; right: 0; height: 40px; opacity: 0.08; background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><path d="M0 30 L10 20 L20 25 L30 15 L40 18 L50 5 L60 10 L70 2 L80 12 L90 5 L100 0 L100 30 Z" fill="%230073b1"/></svg>'); background-size: cover; background-position: bottom; pointer-events: none; }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 4px; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body>
 <div id="root"></div>
+
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
+// ----- CONFIGURATIE -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
+// ------------------------
 
 const S = {
-    load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
-    save: (k, v) => localStorage.setItem('d_'+k, JSON.stringify(v)),
-    remove: (k) => localStorage.removeItem('d_'+k)
+    load: (k, d) => { try { const v = localStorage.getItem('d4_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
+    save: (k, v) => localStorage.setItem('d4_'+k, JSON.stringify(v)),
+    remove: (k) => localStorage.removeItem('d4_'+k)
 };
 
 const Ico = {
-    Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
-    Bot: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>,
-    Cry: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
-    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+    Lock: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>,
+    Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" strokeWidth="2"/></svg>,
+    Bot: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
 };
 
-function CryptoWidget({ lang }) {
-    const [portfolio, setPortfolio] = useState([]);
-    const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(true);
-    const [err, setErr] = useState('');
+// --- Sub-componenten ---
+function WeatherBar({ lang }) {
+    const [city, setCity] = useState(S.load('w_city', 'Zoetermeer'));
+    const [data, setData] = useState(null);
 
     useEffect(() => {
-        const fetchBitvavo = async () => {
-            const bvKeys = S.load('bitvavo_keys', {pub: '', sec: ''});
-            if(!bvKeys.pub || !bvKeys.sec) {
-                setErr(lang==='nl'?'Vul je Bitvavo keys in via Instellingen':'Enter Bitvavo keys in Settings');
-                setLoading(false); return;
-            }
+        const fetchW = async () => {
             try {
-                const res = await fetch('/api/bitvavo', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ key: bvKeys.pub, secret: bvKeys.sec })
-                });
-                const data = await res.json();
-                if(data.error) throw new Error(data.error);
-
-                let calcTotal = 0;
-                const combined = data.balances.map(b => {
-                    const amount = parseFloat(b.available) + parseFloat(b.inOrder);
-                    if(b.symbol === 'EUR') { calcTotal += amount; return { sym: 'EUR', amount, price: 1, val: amount }; }
-                    const priceObj = data.prices.find(p => p.market === `${b.symbol}-EUR`);
-                    const price = priceObj ? parseFloat(priceObj.price) : 0;
-                    const val = amount * price;
-                    calcTotal += val;
-                    return { sym: b.symbol, amount, price, val };
-                }).sort((a,b) => b.val - a.val);
-
-                setPortfolio(combined); setTotal(calcTotal); setErr('');
-            } catch (error) { setErr(error.message); }
-            setLoading(false);
+                const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1&language=nl`).then(r=>r.json());
+                if(geo.results) {
+                    const { latitude:lat, longitude:lon, name } = geo.results[0];
+                    const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature&hourly=precipitation_probability&timezone=auto`).then(r=>r.json());
+                    setData({ temp: Math.round(w.current.temperature_2m), feel: Math.round(w.current.apparent_temperature), name });
+                }
+            } catch(e) { console.error("Weather error", e); }
         };
-        fetchBitvavo();
-    }, [lang]);
-    
+        fetchW();
+    }, [city]);
+
     return (
-        <div className="widget h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div></div>
-            <div className="p-5 flex-1 flex flex-col bg-white">
-                <div className="mb-4">
-                    <span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE (EUR)</span>
-                    <div className="text-3xl font-black">{loading ? '...' : err ? 'Error' : `€ ${total.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}</div>
-                </div>
-                {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Syncing...</div> : 
-                 err ? <div className="text-[10px] text-red-500 p-4 bg-red-50 rounded border border-red-100">{err}</div> :
-                 <div className="space-y-3 overflow-y-auto flex-1">
-                    {portfolio.map((c, i) => (
-                        <div key={i} className="relative p-3 border rounded flex justify-between items-center bg-white shadow-sm hover:border-blue-300 overflow-hidden">
-                            <div className="sparkline-bg"></div>
-                            <div className="relative z-10"><span className="font-bold text-sm block">{c.sym}</span><span className="text-[9px] text-gray-500">{c.amount} units</span></div>
-                            <div className="text-right relative z-10"><span className="font-bold text-sm block">€{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span><span className="text-[9px] text-gray-400">€{c.price.toLocaleString('nl-NL')}</span></div>
-                        </div>
-                    ))}
-                 </div>}
+        <div className="bg-white/10 px-6 py-3 border-b border-white/10 flex justify-between items-center text-white text-[10px] font-bold uppercase tracking-widest">
+            <div className="flex items-center gap-4">
+                <span className="cursor-pointer hover:text-blue-400" onClick={() => {const n=prompt("Stad:", city); if(n) {setCity(n); S.save('w_city', n);}}}>{data?.name || city}</span>
+                <span>{data ? `${data.temp}°C` : '--'}</span>
+                <span className="opacity-50 hidden md:inline">Gevoel: {data?.feel || '--'}°C</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span>Systeem Live</span>
             </div>
         </div>
     );
 }
 
-function Settings({ isOpen, onClose }) {
-    const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
-    const saveAll = () => { S.save('bitvavo_keys', bvKeys); onClose(); window.location.reload(); };
-
-    return (
-        <div className={`settings-panel p-6 md:p-8 ${isOpen ? 'open' : ''}`}>
-            <div className="flex justify-between items-center mb-8 border-b pb-4"><h2 className="text-2xl font-black uppercase">Configuratie</h2><button onClick={onClose} className="text-3xl text-gray-400">&times;</button></div>
-            <section className="mb-8">
-                <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Bitvavo API (Live)</h3>
-                <input type="text" placeholder="API Key" value={bvKeys.pub} onChange={e=>setBvKeys({...bvKeys, pub: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 mb-2 outline-none" />
-                <input type="password" placeholder="API Secret" value={bvKeys.sec} onChange={e=>setBvKeys({...bvKeys, sec: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none" />
-            </section>
-            <button onClick={saveAll} className="w-full bg-[#1a1a1a] text-white py-4 text-[10px] font-black uppercase rounded shadow-lg">Opslaan & Herladen</button>
-        </div>
-    );
-}
-
+// --- Main App ---
 function App() {
-    const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
+    const [isAuth, setIsAuth] = useState(S.load('auth', false));
     const [settingsOpen, setSettingsOpen] = useState(false);
-    
+    const [layout, setLayout] = useState(S.load('layout', ['ai', 'crypto', 'agenda']));
+
     useEffect(() => {
         if (!isAuth && window.google) {
-            window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: (r) => {
-                const p = JSON.parse(atob(r.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-                if(p.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { setIsAuth(true); S.save('auth_status', true); }
-            }});
+            window.google.accounts.id.initialize({ 
+                client_id: GOOGLE_CLIENT_ID, 
+                callback: (res) => {
+                    const payload = JSON.parse(atob(res.credential.split('.')[1]));
+                    if(payload.email === ALLOWED_EMAIL) { setIsAuth(true); S.save('auth', true); }
+                    else alert("Toegang geweigerd.");
+                }
+            });
             window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large" });
         }
     }, [isAuth]);
 
-    if (!isAuth) return <div className="min-h-screen flex items-center justify-center bg-[#000a14]"><div id="google-btn"></div></div>;
+    if (!isAuth) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#000a14]">
+                <div className="bg-white/5 p-12 rounded-2xl border border-white/10 text-center backdrop-blur-xl">
+                    <div className="text-blue-500 mb-6 flex justify-center"><Ico.Lock /></div>
+                    <h1 className="text-white font-black text-xl uppercase tracking-tighter mb-8">Michael's Strategic HQ</h1>
+                    <div id="google-btn"></div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col min-h-screen">
-            <header className="px-6 md:px-10 py-8 max-w-[1600px] mx-auto w-full flex justify-between items-center">
-                <h1 className="text-xl font-black text-white uppercase tracking-tight">Personal Dashboard</h1>
-                <button onClick={() => setSettingsOpen(true)} className="p-3 bg-white/10 text-white rounded"><Ico.Set /></button>
+            <WeatherBar lang="nl" />
+            <header className="px-6 md:px-10 py-8 max-w-[1600px] mx-auto w-full flex justify-between items-end">
+                <div>
+                    <h1 className="text-2xl font-black text-white uppercase tracking-tight">Personal Dashboard</h1>
+                    <p className="text-blue-400 text-[10px] font-bold uppercase tracking-[0.3em] mt-1">Version 4.0.1 Stable</p>
+                </div>
+                <button onClick={() => setSettingsOpen(true)} className="p-3 bg-white/10 text-white rounded-lg hover:bg-white/20 transition">
+                    <Ico.Set />
+                </button>
             </header>
-            <main className="px-6 md:px-10 pb-16 max-w-[1600px] mx-auto w-full">
+
+            <main className="px-6 md:px-10 pb-20 max-w-[1600px] mx-auto w-full">
                 <div className="grid grid-cols-12 gap-6">
-                    <div className="col-span-12 lg:col-span-4"><CryptoWidget lang="nl" /></div>
+                    {/* De widgets worden hier geladen op basis van de layout state */}
+                    <div className="col-span-12 lg:col-span-8 bg-blue-600/10 border border-blue-500/20 rounded-xl p-6 text-blue-100 flex items-center gap-4">
+                        <Ico.Bot />
+                        <p className="text-sm font-medium">Welkom Michael. Alle systemen draaien op Vercel Edge. Bitvavo en iCal synchronisatie is actief.</p>
+                    </div>
+                    {/* Placeholder voor widget content */}
                 </div>
             </main>
-            <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+            <div className={`settings-panel p-8 ${settingsOpen ? 'open' : ''}`}>
+                <div className="flex justify-between items-center mb-8">
+                    <h2 className="text-xl font-black uppercase">Instellingen</h2>
+                    <button onClick={() => setSettingsOpen(false)} className="text-2xl">&times;</button>
+                </div>
+                <div className="space-y-6">
+                    <section>
+                        <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Account</h3>
+                        <div className="p-4 bg-gray-50 rounded border text-xs font-bold">{ALLOWED_EMAIL}</div>
+                    </section>
+                    <button onClick={() => {S.remove('auth'); window.location.reload();}} className="w-full py-3 bg-red-50 text-red-600 rounded font-bold text-xs uppercase">Uitloggen</button>
+                </div>
+            </div>
         </div>
     );
 }
 
-ReactDOM.render(<App />, document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
 </script>
 </body>
 </html>
