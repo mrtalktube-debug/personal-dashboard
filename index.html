@@ -53,31 +53,30 @@ const Ico = {
     Cal: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
     Nws: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>,
     Rad: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>,
+    Tag: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>,
     F1: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>,
     Glf: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path strokeWidth="2" d="M12 18a6 6 0 100-12 6 6 0 000 12z"/></svg>,
     Lng: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 11.37 9.198 15.299 6 18.5"/></svg>,
     Fod: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>,
     Sud: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16M10 4v16M14 4v16"/></svg>,
-    Spk: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>,
     Trs: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>,
-    Ref: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
     Up: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
     Dn: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
 };
 
-function WeatherBar({ lang }) {
+function WeatherBar() {
     const [c, setC] = useState(S.load('wcity', 'Zoetermeer'));
     const [w, setW] = useState(null);
     useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_CITY') { setC(e.detail.payload); S.save('wcity', e.detail.payload); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, []);
     useEffect(() => {
-        fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${c}&count=1&language=${lang}`).then(r=>r.json()).then(d=>{
+        fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${c}&count=1&language=nl`).then(r=>r.json()).then(d=>{
             if(d.results){
                 const { latitude:lat, longitude:lon, name } = d.results[0];
                 fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation&hourly=precipitation_probability&timezone=auto`)
                 .then(r=>r.json()).then(wd => { const ch=new Date().getHours(); let rf=null; for(let i=ch; i<ch+12; i++) { if(wd.hourly.precipitation_probability[i]>30){rf=i-ch;break;} } setW({ t: Math.round(wd.current.temperature_2m), f: Math.round(wd.current.apparent_temperature), rain: rf, name }); });
             }
         });
-    }, [c, lang]);
+    }, [c]);
 
     return (
         <div className="bg-white/10 px-4 md:px-10 py-3 border-b border-white/10 flex justify-between items-center text-white text-xs font-bold uppercase tracking-widest">
@@ -128,7 +127,7 @@ function AIWidget() {
                     {hist.slice(-10).map((m, i) => <div key={i} className={`flex flex-col ${m.r==='ai'?'items-start':'items-end'}`}><div className={`p-3 rounded-lg text-sm max-w-[85%] ${m.r==='ai'?'bg-gray-100':'bg-[#0073b1] text-white'}`}>{m.t}</div></div>)}
                 </div>
             </div>
-            {exp && <div className="p-3 border-t bg-gray-50 flex gap-2"><input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} placeholder="Commando (bijv. 'weer naar Parijs')..." className="flex-1 border p-2.5 rounded text-sm outline-none focus:border-blue-500" /><button onClick={send} className="bg-[#0073b1] text-white px-5 font-bold rounded text-xs uppercase">Zend</button></div>}
+            {exp && <div className="p-3 border-t bg-gray-50 flex gap-2"><input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} placeholder="Commando of vraag..." className="flex-1 border p-2.5 rounded text-sm outline-none focus:border-blue-500" /><button onClick={send} className="bg-[#0073b1] text-white px-5 font-bold rounded text-xs uppercase">Zend</button></div>}
         </div>
     );
 }
@@ -230,13 +229,32 @@ function RadarWidget() {
     );
 }
 
+function PepperWidget() {
+    const deals = [{ t: 'Sony WH-1000XM5', p: '€259', o: '€349', d: '25%', h: true }, { t: 'MacBook Air M2 13"', p: '€899', o: '€1199', d: '25%', h: true }];
+    return (
+        <div className="widget h-[350px]">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper Deals</h3></div></div>
+            <div className="p-4 flex gap-4 overflow-x-auto flex-1 items-center bg-white hide-scroll">
+                {deals.map((d, i) => (
+                    <div key={i} className="min-w-[180px] h-[260px] border rounded p-3 bg-white hover:border-red-400 transition flex flex-col shadow-sm">
+                        <div className="h-[80px] w-full bg-gray-100 rounded mb-3 flex items-center justify-center text-[9px] font-bold text-gray-400 border border-dashed">IMG</div>
+                        <div className="flex gap-1 mb-2">{d.h && <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">HOT</span>}<span className="bg-green-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">-{d.d}</span></div>
+                        <h4 className="text-[11px] font-bold leading-tight mb-auto">{d.t}</h4>
+                        <div className="flex items-baseline gap-2 mt-3"><span className="text-lg font-bold text-blue-600">{d.p}</span><span className="text-[10px] text-gray-400 line-through font-bold">{d.o}</span></div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function RecipeWidget() {
     const allRecs = [{ n: "Ribeye Herb Butter", p: 52, k: 650, t: 15, c: "Vlees", ing: "Ribeye\nBoter", stp: "1. Bakken.\n2. Rusten." }, { n: "Kip Teriyaki", p: 48, k: 510, t: 25, c: "Kip", ing: "Kip\nRijst", stp: "1. Koken.\n2. Bakken." }];
     const [f, setF] = useState('All'); const [exp, setExp] = useState(null);
     const filtered = allRecs.filter(r => f === 'All' || r.c === f);
     return (
         <div className="widget h-[350px]">
-            <div className="p-4 border-b bg-gray-50 flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Fod/><h3 className="text-[10px] font-black uppercase tracking-widest">High-Protein Meals</h3></div><button className="text-gray-500 hover:text-blue-600 bg-white p-1.5 rounded border shadow-sm"><Ico.Ref/></button></div>
+            <div className="p-4 border-b bg-gray-50 flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Fod/><h3 className="text-[10px] font-black uppercase tracking-widest">High-Protein Meals</h3></div><button className="text-gray-500 hover:text-blue-600 bg-white p-1.5 rounded border shadow-sm"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></button></div>
             <div className="flex gap-2 p-3 border-b bg-white overflow-x-auto hide-scroll">{['All', 'Vlees', 'Kip', 'Vis'].map(x => <button key={x} onClick={()=>setF(x)} className={`px-3 py-1 rounded-full text-[9px] font-bold border ${f===x?'bg-gray-900 text-white':'text-gray-500 bg-gray-50'}`}>{x.toUpperCase()}</button>)}</div>
             <div className="p-4 space-y-3 flex-1 overflow-y-auto bg-white">
                 {filtered.map((r, i) => (
@@ -338,9 +356,9 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
 
 function App() {
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [layout, setLayout] = useState(S.load('layout', ['ai', 'crypto', 'agenda', 'news', 'radar', 'recipe', 'f1', 'golf', 'sudoku', 'lang']));
+    const [layout, setLayout] = useState(S.load('layout', ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'f1', 'golf', 'sudoku', 'lang']));
     
-    const widgets = { ai: <div className="col-span-12 lg:col-span-8"><AIWidget /></div>, crypto: <div className="col-span-12 lg:col-span-4"><CryptoWidget /></div>, agenda: <div className="col-span-12 lg:col-span-4"><AgendaWidget /></div>, news: <div className="col-span-12 lg:col-span-8"><NewsWidget /></div>, radar: <div className="col-span-12 lg:col-span-4"><RadarWidget /></div>, recipe: <div className="col-span-12 lg:col-span-4"><RecipeWidget /></div>, f1: <div className="col-span-12 lg:col-span-4"><SportWidget type="F1" /></div>, golf: <div className="col-span-12 lg:col-span-4"><SportWidget type="Golf" /></div>, sudoku: <div className="col-span-12 lg:col-span-4"><SudokuWidget /></div>, lang: <div className="col-span-12 lg:col-span-4"><LanguageWidget /></div> };
+    const widgets = { ai: <div className="col-span-12 lg:col-span-8"><AIWidget /></div>, crypto: <div className="col-span-12 lg:col-span-4"><CryptoWidget /></div>, agenda: <div className="col-span-12 lg:col-span-4"><AgendaWidget /></div>, news: <div className="col-span-12 lg:col-span-8"><NewsWidget /></div>, radar: <div className="col-span-12 lg:col-span-4"><RadarWidget /></div>, pepper: <div className="col-span-12 lg:col-span-8"><PepperWidget /></div>, recipe: <div className="col-span-12 lg:col-span-4"><RecipeWidget /></div>, f1: <div className="col-span-12 lg:col-span-4"><SportWidget type="F1" /></div>, golf: <div className="col-span-12 lg:col-span-4"><SportWidget type="Golf" /></div>, sudoku: <div className="col-span-12 lg:col-span-4"><SudokuWidget /></div>, lang: <div className="col-span-12 lg:col-span-4"><LanguageWidget /></div> };
 
     return (
         <div className="flex flex-col min-h-screen">
