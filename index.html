@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Dashboard - Michael</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -38,9 +39,15 @@
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
+// ----- BEVEILIGINGS INSTELLINGEN -----
+const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
+const ALLOWED_EMAIL = "diabaas3@gmail.com"; // <<--- VUL HIER JOUW GMAIL IN
+// -------------------------------------
+
 const S = {
     load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
-    save: (k, v) => localStorage.setItem('d_'+k, JSON.stringify(v))
+    save: (k, v) => localStorage.setItem('d_'+k, JSON.stringify(v)),
+    remove: (k) => localStorage.removeItem('d_'+k)
 };
 
 const emitCmd = (type, payload) => window.dispatchEvent(new CustomEvent('dashCmd', { detail: { type, payload } }));
@@ -72,7 +79,7 @@ const Ico = {
     Up: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
     Dn: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>,
     Drag: () => <svg className="w-4 h-4 text-gray-400 cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>,
-    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
 };
 
 function WeatherBar({ lang }) {
@@ -92,9 +99,9 @@ function WeatherBar({ lang }) {
     return (
         <div className="bg-white/10 px-4 md:px-10 py-3 border-b border-white/10 flex justify-between items-center text-white text-xs font-bold uppercase tracking-widest">
             <div className="flex gap-4 md:gap-8 items-center w-full">
-                <div className="flex items-center gap-2 cursor-pointer hover:text-blue-300 transition" onClick={()=>{const n=prompt(lang==='nl'?"Stad:":"City:",c);if(n){setC(n);S.save('wcity',n);}}}><Ico.Wea/> <span>{w?.name||c}</span></div>
+                <div className="flex items-center gap-2 cursor-pointer hover:text-blue-300 transition" onClick={()=>{const n=prompt(lang==='nl'?"Stad:":"City:",c);if(n){setC(n);S.save('wcity',n);}}}><Ico.Wea/> <span className="hidden md:inline">{w?.name||c}</span></div>
                 <div className="flex gap-3 md:gap-4 items-center"><span className="text-sm md:text-lg">{w?.t}°C</span><span className="opacity-60 text-[10px] md:text-xs">{lang==='nl'?'Gevoel':'Feels'}: {w?.f}°C</span></div>
-                <div className="ml-auto bg-blue-500/20 px-3 py-1.5 rounded flex items-center gap-2"><span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span><span className="hidden md:inline">{w?.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : w?.rain ? (lang==='nl'?`Regen in ${w.rain}u`:`Rain in ${w.rain}h`) : (lang==='nl'?"Geen regen":"No rain")}</span></div>
+                <div className="ml-auto bg-blue-500/20 px-3 py-1.5 rounded flex items-center gap-2"><span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span><span className="hidden md:inline">{w?.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : w?.rain ? (lang==='nl'?`Regen over ${w.rain}u`:`Rain in ${w.rain}h`) : (lang==='nl'?"Geen regen verwacht":"No rain expected")}</span><span className="md:hidden">{w?.rain===0?"Regen":w?.rain?`${w.rain}u`:"Droog"}</span></div>
             </div>
         </div>
     );
@@ -115,7 +122,7 @@ function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
     const [hist, setHist] = useState(S.load('ai_hist', [{r: 'ai', t: lang==='nl'?'Welkom Michael. Typ een vraag of geef een commando.':'Welcome Michael. Ask a question or type a command.'}]));
     const [showHist, setShowHist] = useState(false);
-    const [model, setModel] = useState(S.load('ai_model', 'GPT-4o'));
+    const [model, setModel] = useState(S.load('ai_model', 'Claude 3.5 Sonnet'));
     const [exp, setExp] = useState(false);
     
     const speak = (txt) => { const u = new SpeechSynthesisUtterance(txt); u.lang = lang==='nl'?'nl-NL':'en-US'; window.speechSynthesis.speak(u); };
@@ -302,7 +309,7 @@ function SportWidget({ type, lang }) {
     const data = type === 'F1' ? { c: [{ r: "GP Bahrein", d: "02 Mar", t: "16:00" }], s: [{ p: 1, n: "Verstappen", fl: "🇳🇱", pt: 25 }], lst: { title: 'GP Abu Dhabi', p1: 'Verstappen', p2: 'Leclerc', p3: 'Russell' } } : { c: [{ r: "The Masters", d: "10 Apr", t: "14:00 NL" }], s: [{ p: 1, n: "Scheffler", fl: "🇺🇸", pt: "-12" }], lst: { title: 'Dubai Classic', p1: 'McIlroy (-14)', p2: 'Meronk (-13)', p3: 'Young (-12)' } };
     return (
         <div className="widget h-[400px]">
-            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500">{type === 'F1' ? <Ico.F1 /> : <Ico.Glf />}<h3 className="text-[10px] font-black uppercase tracking-widest">{type === 'F1' ? T[lang].f1 : T[lang].glf}</h3></div>
+            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500">{type === 'F1' ? <Ico.F1 /> : <Ico.Glf />}<h3 className="text-[10px] font-black uppercase tracking-widest">{type === 'F1' ? T[lang].f1 || 'F1 TOUR' : T[lang].glf || 'GOLF TOUR'}</h3></div>
             <div className="flex border-b bg-white">{[ {id:'cal', l:T[lang].cal}, {id:'std', l:T[lang].std}, {id:'lst', l:T[lang].lst} ].map(t => <button key={t.id} onClick={() => setTab(t.id)} className={`tab-btn ${tab === t.id ? 'active' : ''}`}>{t.l}</button>)}</div>
             <div className="p-4 flex-1 overflow-y-auto space-y-2 bg-white">
                 {tab === 'cal' && data.c.map(r => <div key={r.r} className="flex justify-between text-xs p-3 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-1">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
@@ -327,7 +334,7 @@ function SudokuWidget({ lang }) {
 
     return (
         <div className="widget p-6 h-[500px] bg-gray-50">
-            <div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2 text-gray-500"><Ico.Sud/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].sud}</h3></div><select value={diff} onChange={e=>{setDiff(e.target.value); generate(e.target.value)}} className="text-[10px] font-bold border rounded px-2 py-1 outline-none text-blue-700 bg-white"><option>Medium</option><option>Hard</option></select></div>
+            <div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2 text-gray-500"><Ico.Sud/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].sud || 'SUDOKU'}</h3></div><select value={diff} onChange={e=>{setDiff(e.target.value); generate(e.target.value)}} className="text-[10px] font-bold border rounded px-2 py-1 outline-none text-blue-700 bg-white"><option>Medium</option><option>Hard</option></select></div>
             <div className="flex-1 flex flex-col justify-center items-center w-full">
                 <div className="sudoku-container bg-white shadow-md">
                     {grid.map((c, i) => <div key={i} onClick={()=>setSel(i)} className={`sudoku-cell ${Math.floor(i/9)%3===2 && Math.floor(i/9)!==8 ? 'border-b-thick' : ''} ${i%3===2 && i%9!==8 ? 'border-r-thick' : ''} ${fixed[i] ? 'fixed' : c ? 'input' : ''} ${sel === i ? 'selected' : ''}`}>{c ? c : (notes[i].length > 0 && <div className="sudoku-candidates">{[1,2,3,4,5,6,7,8,9].map(n => <span key={n}>{notes[i].includes(n) ? n : ''}</span>)}</div>)}</div>)}
@@ -367,8 +374,8 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const [dragIdx, setDragIdx] = useState(null);
 
     const handleDragStart = (e, idx) => { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; };
-    const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v5', n); setDragIdx(null); };
-    const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v5', n); };
+    const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v6', n); setDragIdx(null); };
+    const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v6', n); };
 
     const saveAll = () => { S.save('api_keys_dyn', apis); S.save('icals_dyn', icals); S.save('ai_chat_url', aiUrl); onClose(); window.location.reload(); };
 
@@ -404,12 +411,11 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                     <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">iCal Links (Agenda)</h3><button onClick={()=>setIcals([...icals, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
                     {icals.map((c, i) => (
                         <div key={i} className="flex gap-2 mb-2">
-                            <input placeholder="Naam (bijv. Werk)" value={c.name} onChange={e=>{const n=[...icals]; n[i].name=e.target.value; setIcals(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
+                            <input placeholder="Naam" value={c.name} onChange={e=>{const n=[...icals]; n[i].name=e.target.value; setIcals(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
                             <input type="text" placeholder="https://..." value={c.val} onChange={e=>{const n=[...icals]; n[i].val=e.target.value; setIcals(n);}} className="flex-1 p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
                             <button onClick={()=>{const n=icals.filter((_,idx)=>idx!==i); setIcals(n);}} className="text-red-400 hover:text-red-600 font-bold px-1">&times;</button>
                         </div>
                     ))}
-                    <p className="text-[9px] text-gray-400 mt-2 italic">* De namen die je invult, worden direct de knoppen in je Agenda widget.</p>
                 </section>
 
                 <section className="bg-gray-50 p-4 rounded border border-gray-200">
@@ -427,10 +433,47 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
 }
 
 function App() {
+    const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lang, setLang] = useState(S.load('lang', 'nl'));
-    const [layout, setLayout] = useState(S.load('layout_v5', ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'f1', 'golf', 'sudoku', 'lang']));
+    const [layout, setLayout] = useState(S.load('layout_v6', ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'f1', 'golf', 'sudoku', 'lang']));
     
+    useEffect(() => {
+        if (!isAuth && window.google) {
+            window.google.accounts.id.initialize({
+                client_id: GOOGLE_CLIENT_ID,
+                callback: handleCredentialResponse
+            });
+            window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" });
+        }
+    }, [isAuth]);
+
+    const handleCredentialResponse = (response) => {
+        try {
+            const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+            if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) {
+                setIsAuth(true); S.save('auth_status', true);
+            } else {
+                alert("Toegang geweigerd! Dit account heeft geen permissie.");
+            }
+        } catch(e) { console.error("Login failed"); }
+    };
+
+    const handleLogout = () => { setIsAuth(false); S.remove('auth_status'); window.location.reload(); };
+
+    if (!isAuth) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-[#000a14] text-white">
+                <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
+                    <Ico.Lock />
+                    <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
+                    <p className="text-xs text-gray-400 mb-8">Personal Dashboard ver. 3.8</p>
+                    <div id="google-btn"></div>
+                </div>
+            </div>
+        );
+    }
+
     const widgets = { ai: <div className="col-span-12 lg:col-span-8"><AIWidget lang={lang} /></div>, crypto: <div className="col-span-12 lg:col-span-4"><CryptoWidget lang={lang} /></div>, agenda: <div className="col-span-12 lg:col-span-4"><AgendaWidget lang={lang} /></div>, news: <div className="col-span-12 lg:col-span-8"><NewsWidget lang={lang} /></div>, radar: <div className="col-span-12 lg:col-span-4"><RadarWidget lang={lang} /></div>, pepper: <div className="col-span-12 lg:col-span-4"><PepperWidget lang={lang} /></div>, recipe: <div className="col-span-12 lg:col-span-4"><RecipeWidget lang={lang} /></div>, f1: <div className="col-span-12 lg:col-span-4"><SportWidget type="F1" lang={lang} /></div>, golf: <div className="col-span-12 lg:col-span-4"><SportWidget type="Golf" lang={lang} /></div>, sudoku: <div className="col-span-12 lg:col-span-4"><SudokuWidget lang={lang} /></div>, lang: <div className="col-span-12 lg:col-span-4"><LanguageWidget lang={lang} /></div> };
 
     return (
@@ -438,9 +481,9 @@ function App() {
             <WeatherBar lang={lang} />
             <header className="px-6 md:px-10 pt-8 pb-6 max-w-[1600px] mx-auto w-full flex justify-between items-end border-b border-white/10 mb-6">
                 <div><h1 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase drop-shadow-md leading-none">Personal Dashboard</h1><p className="text-blue-200 text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em] mt-2">Michael</p></div>
-                <div className="flex gap-2 md:gap-3">
+                <div className="flex gap-2 md:gap-3 items-center">
                     <button onClick={() => {const nL=lang==='nl'?'en':'nl'; setLang(nL); S.save('lang', nL)}} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition font-bold text-[10px] uppercase">{lang === 'nl' ? '🇳🇱 NL' : '🇬🇧 EN'}</button>
-                    <button onClick={() => alert('Biometrisch inloggen en Cloud Sync worden hierna geactiveerd in de database-fase.')} className="p-2 md:p-3 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition backdrop-blur-sm flex items-center gap-2"><span className="text-[9px] font-bold uppercase tracking-widest hidden md:inline">Offline Modus</span><Ico.Lock /></button>
+                    <button onClick={handleLogout} className="p-2 md:p-3 bg-red-500/20 text-red-400 rounded hover:bg-red-500/40 hover:text-white transition backdrop-blur-sm flex items-center gap-2"><span className="text-[9px] font-bold uppercase tracking-widest hidden md:inline">Uitloggen</span><Ico.Lock /></button>
                     <button onClick={() => setSettingsOpen(true)} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition"><Ico.Set /></button>
                 </div>
             </header>
