@@ -36,7 +36,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 // ----- CONFIGURATIE -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
@@ -246,11 +246,31 @@ function CryptoWidget({ lang }) {
 function AgendaWidget({ lang }) {
     const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
     const cals = rawCals.map(c=>c.name).filter(Boolean);
-    const [view, setView] = useState('week'); const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
+    const [view, setView] = useState('dag'); 
+    const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
     const [f, setF] = useState(cals);
     const [items, setItems] = useState([]);
-    
-    useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => c.toLowerCase().includes(e.detail.payload?.toLowerCase() || '')); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
+    const [search, setSearch] = useState('');
+    const [showJump, setShowJump] = useState(false);
+
+    // Get ISO Week Number
+    const getWeek = (date) => {
+        const t = new Date(date.valueOf());
+        const dayNum = (date.getDay() + 6) % 7;
+        t.setDate(t.getDate() - dayNum + 3);
+        const firstThursday = t.valueOf();
+        t.setMonth(0, 1);
+        if (t.getDay() !== 4) t.setMonth(0, 1 + ((4 - t.getDay()) + 7) % 7);
+        return 1 + Math.ceil((firstThursday - t) / 604800000);
+    };
+
+    const fmtFullDate = (dStr) => {
+        const date = new Date(dStr);
+        const days = ['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];
+        const dayName = days[date.getDay()];
+        const week = getWeek(date);
+        return `${dayName} ${fmtDate(dStr)} (Week ${week})`;
+    };
 
     useEffect(() => {
         const fetchCals = async () => {
@@ -269,7 +289,6 @@ function AgendaWidget({ lang }) {
                     }
                 } catch(e) { console.error("iCal error", e); }
             }
-            if(allEvs.length === 0) allEvs = [{ t: 'Geen afspraken of vul iCal link in bij instellingen.', p: cals[0] || 'Systeem', date: new Date().toISOString().split('T')[0], time: '00:00' }];
             setItems(allEvs);
         };
         fetchCals();
@@ -278,16 +297,67 @@ function AgendaWidget({ lang }) {
     const colors = ['border-red-500', 'border-blue-500', 'border-green-500', 'border-purple-500', 'border-yellow-500', 'border-pink-500'];
     const getColor = (name) => colors[cals.indexOf(name) % colors.length];
 
-    const tEnd = new Date(d); tEnd.setDate(tEnd.getDate() + 7); const dEnd = tEnd.toISOString().split('T')[0];
-    const filteredItems = items.filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd))).sort((a,b)=>a.time.localeCompare(b.time));
+    const filteredItems = items.filter(i => {
+        const matchFilter = f.includes(i.p);
+        const matchSearch = search === '' || i.t.toLowerCase().includes(search.toLowerCase()) || i.p.toLowerCase().includes(search.toLowerCase());
+        const matchDate = search !== '' ? true : (view === 'dag' ? i.date === d : (i.date >= d && i.date <= new Date(new Date(d).setDate(new Date(d).getDate() + 7)).toISOString().split('T')[0]));
+        return matchFilter && matchSearch && matchDate;
+    }).sort((a,b)=>a.time.localeCompare(b.time));
 
     return (
-        <div className="widget h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].ag}</h3></div><div className="flex bg-gray-200 p-1 rounded"><button onClick={()=>setView('dag')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='dag'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].day}</button><button onClick={()=>setView('week')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='week'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].wk}</button></div></div>
-            <div className="flex border-b bg-white overflow-x-auto p-2 gap-2 hide-scroll">{cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-2 py-1.5 text-[9px] font-bold border rounded uppercase whitespace-nowrap ${f.includes(p)?'bg-[#0073b1] text-white border-[#0073b1]':'text-gray-400 bg-gray-50'}`}>{p}</button>)}</div>
-            <div className="p-3 flex border-b bg-gray-50 justify-center"><div className="flex items-center gap-1 bg-white border rounded"><button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&lt;</button><span className="text-[10px] font-bold w-[90px] text-center">{fmtDate(d)}</span><button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&gt;</button></div></div>
-            <div className="flex-1 p-4 bg-white grid grid-cols-2 gap-3 overflow-y-auto content-start">
-                {filteredItems.map((i, idx) => <div key={idx} className={`p-3 border-l-4 ${getColor(i.p)} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}><div className="flex justify-between items-start mb-1"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week'?`${fmtDate(i.date).slice(0,5)} `:''}{i.p}</span><span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded">{i.time}</span></div><span className="font-bold text-xs leading-tight">{i.t}</span></div>)}
+        <div className="widget h-[550px]">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                <div className="flex items-center gap-2 text-gray-500"><Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].ag}</h3></div>
+                <div className="flex gap-2">
+                    <button onClick={() => setD(new Date().toISOString().split('T')[0])} className="px-2 py-1 bg-blue-600 text-white text-[9px] font-bold rounded uppercase">Vandaag</button>
+                    <div className="flex bg-gray-200 p-1 rounded">
+                        <button onClick={()=>setView('dag')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='dag'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].day}</button>
+                        <button onClick={()=>setView('week')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='week'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].wk}</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div className="p-3 border-b bg-white">
+                <div className="relative">
+                    <input type="text" placeholder="Zoek op event, kalender..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full border p-2 pl-8 rounded text-xs outline-none focus:border-blue-500" />
+                    <div className="absolute left-2.5 top-2.5 text-gray-400 font-bold text-xs">🔍</div>
+                </div>
+            </div>
+
+            <div className="flex border-b bg-white overflow-x-auto p-2 gap-2 hide-scroll">
+                {cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-2 py-1.5 text-[9px] font-bold border rounded uppercase whitespace-nowrap ${f.includes(p)?'bg-[#0073b1] text-white border-[#0073b1]':'text-gray-400 bg-gray-50'}`}>{p}</button>)}
+            </div>
+
+            <div className="p-3 flex border-b bg-gray-50 justify-between items-center px-6">
+                <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="font-bold text-gray-500">&lt;</button>
+                <div className="relative">
+                    <span onClick={()=>setShowJump(!showJump)} className="text-[10px] font-black cursor-pointer hover:text-blue-600">{fmtFullDate(d)} ▼</span>
+                    {showJump && <input type="date" value={d} onChange={e=>{setD(e.target.value); setShowJump(false);}} className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 border p-1 rounded text-xs" />}
+                </div>
+                <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="font-bold text-gray-500">&gt;</button>
+            </div>
+
+            <div className="flex-1 p-4 bg-white grid grid-cols-1 md:grid-cols-2 gap-3 overflow-y-auto content-start">
+                {filteredItems.map((i, idx) => (
+                    <div key={idx} className={`p-3 border-l-4 ${getColor(i.p)} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}>
+                        <div className="flex justify-between items-start mb-1">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week' ? `${fmtDate(i.date).slice(0,5)} ` : ''}{i.p}</span>
+                            <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded">{i.time}</span>
+                        </div>
+                        <span className="font-bold text-xs leading-tight">{i.t}</span>
+                    </div>
+                ))}
+            </div>
+
+            <div className="p-4 bg-blue-50/50 border-t grid grid-cols-2 gap-4">
+                <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Schooldag Ryan</span>
+                    <span className="text-[10px] font-bold">08:30 - 15:30</span>
+                </div>
+                <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Schooldag Yaron</span>
+                    <span className="text-[10px] font-bold">09:00 - 16:00</span>
+                </div>
             </div>
         </div>
     );
