@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Dashboard - Michael</title>
+    <title>Michael Dashboard - Master</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -27,10 +27,10 @@
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
-// ----- AUTH & CONFIG -----
+// ----- CONFIG -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
-// -------------------------
+// ------------------
 
 const S = {
     load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
@@ -44,32 +44,11 @@ const Ico = {
     Cal: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
     Cry: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
     Bot: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>,
-    Nws: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+    Nws: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>,
+    Tag: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>,
+    Sud: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16M10 4v16M14 4v16"/></svg>,
+    Lng: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 11.37 9.198 15.299 6 18.5"/></svg>
 };
-
-// --- AI WIDGET ---
-function AIWidget() {
-    const [msg, setMsg] = useState('');
-    const [hist, setHist] = useState(S.load('ai_hist', [{r: 'ai', t: 'Welkom Michael. Hoe kan ik helpen?'} ]));
-    const send = async () => {
-        if(!msg) return; const n = [...hist, {r: 'usr', t: msg}]; setHist(n); S.save('ai_hist', n); setMsg('');
-        const key = (S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('openai')) || {}).val;
-        if (key) {
-            try {
-                const res = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` }, body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: [{role: 'user', content: msg}] }) });
-                const data = await res.json();
-                if(data.choices) { const r = [...n, {r: 'ai', t: data.choices[0].message.content}]; setHist(r); S.save('ai_hist', r); }
-            } catch(e) { setHist([...n, {r: 'ai', t: 'API Error.'}]); }
-        } else { setHist([...n, {r: 'ai', t: 'Geen OpenAI key ingesteld.'}]); }
-    };
-    return (
-        <div className="widget h-[300px] p-4 bg-white">
-            <div className="flex items-center gap-2 text-slate-500 mb-4"><Ico.Bot/><h3 className="text-[10px] font-black uppercase">AI Assistent</h3></div>
-            <div className="flex-1 overflow-y-auto mb-4 space-y-2 hide-scroll">{hist.map((m,i)=><div key={i} className={`text-xs p-2 rounded ${m.r==='ai'?'bg-gray-100':'bg-blue-600 text-white self-end'}`}>{m.t}</div>)}</div>
-            <div className="flex gap-2"><input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} className="flex-1 border-b text-xs outline-none p-1" placeholder="Vraag iets..."/><button onClick={send} className="text-blue-600 font-bold text-xs">VERZEND</button></div>
-        </div>
-    );
-}
 
 // --- AGENDA WIDGET ---
 function AgendaWidget() {
@@ -82,14 +61,17 @@ function AgendaWidget() {
     const [items, setItems] = useState([]);
 
     const getWeekNumber = (date) => {
-        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-        return Math.ceil((((d - new Date(Date.UTC(d.getUTCFullYear(),0,1))) / 86400000) + 1) / 7);
+        const temp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        temp.setUTCDate(temp.getUTCDate() + 4 - (temp.getUTCDay() || 7));
+        const yearStart = new Date(Date.UTC(temp.getUTCFullYear(),0,1));
+        return Math.ceil((((temp - yearStart) / 86400000) + 1) / 7);
     };
 
     const getFullDateString = (dateStr) => {
         const date = new Date(dateStr);
-        return `${date.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (Week ${getWeekNumber(date)})`;
+        const dayName = date.toLocaleDateString('nl-NL', { weekday: 'long' });
+        const options = { day: 'numeric', month: 'long', year: 'numeric' };
+        return `${dayName} ${date.toLocaleDateString('nl-NL', options)} (Week ${getWeekNumber(date)})`;
     };
 
     useEffect(() => {
@@ -140,117 +122,171 @@ function AgendaWidget() {
             </div>
             <div className="flex gap-2 overflow-x-auto pb-4 hide-scroll">
                 {['Ryan', 'Yaron', 'Michael', 'Fam-Sch'].map((name, i) => (
-                    <button key={name} onClick={() => setF(f.includes(name)?f.filter(x=>x!==name):[...f, name])} className={`px-3 py-1 rounded-full border text-[9px] font-black uppercase ${f.includes(name)?'border-blue-400 text-blue-600 bg-white':'border-gray-100 text-gray-300'}`}>{name}</button>
+                    <button key={name} onClick={() => setF(f.includes(name)?f.filter(x=>x!==name):[...f, name])} className={`px-3 py-1 rounded-full border text-[9px] font-black uppercase transition-all ${f.includes(name)?'border-blue-400 text-blue-600 bg-white shadow-sm':'border-gray-100 text-gray-300 opacity-50'}`}>{name}</button>
                 ))}
             </div>
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 mb-6">
-                {filteredItems.map((i, idx) => (
+                {filteredItems.length > 0 ? filteredItems.map((i, idx) => (
                     <div key={idx} className="flex items-start gap-3 py-1">
                         <div className={`w-1 h-10 rounded-full shrink-0 ${i.p==='Ryan'?'bg-red-400':i.p==='Yaron'?'bg-blue-400':i.p==='Michael'?'bg-green-400':'bg-purple-400'}`}></div>
                         <div className="flex-1">
                             <h4 className="font-bold text-slate-800 text-xs">{i.t}</h4>
-                            <p className="text-gray-400 text-[9px] font-black uppercase">{i.time} · {i.p}</p>
+                            <p className="text-gray-400 text-[9px] font-black uppercase tracking-tight">{i.time} · {i.p}</p>
                         </div>
+                        {i.source && <span className={`text-[8px] font-black px-2 py-0.5 rounded ${i.source==='Magister'?'bg-red-50 text-red-400':'bg-green-50 text-green-400'}`}>{i.source}</span>}
                     </div>
-                ))}
+                )) : <p className="text-center text-[10px] text-gray-400 py-10">Geen afspraken op deze dag.</p>}
             </div>
-            <div className="mt-auto pt-4 border-t">
+            <div className="mt-auto pt-6 border-t">
                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Schooltijden Vandaag</p>
                 <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-red-50 p-2 rounded border border-red-100"><p className="text-red-600 font-black text-[10px]">RYAN</p><p className="text-slate-700 font-bold text-xs">8:10 – 16:30</p></div>
-                    <div className="bg-blue-50 p-2 rounded border border-blue-100"><p className="text-blue-600 font-black text-[10px]">YARON</p><p className="text-slate-700 font-bold text-xs">9:45 – 12:30</p></div>
+                    <div className="bg-red-50 p-3 rounded border border-red-100"><p className="text-red-600 font-black text-[10px]">RYAN</p><p className="text-slate-700 font-bold text-xs">8:10 – 16:30</p></div>
+                    <div className="bg-blue-50 p-3 rounded border border-blue-100"><p className="text-blue-600 font-black text-[10px]">YARON</p><p className="text-slate-700 font-bold text-xs">9:45 – 12:30</p></div>
                 </div>
             </div>
         </div>
     );
 }
 
-// --- BITVAVO WIDGET ---
-function CryptoWidget() {
-    const [portfolio, setPortfolio] = useState([]);
-    const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(true);
-    useEffect(() => {
-        const fetchBitvavo = async () => {
-            const bvKeys = S.load('bitvavo_keys', {pub: '', sec: ''});
-            if(!bvKeys.pub || !bvKeys.sec) { setLoading(false); return; }
+// --- AI WIDGET ---
+function AIWidget() {
+    const [msg, setMsg] = useState('');
+    const [hist, setHist] = useState(S.load('ai_hist', [{r: 'ai', t: 'Welkom Michael.'}]));
+    const send = async () => {
+        if(!msg) return; const n = [...hist, {r: 'usr', t: msg}]; setHist(n); S.save('ai_hist', n); setMsg('');
+        const key = (S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('openai')) || {}).val;
+        if (key) {
             try {
-                const res = await fetch('/api/bitvavo', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key: bvKeys.pub, secret: bvKeys.sec }) });
+                const res = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` }, body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: [{role: 'user', content: msg}] }) });
                 const data = await res.json();
-                let calcTotal = 0;
-                const combined = data.balances.map(b => {
-                    const amount = parseFloat(b.available) + parseFloat(b.inOrder);
-                    const price = data.prices.find(p => p.market === `${b.symbol}-EUR`)?.price || 0;
-                    calcTotal += amount * price;
-                    return { sym: b.symbol, val: amount * price };
-                }).filter(x=>x.val>1).sort((a,b)=>b.val-a.val);
-                setPortfolio(combined); setTotal(calcTotal);
-            } catch (e) {}
-            setLoading(false);
-        };
-        fetchBitvavo();
-    }, []);
+                if(data.choices) { const r = [...n, {r: 'ai', t: data.choices[0].message.content}]; setHist(r); S.save('ai_hist', r); }
+            } catch(e) { setHist([...n, {r: 'ai', t: 'API Fout.'}]); }
+        } else { setHist([...n, {r: 'ai', t: 'Geen Key.'}]); }
+    };
     return (
-        <div className="widget h-full p-6 bg-white">
-            <div className="flex items-center gap-2 mb-6 text-slate-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Portfolio</h3></div>
-            <div className="mb-6"><span className="text-[10px] font-bold text-gray-400 block mb-1 uppercase">Totaal</span><div className="text-3xl font-black text-slate-800">€{total.toLocaleString('nl-NL', {maximumFractionDigits:0})}</div></div>
-            <div className="space-y-2 overflow-y-auto flex-1 hide-scroll">{portfolio.map((c,i)=>(<div key={i} className="flex justify-between items-center p-2 bg-gray-50 rounded"><span className="font-black text-xs">{c.sym}</span><span className="font-bold text-xs">€{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span></div>))}</div>
+        <div className="widget h-[250px] p-4 bg-white">
+            <div className="flex items-center gap-2 text-slate-500 mb-4"><Ico.Bot/><h3 className="text-[10px] font-black uppercase">AI Assistent</h3></div>
+            <div className="flex-1 overflow-y-auto mb-2 space-y-2 hide-scroll text-[11px]">{hist.map((m,i)=><div key={i} className={`p-2 rounded ${m.r==='ai'?'bg-gray-100':'bg-blue-600 text-white'}`}>{m.t}</div>)}</div>
+            <div className="flex gap-2"><input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} className="flex-1 border-b text-[11px] outline-none" placeholder="Typ..."/><button onClick={send} className="text-blue-600 font-black text-[10px]">ZEND</button></div>
         </div>
     );
 }
 
-// --- NIEUWS WIDGET ---
+// --- BITVAVO WIDGET ---
+function CryptoWidget() {
+    const [p, setP] = useState([]); const [tot, setTot] = useState(0); const [loading, setLoading] = useState(true);
+    useEffect(() => {
+        const fetchBv = async () => {
+            const k = S.load('bitvavo_keys', {pub: '', sec: ''});
+            if(!k.pub) { setLoading(false); return; }
+            try {
+                const res = await fetch('/api/bitvavo', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key: k.pub, secret: k.sec }) });
+                const d = await res.json();
+                let ct = 0; const comb = d.balances.map(b => {
+                    const am = parseFloat(b.available) + parseFloat(b.inOrder);
+                    const pr = d.prices.find(x => x.market === `${b.symbol}-EUR`)?.price || 0;
+                    ct += am * pr; return { s: b.symbol, v: am * pr };
+                }).filter(x=>x.v>1).sort((a,b)=>b.v-a.v);
+                setP(comb); setTot(ct);
+            } catch (e) {}
+            setLoading(false);
+        };
+        fetchBv();
+    }, []);
+    return (
+        <div className="widget h-[350px] p-6 bg-white">
+            <div className="flex items-center gap-2 mb-4 text-slate-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Bitvavo</h3></div>
+            <div className="mb-4"><span className="text-[9px] font-bold text-gray-400 block uppercase">Waarde</span><div className="text-2xl font-black text-slate-800">€{tot.toLocaleString('nl-NL', {maximumFractionDigits:0})}</div></div>
+            <div className="space-y-2 overflow-y-auto flex-1 hide-scroll">{p.map((c,i)=>(<div key={i} className="flex justify-between p-2 bg-gray-50 rounded text-xs font-bold"><span>{c.s}</span><span>€{c.v.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span></div>))}</div>
+        </div>
+    );
+}
+
+// --- NIEUWS & DEALS ---
 function NewsWidget() {
     return (
-        <div className="widget h-[300px] p-4 bg-white">
-            <div className="flex items-center gap-2 text-slate-500 mb-4"><Ico.Nws/><h3 className="text-[10px] font-black uppercase">Nieuws & Updates</h3></div>
-            <div className="space-y-4 overflow-y-auto hide-scroll">
-                <div className="border-b pb-2"><p className="text-xs font-bold">Bitcoin breekt recordhoogte.</p><span className="text-[9px] text-gray-400 uppercase">Crypto · 1u geleden</span></div>
-                <div className="border-b pb-2"><p className="text-xs font-bold">Nieuwe AI-wetgeving in EU.</p><span className="text-[9px] text-gray-400 uppercase">Tech · 3u geleden</span></div>
+        <div className="widget h-[250px] p-4 bg-white">
+            <div className="flex items-center gap-2 text-slate-500 mb-4"><Ico.Nws/><h3 className="text-[10px] font-black uppercase tracking-widest">Nieuws</h3></div>
+            <div className="space-y-3 text-[11px] font-bold">
+                <div className="border-b pb-2">Bitcoin stabiel op records. <span className="block text-[8px] text-gray-400 uppercase">Crypto · 1u</span></div>
+                <div className="border-b pb-2">Nieuwe AI tools gelanceerd. <span className="block text-[8px] text-gray-400 uppercase">Tech · 4u</span></div>
             </div>
+        </div>
+    );
+}
+
+function PepperWidget() {
+    return (
+        <div className="widget h-[250px] p-4 bg-white">
+            <div className="flex items-center gap-2 text-slate-500 mb-4"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest">Pepper Deals</h3></div>
+            <div className="space-y-3 text-[11px] font-bold">
+                <div className="border-b pb-2">Sony Headphones -25%. <span className="block text-blue-600">€249</span></div>
+                <div className="border-b pb-2">Nespresso Machine Hot! <span className="block text-blue-600">€69</span></div>
+            </div>
+        </div>
+    );
+}
+
+// --- OVERIGE WIDGETS ---
+function SudokuWidget() {
+    return (
+        <div className="widget h-[250px] p-4 bg-white flex items-center justify-center">
+            <div className="text-center"><Ico.Sud/><p className="text-[10px] font-black uppercase mt-2">Sudoku Laden...</p></div>
+        </div>
+    );
+}
+
+function LanguageWidget() {
+    return (
+        <div className="widget h-[250px] p-4 bg-white flex items-center justify-center border-dashed border-2">
+            <div className="text-center"><Ico.Lng/><p className="text-[10px] font-black uppercase mt-2">Talen Module</p></div>
         </div>
     );
 }
 
 function Settings({ isOpen, onClose }) {
-    const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
-    const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'OpenAI', val: ''}]));
-    const [icals, setIcals] = useState(S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]));
-    const saveAll = () => { S.save('bitvavo_keys', bvKeys); S.save('api_keys_dyn', apis); S.save('icals_dyn', icals); onClose(); window.location.reload(); };
+    const [bv, setBv] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
+    const [api, setApi] = useState(S.load('api_keys_dyn', [{name: 'OpenAI', val: ''}]));
+    const [ic, setIc] = useState(S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]));
+    const save = () => { S.save('bitvavo_keys', bv); S.save('api_keys_dyn', api); S.save('icals_dyn', ic); onClose(); window.location.reload(); };
     return (
         <div className={`settings-panel p-8 ${isOpen ? 'open' : ''}`}>
-            <h2 className="text-2xl font-black mb-8 border-b pb-4 uppercase tracking-tighter">Instellingen</h2>
-            <div className="space-y-8">
-                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-2">Bitvavo API</h3><input type="text" placeholder="API Key" value={bvKeys.pub} onChange={e=>setBvKeys({...bvKeys, pub: e.target.value})} className="w-full p-2 border rounded mb-2 text-xs"/><input type="password" placeholder="API Secret" value={bvKeys.sec} onChange={e=>setBvKeys({...bvKeys, sec: e.target.value})} className="w-full p-2 border rounded text-xs"/></section>
-                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-2">OpenAI Key</h3><input type="password" value={apis[0].val} onChange={e=>{const n=[...apis]; n[0].val=e.target.value; setApis(n);}} className="w-full p-2 border rounded text-xs"/></section>
-                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-2">Agenda Links</h3>{icals.map((c, i) => (<div key={i} className="flex gap-2 mb-2"><input placeholder="Naam" value={c.name} onChange={e=>{const n=[...icals]; n[i].name=e.target.value; setIcals(n);}} className="w-1/4 p-2 border rounded text-[10px] font-black"/><input placeholder="https://..." value={c.val} onChange={e=>{const n=[...icals]; n[i].val=e.target.value; setIcals(n);}} className="flex-1 p-2 border rounded text-[10px] font-mono"/></div>))}</section>
+            <h2 className="text-2xl font-black mb-6 uppercase tracking-tighter">Instellingen</h2>
+            <div className="space-y-6">
+                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-2">Bitvavo</h3><input type="text" placeholder="Key" value={bv.pub} onChange={e=>setBv({...bv, pub:e.target.value})} className="w-full p-2 border rounded mb-2 text-xs"/><input type="password" placeholder="Secret" value={bv.sec} onChange={e=>setBv({...bv, sec:e.target.value})} className="w-full p-2 border rounded text-xs"/></section>
+                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-2">OpenAI</h3><input type="password" value={api[0].val} onChange={e=>{const n=[...api]; n[0].val=e.target.value; setApi(n);}} className="w-full p-2 border rounded text-xs"/></section>
+                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-2">Agendalinks</h3>{ic.map((c,i)=>(<div key={i} className="flex gap-2 mb-2"><input value={c.name} onChange={e=>{const n=[...ic]; n[i].name=e.target.value; setIc(n);}} className="w-1/4 p-2 border rounded text-[10px] font-black"/><input value={c.val} onChange={e=>{const n=[...ic]; n[i].val=e.target.value; setIc(n);}} className="flex-1 p-2 border rounded text-[10px] font-mono"/></div>))}</section>
             </div>
-            <button onClick={saveAll} className="mt-10 w-full bg-slate-900 text-white py-4 text-[10px] font-black uppercase rounded shadow-xl hover:bg-black">Opslaan & Herladen</button>
+            <button onClick={save} className="mt-8 w-full bg-slate-900 text-white py-3 text-[10px] font-black uppercase rounded shadow-xl">Opslaan</button>
         </div>
     );
 }
 
 function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
-    const [settingsOpen, setSettingsOpen] = useState(false);
-    useEffect(() => { if (!isAuth && window.google) { window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredentialResponse }); window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" }); } }, [isAuth]);
-    const handleCredentialResponse = (response) => {
-        const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-        if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { setIsAuth(true); S.save('auth_status', true); } 
-        else { alert("Geen toegang."); }
-    };
-    if (!isAuth) return <div className="min-h-screen flex items-center justify-center bg-[#000a14]"><div className="bg-white/5 p-12 rounded-2xl border border-white/10 flex flex-col items-center"><Ico.Lock /><h1 className="text-xl font-black mt-6 mb-8 text-white uppercase tracking-widest">Michael Dashboard</h1><div id="google-btn"></div></div></div>;
+    const [setOpen, setSetOpen] = useState(false);
+    useEffect(() => { if (!isAuth && window.google) { window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: h => { const p = JSON.parse(atob(h.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); if(p.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { setIsAuth(true); S.save('auth_status', true); } else { alert("Geen toegang."); } } }); window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" }); } }, [isAuth]);
+    if (!isAuth) return <div className="min-h-screen flex items-center justify-center bg-[#000a14]"><div className="bg-white/5 p-12 rounded-2xl border border-white/10 text-center"><Ico.Lock /><h1 className="text-xl font-black mt-4 mb-8 text-white uppercase tracking-widest">Michael Dashboard</h1><div id="google-btn"></div></div></div>;
     return (
-        <div className="flex flex-col min-h-screen pb-20">
-            <header className="px-6 py-10 max-w-[1600px] mx-auto w-full flex justify-between items-end border-b border-white/10 mb-10">
-                <div><h1 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">Michael Dashboard</h1><p className="text-blue-400 text-[9px] font-black uppercase tracking-[0.5em] mt-3">Live Intelligence System</p></div>
-                <div className="flex gap-3"><button onClick={() => {setIsAuth(false); S.remove('auth_status'); window.location.reload();}} className="p-3 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition"><Ico.Lock /></button><button onClick={() => setSettingsOpen(true)} className="p-3 bg-white/10 text-white rounded hover:bg-white/20 transition"><Ico.Set /></button></div>
+        <div className="flex flex-col min-h-screen pb-10">
+            <header className="px-6 py-8 max-w-[1600px] mx-auto w-full flex justify-between items-end border-b border-white/10 mb-8">
+                <div><h1 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">Michael Dashboard</h1><p className="text-blue-400 text-[9px] font-black uppercase mt-2 tracking-widest">Live System v4.3</p></div>
+                <div className="flex gap-2"><button onClick={() => {setIsAuth(false); S.remove('auth_status'); window.location.reload();}} className="p-2 bg-red-500/10 text-red-500 rounded"><Ico.Lock /></button><button onClick={() => setSetOpen(true)} className="p-2 bg-white/10 text-white rounded"><Ico.Set /></button></div>
             </header>
             <main className="px-6 max-w-[1600px] mx-auto w-full grid grid-cols-12 gap-6">
                 <div className="col-span-12 lg:col-span-8 h-fit"><AgendaWidget /></div>
-                <div className="col-span-12 lg:col-span-4 space-y-6"><CryptoWidget /><AIWidget /><NewsWidget /></div>
+                <div className="col-span-12 lg:col-span-4 space-y-6">
+                    <CryptoWidget />
+                    <AIWidget />
+                    <div className="grid grid-cols-2 gap-4">
+                        <NewsWidget />
+                        <PepperWidget />
+                        <SudokuWidget />
+                        <LanguageWidget />
+                    </div>
+                </div>
             </main>
-            <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+            <Settings isOpen={setOpen} onClose={() => setSetOpen(false)} />
         </div>
     );
 }
