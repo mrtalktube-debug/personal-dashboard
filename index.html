@@ -50,7 +50,7 @@ const Ico = {
     Lng: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 11.37 9.198 15.299 6 18.5"/></svg>
 };
 
-// --- AGENDA WIDGET (LUXE VERSIE + WEEKNUMMER + SCHOOLTIJDEN) ---
+// --- AGENDA WIDGET ---
 function AgendaWidget() {
     const rawCals = S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]);
     const cals = rawCals.map(c => c.name).filter(Boolean);
@@ -103,59 +103,52 @@ function AgendaWidget() {
     const filteredItems = items.filter(i => f.includes(i.p) && i.date === d && i.t.toLowerCase().includes(searchTerm.toLowerCase())).sort((a,b) => a.time.localeCompare(b.time));
 
     return (
-        <div className="widget h-full p-5 bg-white">
-            <div className="flex justify-between items-center mb-5">
+        <div className="widget h-full p-6 bg-white min-h-[500px]">
+            <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-2 text-slate-500"><Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">Familie Agenda</h3></div>
                 <div className="flex gap-2">
                     <button onClick={() => setShowJump(!showJump)} className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded text-[9px] font-black uppercase hover:bg-gray-200">Kies Datum</button>
-                    <button onClick={() => setD(new Date().toISOString().split('T')[0])} className="bg-blue-600 text-white px-3 py-1.5 rounded text-[9px] font-black uppercase hover:bg-blue-700 transition">Vandaag</button>
+                    <button onClick={() => setD(new Date().toISOString().split('T')[0])} className="bg-blue-600 text-white px-3 py-1.5 rounded text-[9px] font-black uppercase">Vandaag</button>
                 </div>
             </div>
-
-            {showJump && <div className="mb-4 p-3 bg-gray-50 rounded border flex gap-2"><input type="date" value={d} onChange={e=>setD(e.target.value)} className="flex-1 p-2 rounded text-xs border outline-none"/><button onClick={()=>setShowJump(false)} className="px-3 py-2 bg-gray-800 text-white rounded text-[10px] font-black uppercase">OK</button></div>}
-
-            <div className="text-center mb-6">
-                <div className="flex items-center justify-between text-blue-600 font-black text-xs uppercase mb-1">
-                    <button onClick={() => {const nd=new Date(d); nd.setDate(nd.getDate()-1); setD(nd.toISOString().split('T')[0])}} className="p-2 hover:bg-gray-100 rounded">‹</button>
-                    <span>{getFullDateString(new Date(d))}</span>
-                    <button onClick={() => {const nd=new Date(d); nd.setDate(nd.getDate()+1); setD(nd.toISOString().split('T')[0])}} className="p-2 hover:bg-gray-100 rounded">›</button>
+            {showJump && <div className="mb-4 p-3 bg-gray-50 rounded border flex gap-2"><input type="date" value={d} onChange={e=>setD(e.target.value)} className="flex-1 p-2 rounded text-xs border outline-none"/><button onClick={()=>setShowJump(false)} className="px-3 py-2 bg-gray-800 text-white rounded text-[10px] font-black">OK</button></div>}
+            <div className="text-center mb-8">
+                <div className="flex items-center justify-between text-blue-600 font-black text-sm uppercase mb-2">
+                    <button onClick={() => {const nd=new Date(d); nd.setDate(nd.getDate()-1); setD(nd.toISOString().split('T')[0])}}>‹ Vorige</button>
+                    <span className="text-base">{getFullDateString(new Date(d))}</span>
+                    <button onClick={() => {const nd=new Date(d); nd.setDate(nd.getDate()+1); setD(nd.toISOString().split('T')[0])}}>Volgende ›</button>
                 </div>
-                <input type="text" placeholder="Snel zoeken in deze dag..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full mt-3 p-2 border-b text-xs outline-none focus:border-blue-400 bg-transparent" />
+                <input type="text" placeholder="Snel zoeken in deze dag..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full mt-4 p-2 border-b text-xs outline-none focus:border-blue-400 bg-transparent font-medium" />
             </div>
-
-            <div className="flex gap-2 overflow-x-auto pb-4 hide-scroll">
-                {['Ryan', 'Yaron', 'Michael', 'Fam-Sch'].map((name, i) => {
-                    const active = f.includes(name);
-                    const colors = ['border-red-400 text-red-600', 'border-blue-400 text-blue-600', 'border-green-400 text-green-600', 'border-purple-400 text-purple-600'];
-                    return <button key={name} onClick={() => setF(active ? f.filter(x => x !== name) : [...f, name])} className={`px-3 py-1 rounded-full border text-[9px] font-black uppercase transition-all ${active ? colors[i]+' bg-white shadow-sm' : 'border-gray-100 text-gray-300 opacity-50'}`}>{name}</button>;
-                })}
+            <div className="flex gap-2 overflow-x-auto pb-6 hide-scroll">
+                {['Ryan', 'Yaron', 'Michael', 'Fam-Sch'].map((name, i) => (
+                    <button key={name} onClick={() => setF(f.includes(name)?f.filter(x=>x!==name):[...f, name])} className={`px-4 py-1.5 rounded-full border text-[10px] font-black uppercase transition-all ${f.includes(name)?'border-blue-400 text-blue-600 bg-white shadow-sm':'border-gray-100 text-gray-300 opacity-50'}`}>{name}</button>
+                ))}
             </div>
-
-            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 mb-6 hide-scroll">
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 mb-8 hide-scroll">
                 {filteredItems.map((i, idx) => (
-                    <div key={idx} className="flex items-start gap-3 py-1">
-                        <div className={`w-1 h-10 rounded-full shrink-0 ${i.p==='Ryan'?'bg-red-400':i.p==='Yaron'?'bg-blue-400':i.p==='Michael'?'bg-green-400':'bg-purple-400'}`}></div>
+                    <div key={idx} className="flex items-start gap-4 py-2 border-b border-gray-50 last:border-0">
+                        <div className={`w-1.5 h-12 rounded-full shrink-0 ${i.p==='Ryan'?'bg-red-400':i.p==='Yaron'?'bg-blue-400':i.p==='Michael'?'bg-green-400':'bg-purple-400'}`}></div>
                         <div className="flex-1">
-                            <h4 className="font-bold text-slate-800 text-xs">{i.t}</h4>
-                            <p className="text-gray-400 text-[9px] font-black uppercase tracking-tight">{i.time} · {i.p}</p>
+                            <h4 className="font-bold text-slate-800 text-sm">{i.t}</h4>
+                            <p className="text-gray-400 text-[10px] font-black uppercase tracking-tight">{i.time} · {i.p}</p>
                         </div>
-                        {i.source && <span className={`text-[8px] font-black px-2 py-0.5 rounded ${i.source==='Magister'?'bg-red-50 text-red-400':'bg-green-50 text-green-400'}`}>{i.source}</span>}
+                        {i.source && <span className={`text-[9px] font-black px-2 py-1 rounded bg-gray-50 text-gray-400 uppercase`}>{i.source}</span>}
                     </div>
                 ))}
             </div>
-
             <div className="mt-auto pt-6 border-t border-gray-100">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">🏠 Schooltijden Vandaag</p>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-red-50 p-3 rounded border border-red-100"><p className="text-red-600 font-black text-[10px]">RYAN</p><p className="text-slate-700 font-bold text-xs">8:10 – 16:30</p></div>
-                    <div className="bg-blue-50 p-3 rounded border border-blue-100"><p className="text-blue-600 font-black text-[10px]">YARON</p><p className="text-slate-700 font-bold text-xs">9:45 – 12:30</p></div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">🏠 Schooltijden Vandaag</p>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-red-50 p-4 rounded border border-red-100"><p className="text-red-600 font-black text-[11px] mb-1">RYAN</p><p className="text-slate-700 font-bold text-sm">8:10 – 16:30</p></div>
+                    <div className="bg-blue-50 p-4 rounded border border-blue-100"><p className="text-blue-600 font-black text-[11px] mb-1">YARON</p><p className="text-slate-700 font-bold text-sm">9:45 – 12:30</p></div>
                 </div>
             </div>
         </div>
     );
 }
 
-// --- BITVAVO WIDGET (LUXE VERSIE) ---
+// --- BITVAVO WIDGET ---
 function CryptoWidget() {
     const [p, setP] = useState([]); const [tot, setTot] = useState(0); const [loading, setLoading] = useState(true);
     useEffect(() => {
@@ -168,7 +161,7 @@ function CryptoWidget() {
                 let ct = 0; const comb = d.balances.map(b => {
                     const am = parseFloat(b.available) + parseFloat(b.inOrder);
                     const pr = d.prices.find(x => x.market === `${b.symbol}-EUR`)?.price || 0;
-                    ct += am * pr; return { s: b.symbol, v: am * pr };
+                    ct += am * pr; return { s: b.symbol, v: am * pr, am };
                 }).filter(x=>x.v>1).sort((a,b)=>b.v-a.v);
                 setP(comb); setTot(ct);
             } catch (e) {}
@@ -177,14 +170,14 @@ function CryptoWidget() {
         fetchBv();
     }, []);
     return (
-        <div className="widget h-full p-6 bg-white">
+        <div className="widget h-[400px] p-6 bg-white">
             <div className="flex items-center gap-2 mb-6 text-slate-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Portfolio</h3></div>
-            <div className="mb-6"><span className="text-[10px] font-bold text-gray-400 block mb-1 uppercase tracking-tighter">Totale Waarde (EUR)</span><div className="text-3xl font-black text-slate-800">{loading ? '...' : `€${tot.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}</div></div>
+            <div className="mb-6"><span className="text-[10px] font-bold text-gray-400 block mb-1 uppercase">Totale Waarde</span><div className="text-3xl font-black text-slate-800">€{tot.toLocaleString('nl-NL', {maximumFractionDigits:0})}</div></div>
             <div className="space-y-3 overflow-y-auto flex-1 hide-scroll pr-1">
                 {p.map((c, i) => (
                     <div key={i} className="relative p-3 border border-gray-50 rounded flex justify-between items-center bg-gray-50/50 group overflow-hidden">
                         <div className="sparkline-bg"></div>
-                        <div className="relative z-10"><span className="font-black text-xs block text-slate-800">{c.s}</span><span className="text-[9px] text-gray-400 font-bold">Actueel Saldo</span></div>
+                        <div className="relative z-10"><span className="font-black text-xs block text-slate-800">{c.s}</span><span className="text-[10px] text-gray-400 font-bold">{c.am.toFixed(2)} units</span></div>
                         <div className="text-right relative z-10"><span className="font-black text-xs block text-slate-800">€{c.v.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span></div>
                     </div>
                 ))}
@@ -209,51 +202,40 @@ function AIWidget() {
         } else { setHist([...n, {r: 'ai', t: 'Geen OpenAI key gevonden.'}]); }
     };
     return (
-        <div className="widget h-[300px] p-4 bg-white">
-            <div className="flex items-center gap-2 text-slate-500 mb-4"><Ico.Bot/><h3 className="text-[10px] font-black uppercase tracking-widest">AI Assistent</h3></div>
-            <div className="flex-1 overflow-y-auto mb-4 space-y-2 text-[11px] hide-scroll">{hist.slice(-10).map((m,i)=><div key={i} className={`p-2 rounded ${m.r==='ai'?'bg-gray-100':'bg-blue-600 text-white self-end'}`}>{m.t}</div>)}</div>
-            <div className="flex gap-2 border-t pt-3"><input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} className="flex-1 text-[11px] outline-none" placeholder="Vraag iets aan ChatGPT..."/><button onClick={send} className="text-blue-600 font-black text-[10px] tracking-widest">SEND</button></div>
+        <div className="widget h-[350px] p-5 bg-white">
+            <div className="flex items-center gap-2 text-slate-500 mb-5"><Ico.Bot/><h3 className="text-[10px] font-black uppercase tracking-widest">AI Assistent</h3></div>
+            <div className="flex-1 overflow-y-auto mb-4 space-y-3 text-[11px] hide-scroll">{hist.slice(-15).map((m,i)=><div key={i} className={`p-3 rounded-lg ${m.r==='ai'?'bg-gray-100 text-slate-800':'bg-blue-600 text-white self-end'}`}>{m.t}</div>)}</div>
+            <div className="flex gap-2 border-t pt-4"><input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} className="flex-1 text-[11px] outline-none bg-transparent" placeholder="Typ een bericht aan ChatGPT..."/><button onClick={send} className="text-blue-600 font-black text-[10px] tracking-widest">STUUR</button></div>
         </div>
     );
 }
 
-// --- NIEUWS & DEALS (LUXE) ---
+// --- OVERIGE WIDGETS ---
 function NewsWidget() {
     return (
-        <div className="widget h-[280px] p-5 bg-white">
-            <div className="flex items-center gap-2 text-slate-500 mb-5"><Ico.Nws/><h3 className="text-[10px] font-black uppercase tracking-widest">Tech & Crypto Nieuws</h3></div>
-            <div className="space-y-4 overflow-y-auto hide-scroll">
-                <div className="border-b pb-3 hover:bg-gray-50 transition p-1"><p className="text-[11px] font-bold leading-tight">Bitcoin bereikt nieuwe mijlpaal in 2026.</p><span className="text-[8px] text-gray-400 font-black uppercase mt-1 block">Live · 42m geleden</span></div>
-                <div className="border-b pb-3 hover:bg-gray-50 transition p-1"><p className="text-[11px] font-bold leading-tight">AI agents transformeren werkplek.</p><span className="text-[8px] text-gray-400 font-black uppercase mt-1 block">Tech · 2u geleden</span></div>
-            </div>
+        <div className="widget h-[250px] p-5 bg-white">
+            <div className="flex items-center gap-2 text-slate-500 mb-5"><Ico.Nws/><h3 className="text-[10px] font-black uppercase tracking-widest">Nieuws</h3></div>
+            <div className="space-y-4 overflow-y-auto hide-scroll"><div className="border-b pb-3"><p className="text-[11px] font-bold">Live: Bitcoin breekt door 90k grens.</p><span className="text-[9px] text-gray-400 uppercase mt-1 block">Crypto · 1u</span></div><div className="border-b pb-3"><p className="text-[11px] font-bold">Tech: Nieuwe AI ontwikkelingen van OpenAI.</p><span className="text-[9px] text-gray-400 uppercase mt-1 block">AI · 3u</span></div></div>
         </div>
     );
 }
 
 function PepperWidget() {
     return (
-        <div className="widget h-[280px] p-5 bg-white">
+        <div className="widget h-[250px] p-5 bg-white">
             <div className="flex items-center gap-2 text-slate-500 mb-5"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest">Pepper Deals</h3></div>
-            <div className="space-y-4 overflow-y-auto hide-scroll">
-                <div className="border-b pb-3"><div className="flex justify-between items-center mb-1"><span className="bg-red-500 text-white text-[8px] px-1 rounded font-black">HOT</span><span className="text-blue-600 font-black text-xs">€249</span></div><p className="text-[11px] font-bold">Sony WH-1000XM5 Black</p></div>
-                <div className="border-b pb-3"><div className="flex justify-between items-center mb-1"><span className="bg-blue-500 text-white text-[8px] px-1 rounded font-black">SALE</span><span className="text-blue-600 font-black text-xs">€899</span></div><p className="text-[11px] font-bold">MacBook Air M2 Silver</p></div>
+            <div className="space-y-4 overflow-y-auto hide-scroll"><div className="border-b pb-3"><div className="flex justify-between items-center mb-1"><span className="bg-red-500 text-white text-[8px] px-1 rounded font-black">HOT</span><span className="text-blue-600 font-black text-xs">€249</span></div><p className="text-[11px] font-bold">Sony WH-1000XM5 Black</p></div></div>
+        </div>
+    );
+}
+
+function MiniWidget({ ico, label }) {
+    return (
+        <div className="widget h-[150px] p-5 bg-white flex items-center justify-center border-dashed border-2 border-gray-100">
+            <div className="text-center opacity-30 text-slate-400">
+                <div className="flex justify-center mb-2">{ico}</div>
+                <p className="text-[9px] font-black uppercase tracking-widest">{label}</p>
             </div>
-        </div>
-    );
-}
-
-function SudokuWidget() {
-    return (
-        <div className="widget h-[280px] p-5 bg-white flex items-center justify-center border-dashed border-2 border-gray-100 text-gray-300">
-            <div className="text-center"><Ico.Sud/><p className="text-[9px] font-black uppercase mt-2">Sudoku Module</p></div>
-        </div>
-    );
-}
-
-function LanguageWidget() {
-    return (
-        <div className="widget h-[280px] p-5 bg-white flex items-center justify-center border-dashed border-2 border-gray-100 text-gray-300">
-            <div className="text-center"><Ico.Lng/><p className="text-[9px] font-black uppercase mt-2">Talen Module</p></div>
         </div>
     );
 }
@@ -265,13 +247,13 @@ function Settings({ isOpen, onClose }) {
     const save = () => { S.save('bitvavo_keys', bv); S.save('api_keys_dyn', api); S.save('icals_dyn', ic); onClose(); window.location.reload(); };
     return (
         <div className={`settings-panel p-8 ${isOpen ? 'open' : ''}`}>
-            <h2 className="text-2xl font-black mb-8 border-b pb-4 uppercase tracking-tighter">Instellingen</h2>
+            <h2 className="text-2xl font-black mb-8 border-b pb-4 uppercase tracking-tighter">Dashboard Instellingen</h2>
             <div className="space-y-8">
-                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-3 tracking-widest">Bitvavo API</h3><input type="text" placeholder="API Key" value={bv.pub} onChange={e=>setBv({...bv, pub:e.target.value})} className="w-full p-3 border rounded-lg mb-2 text-xs font-mono bg-slate-50 outline-none"/><input type="password" placeholder="API Secret" value={bv.sec} onChange={e=>setBv({...bv, sec:e.target.value})} className="w-full p-3 border rounded-lg text-xs font-mono bg-slate-50 outline-none"/></section>
-                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-3 tracking-widest">OpenAI ChatGPT</h3><input type="password" placeholder="sk-..." value={api[0].val} onChange={e=>{const n=[...api]; n[0].val=e.target.value; setApi(n);}} className="w-full p-3 border rounded-lg text-xs font-mono bg-slate-50 outline-none"/></section>
+                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-3 tracking-widest">Bitvavo API</h3><input type="text" placeholder="API Key" value={bv.pub} onChange={e=>setBv({...bv, pub:e.target.value})} className="w-full p-3 border rounded-lg mb-2 text-xs font-mono bg-slate-50"/><input type="password" placeholder="API Secret" value={bv.sec} onChange={e=>setBv({...bv, sec:e.target.value})} className="w-full p-3 border rounded-lg text-xs font-mono bg-slate-50"/></section>
+                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-3 tracking-widest">OpenAI (ChatGPT)</h3><input type="password" value={api[0].val} onChange={e=>{const n=[...api]; n[0].val=e.target.value; setApi(n);}} className="w-full p-3 border rounded-lg text-xs font-mono bg-slate-50"/></section>
                 <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-3 tracking-widest">Agenda iCal Links</h3>{ic.map((c,i)=>(<div key={i} className="flex gap-2 mb-3"><input value={c.name} onChange={e=>{const n=[...ic]; n[i].name=e.target.value; setIc(n);}} className="w-1/4 p-2 border rounded font-black text-[10px] bg-slate-50"/><input value={c.val} onChange={e=>{const n=[...ic]; n[i].val=e.target.value; setIc(ic);}} className="flex-1 p-2 border rounded text-[10px] font-mono bg-slate-50"/></div>))}</section>
             </div>
-            <button onClick={save} className="mt-10 w-full bg-slate-900 text-white py-4 text-[10px] font-black uppercase rounded shadow-xl hover:bg-black transition">Opslaan & Herladen</button>
+            <button onClick={save} className="mt-10 w-full bg-slate-900 text-white py-4 text-[11px] font-black uppercase rounded shadow-xl hover:bg-black transition">Systeem Opslaan & Herladen</button>
         </div>
     );
 }
@@ -280,23 +262,26 @@ function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
     const [setOpen, setSetOpen] = useState(false);
     useEffect(() => { if (!isAuth && window.google) { window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: h => { const p = JSON.parse(atob(h.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); if(p.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { setIsAuth(true); S.save('auth_status', true); } else { alert("Geen toegang voor "+p.email); } } }); window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" }); } }, [isAuth]);
-    if (!isAuth) return <div className="min-h-screen flex items-center justify-center bg-[#000a14]"><div className="bg-white/5 p-12 rounded-2xl border border-white/10 text-center"><Ico.Lock /><h1 className="text-xl font-black mt-6 mb-8 text-white uppercase tracking-widest leading-none">Michael Dashboard<br/><span className="text-[8px] opacity-40 font-bold">Encrypted Intelligence System</span></h1><div id="google-btn"></div></div></div>;
+    if (!isAuth) return <div className="min-h-screen flex items-center justify-center bg-[#000a14]"><div className="bg-white/5 p-12 rounded-2xl border border-white/10 text-center"><Ico.Lock /><h1 className="text-xl font-black mt-6 mb-8 text-white uppercase tracking-widest leading-none">Michael Dashboard<br/><span className="text-[8px] opacity-40 font-bold uppercase tracking-widest mt-2 block">Secured Intelligence System</span></h1><div id="google-btn"></div></div></div>;
     return (
         <div className="flex flex-col min-h-screen pb-20">
             <header className="px-6 py-10 max-w-[1600px] mx-auto w-full flex justify-between items-end border-b border-white/10 mb-10">
-                <div><h1 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">Michael Dashboard</h1><p className="text-blue-400 text-[9px] font-black uppercase tracking-[0.5em] mt-3">Live Intelligence System v4.3</p></div>
-                <div className="flex gap-3"><button onClick={() => {setIsAuth(false); S.remove('auth_status'); window.location.reload();}} className="p-3 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition"><Ico.Lock /></button><button onClick={() => setSetOpen(true)} className="p-3 bg-white/10 text-white rounded hover:bg-white/20 transition"><Ico.Set /></button></div>
+                <div><h1 className="text-3xl font-black text-white tracking-tighter uppercase leading-none">Michael Dashboard</h1><p className="text-blue-400 text-[9px] font-black uppercase tracking-[0.5em] mt-3">Live intelligence system v4.3</p></div>
+                <div className="flex gap-4">
+                    <button onClick={() => {setIsAuth(false); S.remove('auth_status'); window.location.reload();}} className="p-3 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition backdrop-blur-sm"><Ico.Lock /></button>
+                    <button onClick={() => setSetOpen(true)} className="p-3 bg-white/10 text-white rounded hover:bg-white/20 transition"><Ico.Set /></button>
+                </div>
             </header>
-            <main className="px-6 max-w-[1600px] mx-auto w-full grid grid-cols-12 gap-8">
+            <main className="px-6 max-w-[1600px] mx-auto w-full grid grid-cols-12 gap-10">
                 <div className="col-span-12 lg:col-span-8 h-fit"><AgendaWidget /></div>
-                <div className="col-span-12 lg:col-span-4 space-y-8">
+                <div className="col-span-12 lg:col-span-4 space-y-10">
                     <CryptoWidget />
                     <AIWidget />
-                    <div className="grid grid-cols-2 gap-6">
-                        <NewsWidget />
-                        <PepperWidget />
-                        <SudokuWidget />
-                        <LanguageWidget />
+                    <NewsWidget />
+                    <PepperWidget />
+                    <div className="grid grid-cols-2 gap-4">
+                        <MiniWidget ico={<Ico.Sud/>} label="Sudoku" />
+                        <MiniWidget ico={<Ico.Lng/>} label="Talen" />
                     </div>
                 </div>
             </main>
