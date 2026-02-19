@@ -14,12 +14,13 @@
         :root { --p-blue: #0073b1; --bg: linear-gradient(135deg, #001a33 0%, #000a14 100%); }
         body { background: var(--bg); min-height: 100vh; font-family: 'Inter', sans-serif; margin: 0; color: #1a1a1a; }
         .widget { background: rgba(255,255,255,0.98); border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; transition: 0.2s; text-align: center; cursor: pointer; }
+        .tab-btn.active { color: var(--p-blue); border-bottom-color: var(--p-blue); background: rgba(0,115,177,0.05); }
         .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; box-shadow: -10px 0 30px rgba(0,0,0,0.5); transform: translateX(100%); transition: 0.3s ease; overflow-y: auto; }
         .settings-panel.open { transform: translateX(0); }
         .sparkline-bg { position: absolute; bottom: 0; left: 0; right: 0; height: 40px; opacity: 0.08; background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><path d="M0 30 L10 20 L20 25 L30 15 L40 18 L50 5 L60 10 L70 2 L80 12 L90 5 L100 0 L100 30 Z" fill="%230073b1"/></svg>'); background-size: cover; background-position: bottom; pointer-events: none; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 4px; }
-        .hide-scroll::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body>
@@ -27,10 +28,8 @@
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
-// ----- CONFIG -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
-// ------------------
 
 const S = {
     load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
@@ -40,255 +39,123 @@ const S = {
 
 const Ico = {
     Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
-    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>,
-    Cal: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
-    Cry: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
     Bot: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>,
-    Nws: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>,
-    Tag: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>,
-    Sud: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16M10 4v16M14 4v16"/></svg>,
-    Lng: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 11.37 9.198 15.299 6 18.5"/></svg>
+    Cry: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
+    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
 };
 
-// --- AGENDA WIDGET ---
-function AgendaWidget() {
-    const rawCals = S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]);
-    const cals = rawCals.map(c => c.name).filter(Boolean);
-    const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
-    const [f, setF] = useState(cals);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [showJump, setShowJump] = useState(false);
-    const [items, setItems] = useState([]);
-
-    const getWeekNumber = (date) => {
-        const temp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-        temp.setUTCDate(temp.getUTCDate() + 4 - (temp.getUTCDay() || 7));
-        const yearStart = new Date(Date.UTC(temp.getUTCFullYear(),0,1));
-        return Math.ceil((((temp - yearStart) / 86400000) + 1) / 7);
-    };
-
-    const getFullDateString = (dateStr) => {
-        const date = new Date(dateStr);
-        const dayName = date.toLocaleDateString('nl-NL', { weekday: 'long' });
-        const options = { day: 'numeric', month: 'long', year: 'numeric' };
-        return `${dayName} ${date.toLocaleDateString('nl-NL', options)} (Week ${getWeekNumber(date)})`;
-    };
+function CryptoWidget({ lang }) {
+    const [portfolio, setPortfolio] = useState([]);
+    const [total, setTotal] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState('');
 
     useEffect(() => {
-        const fetchCals = async () => {
-            let allEvs = [];
-            for(let c of rawCals) {
-                if(!c.val) continue;
-                try {
-                    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(c.val)}`);
-                    const txt = await res.text();
-                    let cur = {}; const lines = txt.split(/\r?\n/);
-                    for(let l of lines) {
-                        if(l.startsWith('BEGIN:VEVENT')) cur = {};
-                        else if(l.startsWith('SUMMARY:')) cur.t = l.substring(8);
-                        else if(l.startsWith('DTSTART')) { 
-                            const m = l.match(/:(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/); 
-                            if(m) { cur.date = `${m[1]}-${m[2]}-${m[3]}`; cur.time = m[4] ? `${m[4]}:${m[5]}` : '00:00'; } 
-                        }
-                        else if(l.startsWith('END:VEVENT') && cur.t && cur.date) allEvs.push({...cur, p: c.name, source: (c.name==='Michael'?'Outlook':'Magister')});
-                    }
-                } catch(e) {}
+        const fetchBitvavo = async () => {
+            const bvKeys = S.load('bitvavo_keys', {pub: '', sec: ''});
+            if(!bvKeys.pub || !bvKeys.sec) {
+                setErr(lang==='nl'?'Vul je Bitvavo keys in via Instellingen':'Enter Bitvavo keys in Settings');
+                setLoading(false); return;
             }
-            if(allEvs.length === 0) allEvs = [{ t: 'Geen afspraken geladen', p: 'Systeem', date: d, time: '00:00' }];
-            setItems(allEvs);
-        };
-        fetchCals();
-    }, [JSON.stringify(rawCals), d]);
-
-    const filteredItems = items.filter(i => f.includes(i.p) && i.date === d && i.t.toLowerCase().includes(searchTerm.toLowerCase())).sort((a,b) => a.time.localeCompare(b.time));
-
-    return (
-        <div className="widget h-full p-6 bg-white min-h-[500px]">
-            <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-2 text-slate-500"><Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">Familie Agenda</h3></div>
-                <div className="flex gap-2">
-                    <button onClick={() => setShowJump(!showJump)} className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded text-[9px] font-black uppercase hover:bg-gray-200">Kies Datum</button>
-                    <button onClick={() => setD(new Date().toISOString().split('T')[0])} className="bg-blue-600 text-white px-3 py-1.5 rounded text-[9px] font-black uppercase">Vandaag</button>
-                </div>
-            </div>
-            {showJump && <div className="mb-4 p-3 bg-gray-50 rounded border flex gap-2"><input type="date" value={d} onChange={e=>setD(e.target.value)} className="flex-1 p-2 rounded text-xs border outline-none"/><button onClick={()=>setShowJump(false)} className="px-3 py-2 bg-gray-800 text-white rounded text-[10px] font-black">OK</button></div>}
-            <div className="text-center mb-8">
-                <div className="flex items-center justify-between text-blue-600 font-black text-sm uppercase mb-2">
-                    <button onClick={() => {const nd=new Date(d); nd.setDate(nd.getDate()-1); setD(nd.toISOString().split('T')[0])}}>‹ Vorige</button>
-                    <span className="text-base">{getFullDateString(new Date(d))}</span>
-                    <button onClick={() => {const nd=new Date(d); nd.setDate(nd.getDate()+1); setD(nd.toISOString().split('T')[0])}}>Volgende ›</button>
-                </div>
-                <input type="text" placeholder="Snel zoeken in deze dag..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full mt-4 p-2 border-b text-xs outline-none focus:border-blue-400 bg-transparent font-medium" />
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-6 hide-scroll">
-                {['Ryan', 'Yaron', 'Michael', 'Fam-Sch'].map((name, i) => (
-                    <button key={name} onClick={() => setF(f.includes(name)?f.filter(x=>x!==name):[...f, name])} className={`px-4 py-1.5 rounded-full border text-[10px] font-black uppercase transition-all ${f.includes(name)?'border-blue-400 text-blue-600 bg-white shadow-sm':'border-gray-100 text-gray-300 opacity-50'}`}>{name}</button>
-                ))}
-            </div>
-            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 mb-8 hide-scroll">
-                {filteredItems.map((i, idx) => (
-                    <div key={idx} className="flex items-start gap-4 py-2 border-b border-gray-50 last:border-0">
-                        <div className={`w-1.5 h-12 rounded-full shrink-0 ${i.p==='Ryan'?'bg-red-400':i.p==='Yaron'?'bg-blue-400':i.p==='Michael'?'bg-green-400':'bg-purple-400'}`}></div>
-                        <div className="flex-1">
-                            <h4 className="font-bold text-slate-800 text-sm">{i.t}</h4>
-                            <p className="text-gray-400 text-[10px] font-black uppercase tracking-tight">{i.time} · {i.p}</p>
-                        </div>
-                        {i.source && <span className={`text-[9px] font-black px-2 py-1 rounded bg-gray-50 text-gray-400 uppercase`}>{i.source}</span>}
-                    </div>
-                ))}
-            </div>
-            <div className="mt-auto pt-6 border-t border-gray-100">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">🏠 Schooltijden Vandaag</p>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-red-50 p-4 rounded border border-red-100"><p className="text-red-600 font-black text-[11px] mb-1">RYAN</p><p className="text-slate-700 font-bold text-sm">8:10 – 16:30</p></div>
-                    <div className="bg-blue-50 p-4 rounded border border-blue-100"><p className="text-blue-600 font-black text-[11px] mb-1">YARON</p><p className="text-slate-700 font-bold text-sm">9:45 – 12:30</p></div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// --- BITVAVO WIDGET ---
-function CryptoWidget() {
-    const [p, setP] = useState([]); const [tot, setTot] = useState(0); const [loading, setLoading] = useState(true);
-    useEffect(() => {
-        const fetchBv = async () => {
-            const k = S.load('bitvavo_keys', {pub: '', sec: ''});
-            if(!k.pub) { setLoading(false); return; }
             try {
-                const res = await fetch('/api/bitvavo', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key: k.pub, secret: k.sec }) });
-                const d = await res.json();
-                let ct = 0; const comb = d.balances.map(b => {
-                    const am = parseFloat(b.available) + parseFloat(b.inOrder);
-                    const pr = d.prices.find(x => x.market === `${b.symbol}-EUR`)?.price || 0;
-                    ct += am * pr; return { s: b.symbol, v: am * pr, am };
-                }).filter(x=>x.v>1).sort((a,b)=>b.v-a.v);
-                setP(comb); setTot(ct);
-            } catch (e) {}
+                const res = await fetch('/api/bitvavo', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ key: bvKeys.pub, secret: bvKeys.sec })
+                });
+                const data = await res.json();
+                if(data.error) throw new Error(data.error);
+
+                let calcTotal = 0;
+                const combined = data.balances.map(b => {
+                    const amount = parseFloat(b.available) + parseFloat(b.inOrder);
+                    if(b.symbol === 'EUR') { calcTotal += amount; return { sym: 'EUR', amount, price: 1, val: amount }; }
+                    const priceObj = data.prices.find(p => p.market === `${b.symbol}-EUR`);
+                    const price = priceObj ? parseFloat(priceObj.price) : 0;
+                    const val = amount * price;
+                    calcTotal += val;
+                    return { sym: b.symbol, amount, price, val };
+                }).sort((a,b) => b.val - a.val);
+
+                setPortfolio(combined); setTotal(calcTotal); setErr('');
+            } catch (error) { setErr(error.message); }
             setLoading(false);
         };
-        fetchBv();
-    }, []);
+        fetchBitvavo();
+    }, [lang]);
+    
     return (
-        <div className="widget h-[400px] p-6 bg-white">
-            <div className="flex items-center gap-2 mb-6 text-slate-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Portfolio</h3></div>
-            <div className="mb-6"><span className="text-[10px] font-bold text-gray-400 block mb-1 uppercase">Totale Waarde</span><div className="text-3xl font-black text-slate-800">€{tot.toLocaleString('nl-NL', {maximumFractionDigits:0})}</div></div>
-            <div className="space-y-3 overflow-y-auto flex-1 hide-scroll pr-1">
-                {p.map((c, i) => (
-                    <div key={i} className="relative p-3 border border-gray-50 rounded flex justify-between items-center bg-gray-50/50 group overflow-hidden">
-                        <div className="sparkline-bg"></div>
-                        <div className="relative z-10"><span className="font-black text-xs block text-slate-800">{c.s}</span><span className="text-[10px] text-gray-400 font-bold">{c.am.toFixed(2)} units</span></div>
-                        <div className="text-right relative z-10"><span className="font-black text-xs block text-slate-800">€{c.v.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span></div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-// --- AI WIDGET ---
-function AIWidget() {
-    const [msg, setMsg] = useState('');
-    const [hist, setHist] = useState(S.load('ai_hist', [{r: 'ai', t: 'Welkom Michael.'}]));
-    const send = async () => {
-        if(!msg) return; const n = [...hist, {r: 'usr', t: msg}]; setHist(n); S.save('ai_hist', n); setMsg('');
-        const key = (S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('openai')) || {}).val;
-        if (key) {
-            try {
-                const res = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` }, body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: [{role: 'user', content: msg}] }) });
-                const data = await res.json();
-                if(data.choices) { const r = [...n, {r: 'ai', t: data.choices[0].message.content}]; setHist(r); S.save('ai_hist', r); }
-            } catch(e) { setHist([...n, {r: 'ai', t: 'API Fout.'}]); }
-        } else { setHist([...n, {r: 'ai', t: 'Geen OpenAI key gevonden.'}]); }
-    };
-    return (
-        <div className="widget h-[350px] p-5 bg-white">
-            <div className="flex items-center gap-2 text-slate-500 mb-5"><Ico.Bot/><h3 className="text-[10px] font-black uppercase tracking-widest">AI Assistent</h3></div>
-            <div className="flex-1 overflow-y-auto mb-4 space-y-3 text-[11px] hide-scroll">{hist.slice(-15).map((m,i)=><div key={i} className={`p-3 rounded-lg ${m.r==='ai'?'bg-gray-100 text-slate-800':'bg-blue-600 text-white self-end'}`}>{m.t}</div>)}</div>
-            <div className="flex gap-2 border-t pt-4"><input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} className="flex-1 text-[11px] outline-none bg-transparent" placeholder="Typ een bericht aan ChatGPT..."/><button onClick={send} className="text-blue-600 font-black text-[10px] tracking-widest">STUUR</button></div>
-        </div>
-    );
-}
-
-// --- OVERIGE WIDGETS ---
-function NewsWidget() {
-    return (
-        <div className="widget h-[250px] p-5 bg-white">
-            <div className="flex items-center gap-2 text-slate-500 mb-5"><Ico.Nws/><h3 className="text-[10px] font-black uppercase tracking-widest">Nieuws</h3></div>
-            <div className="space-y-4 overflow-y-auto hide-scroll"><div className="border-b pb-3"><p className="text-[11px] font-bold">Live: Bitcoin breekt door 90k grens.</p><span className="text-[9px] text-gray-400 uppercase mt-1 block">Crypto · 1u</span></div><div className="border-b pb-3"><p className="text-[11px] font-bold">Tech: Nieuwe AI ontwikkelingen van OpenAI.</p><span className="text-[9px] text-gray-400 uppercase mt-1 block">AI · 3u</span></div></div>
-        </div>
-    );
-}
-
-function PepperWidget() {
-    return (
-        <div className="widget h-[250px] p-5 bg-white">
-            <div className="flex items-center gap-2 text-slate-500 mb-5"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest">Pepper Deals</h3></div>
-            <div className="space-y-4 overflow-y-auto hide-scroll"><div className="border-b pb-3"><div className="flex justify-between items-center mb-1"><span className="bg-red-500 text-white text-[8px] px-1 rounded font-black">HOT</span><span className="text-blue-600 font-black text-xs">€249</span></div><p className="text-[11px] font-bold">Sony WH-1000XM5 Black</p></div></div>
-        </div>
-    );
-}
-
-function MiniWidget({ ico, label }) {
-    return (
-        <div className="widget h-[150px] p-5 bg-white flex items-center justify-center border-dashed border-2 border-gray-100">
-            <div className="text-center opacity-30 text-slate-400">
-                <div className="flex justify-center mb-2">{ico}</div>
-                <p className="text-[9px] font-black uppercase tracking-widest">{label}</p>
+        <div className="widget h-[450px]">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div></div>
+            <div className="p-5 flex-1 flex flex-col bg-white">
+                <div className="mb-4">
+                    <span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE (EUR)</span>
+                    <div className="text-3xl font-black">{loading ? '...' : err ? 'Error' : `€ ${total.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}</div>
+                </div>
+                {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Syncing...</div> : 
+                 err ? <div className="text-[10px] text-red-500 p-4 bg-red-50 rounded border border-red-100">{err}</div> :
+                 <div className="space-y-3 overflow-y-auto flex-1">
+                    {portfolio.map((c, i) => (
+                        <div key={i} className="relative p-3 border rounded flex justify-between items-center bg-white shadow-sm hover:border-blue-300 overflow-hidden">
+                            <div className="sparkline-bg"></div>
+                            <div className="relative z-10"><span className="font-bold text-sm block">{c.sym}</span><span className="text-[9px] text-gray-500">{c.amount} units</span></div>
+                            <div className="text-right relative z-10"><span className="font-bold text-sm block">€{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span><span className="text-[9px] text-gray-400">€{c.price.toLocaleString('nl-NL')}</span></div>
+                        </div>
+                    ))}
+                 </div>}
             </div>
         </div>
     );
 }
 
 function Settings({ isOpen, onClose }) {
-    const [bv, setBv] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
-    const [api, setApi] = useState(S.load('api_keys_dyn', [{name: 'OpenAI', val: ''}]));
-    const [ic, setIc] = useState(S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]));
-    const save = () => { S.save('bitvavo_keys', bv); S.save('api_keys_dyn', api); S.save('icals_dyn', ic); onClose(); window.location.reload(); };
+    const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
+    const saveAll = () => { S.save('bitvavo_keys', bvKeys); onClose(); window.location.reload(); };
+
     return (
-        <div className={`settings-panel p-8 ${isOpen ? 'open' : ''}`}>
-            <h2 className="text-2xl font-black mb-8 border-b pb-4 uppercase tracking-tighter">Dashboard Instellingen</h2>
-            <div className="space-y-8">
-                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-3 tracking-widest">Bitvavo API</h3><input type="text" placeholder="API Key" value={bv.pub} onChange={e=>setBv({...bv, pub:e.target.value})} className="w-full p-3 border rounded-lg mb-2 text-xs font-mono bg-slate-50"/><input type="password" placeholder="API Secret" value={bv.sec} onChange={e=>setBv({...bv, sec:e.target.value})} className="w-full p-3 border rounded-lg text-xs font-mono bg-slate-50"/></section>
-                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-3 tracking-widest">OpenAI (ChatGPT)</h3><input type="password" value={api[0].val} onChange={e=>{const n=[...api]; n[0].val=e.target.value; setApi(n);}} className="w-full p-3 border rounded-lg text-xs font-mono bg-slate-50"/></section>
-                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-3 tracking-widest">Agenda iCal Links</h3>{ic.map((c,i)=>(<div key={i} className="flex gap-2 mb-3"><input value={c.name} onChange={e=>{const n=[...ic]; n[i].name=e.target.value; setIc(n);}} className="w-1/4 p-2 border rounded font-black text-[10px] bg-slate-50"/><input value={c.val} onChange={e=>{const n=[...ic]; n[i].val=e.target.value; setIc(ic);}} className="flex-1 p-2 border rounded text-[10px] font-mono bg-slate-50"/></div>))}</section>
-            </div>
-            <button onClick={save} className="mt-10 w-full bg-slate-900 text-white py-4 text-[11px] font-black uppercase rounded shadow-xl hover:bg-black transition">Systeem Opslaan & Herladen</button>
+        <div className={`settings-panel p-6 md:p-8 ${isOpen ? 'open' : ''}`}>
+            <div className="flex justify-between items-center mb-8 border-b pb-4"><h2 className="text-2xl font-black uppercase">Configuratie</h2><button onClick={onClose} className="text-3xl text-gray-400">&times;</button></div>
+            <section className="mb-8">
+                <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Bitvavo API (Live)</h3>
+                <input type="text" placeholder="API Key" value={bvKeys.pub} onChange={e=>setBvKeys({...bvKeys, pub: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 mb-2 outline-none" />
+                <input type="password" placeholder="API Secret" value={bvKeys.sec} onChange={e=>setBvKeys({...bvKeys, sec: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none" />
+            </section>
+            <button onClick={saveAll} className="w-full bg-[#1a1a1a] text-white py-4 text-[10px] font-black uppercase rounded shadow-lg">Opslaan & Herladen</button>
         </div>
     );
 }
 
 function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
-    const [setOpen, setSetOpen] = useState(false);
-    useEffect(() => { if (!isAuth && window.google) { window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: h => { const p = JSON.parse(atob(h.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); if(p.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { setIsAuth(true); S.save('auth_status', true); } else { alert("Geen toegang voor "+p.email); } } }); window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" }); } }, [isAuth]);
-    if (!isAuth) return <div className="min-h-screen flex items-center justify-center bg-[#000a14]"><div className="bg-white/5 p-12 rounded-2xl border border-white/10 text-center"><Ico.Lock /><h1 className="text-xl font-black mt-6 mb-8 text-white uppercase tracking-widest leading-none">Michael Dashboard<br/><span className="text-[8px] opacity-40 font-bold uppercase tracking-widest mt-2 block">Secured Intelligence System</span></h1><div id="google-btn"></div></div></div>;
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    
+    useEffect(() => {
+        if (!isAuth && window.google) {
+            window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: (r) => {
+                const p = JSON.parse(atob(r.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+                if(p.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { setIsAuth(true); S.save('auth_status', true); }
+            }});
+            window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large" });
+        }
+    }, [isAuth]);
+
+    if (!isAuth) return <div className="min-h-screen flex items-center justify-center bg-[#000a14]"><div id="google-btn"></div></div>;
+
     return (
-        <div className="flex flex-col min-h-screen pb-20">
-            <header className="px-6 py-10 max-w-[1600px] mx-auto w-full flex justify-between items-end border-b border-white/10 mb-10">
-                <div><h1 className="text-3xl font-black text-white tracking-tighter uppercase leading-none">Michael Dashboard</h1><p className="text-blue-400 text-[9px] font-black uppercase tracking-[0.5em] mt-3">Live intelligence system v4.3</p></div>
-                <div className="flex gap-4">
-                    <button onClick={() => {setIsAuth(false); S.remove('auth_status'); window.location.reload();}} className="p-3 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition backdrop-blur-sm"><Ico.Lock /></button>
-                    <button onClick={() => setSetOpen(true)} className="p-3 bg-white/10 text-white rounded hover:bg-white/20 transition"><Ico.Set /></button>
-                </div>
+        <div className="flex flex-col min-h-screen">
+            <header className="px-6 md:px-10 py-8 max-w-[1600px] mx-auto w-full flex justify-between items-center">
+                <h1 className="text-xl font-black text-white uppercase tracking-tight">Personal Dashboard</h1>
+                <button onClick={() => setSettingsOpen(true)} className="p-3 bg-white/10 text-white rounded"><Ico.Set /></button>
             </header>
-            <main className="px-6 max-w-[1600px] mx-auto w-full grid grid-cols-12 gap-10">
-                <div className="col-span-12 lg:col-span-8 h-fit"><AgendaWidget /></div>
-                <div className="col-span-12 lg:col-span-4 space-y-10">
-                    <CryptoWidget />
-                    <AIWidget />
-                    <NewsWidget />
-                    <PepperWidget />
-                    <div className="grid grid-cols-2 gap-4">
-                        <MiniWidget ico={<Ico.Sud/>} label="Sudoku" />
-                        <MiniWidget ico={<Ico.Lng/>} label="Talen" />
-                    </div>
+            <main className="px-6 md:px-10 pb-16 max-w-[1600px] mx-auto w-full">
+                <div className="grid grid-cols-12 gap-6">
+                    <div className="col-span-12 lg:col-span-4"><CryptoWidget lang="nl" /></div>
                 </div>
             </main>
-            <Settings isOpen={setOpen} onClose={() => setSetOpen(false)} />
+            <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
         </div>
     );
 }
+
 ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
