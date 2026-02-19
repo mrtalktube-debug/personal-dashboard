@@ -1,36 +1,40 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Michael's Strategic Dashboard</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Dashboard - Michael</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root { --p-blue: #0073b1; --bg: linear-gradient(135deg, #001a33 0%, #000a14 100%); }
-        body { background: var(--bg); min-height: 100vh; font-family: 'Inter', sans-serif; color: #1a1a1a; margin: 0; }
-        .widget { background: rgba(255,255,255,0.98); border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; }
-        .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; text-align: center; cursor: pointer; }
+        body { background: var(--bg); min-height: 100vh; font-family: 'Inter', sans-serif; margin: 0; color: #1a1a1a; }
+        .widget { background: rgba(255,255,255,0.98); border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; transition: 0.2s; text-align: center; cursor: pointer; }
         .tab-btn.active { color: var(--p-blue); border-bottom-color: var(--p-blue); background: rgba(0,115,177,0.05); }
-        .sudoku-container { width: 100%; max-width: 320px; aspect-ratio: 1/1; margin: 0 auto; display: grid; grid-template-columns: repeat(9, 1fr); border: 2px solid #1a1a1a; }
-        .sudoku-cell { border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; cursor: pointer; aspect-ratio: 1/1; font-size: 1rem; }
-        .sudoku-cell.fixed { background: #f1f5f9; font-weight: 900; }
-        .sudoku-cell.selected { background: #e0f2fe; }
+        .sudoku-container { width: 100%; max-width: 320px; aspect-ratio: 1/1; margin: 0 auto; display: grid; grid-template-columns: repeat(9, 1fr); border: 2px solid #1a1a1a; background: white; }
+        .sudoku-cell { width: 100%; height: 100%; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.1s; position: relative; user-select: none; }
+        .sudoku-cell.selected { background: #e0f2fe; border-color: var(--p-blue); z-index: 10; }
+        .sudoku-cell.fixed { background: #f8fafc; font-weight: 900; color: #1e293b; font-size: 1.1rem; }
+        .sudoku-cell.input { font-weight: 700; color: var(--p-blue); font-size: 1.2rem; }
+        .sudoku-candidates { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); width: 100%; height: 100%; font-size: 0.45rem; line-height: 1; color: #64748b; padding: 1px; }
         .border-r-thick { border-right: 2px solid #1a1a1a !important; }
         .border-b-thick { border-bottom: 2px solid #1a1a1a !important; }
-        .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; transform: translateX(100%); transition: 0.3s ease; overflow-y: auto; box-shadow: -10px 0 30px rgba(0,0,0,0.5); }
+        .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; box-shadow: -10px 0 30px rgba(0,0,0,0.5); transform: translateX(100%); transition: 0.3s ease; overflow-y: auto; }
         .settings-panel.open { transform: translateX(0); }
+        .sparkline-bg { position: absolute; bottom: 0; left: 0; right: 0; height: 40px; opacity: 0.08; background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><path d="M0 30 L10 20 L20 25 L30 15 L40 18 L50 5 L60 10 L70 2 L80 12 L90 5 L100 0 L100 30 Z" fill="%230073b1"/></svg>'); background-size: cover; background-position: bottom; pointer-events: none; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 4px; }
         .hide-scroll::-webkit-scrollbar { display: none; }
+        .ai-transition { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
 <body>
 <div id="root"></div>
-
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
@@ -40,126 +44,551 @@ const ALLOWED_EMAIL = "diabaas3@gmail.com";
 // ------------------------
 
 const S = {
-    load: (k, d) => { try { const v = localStorage.getItem('d4_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
-    save: (k, v) => localStorage.setItem('d4_'+k, JSON.stringify(v)),
-    remove: (k) => localStorage.removeItem('d4_'+k)
+    load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
+    save: (k, v) => localStorage.setItem('d_'+k, JSON.stringify(v)),
+    remove: (k) => localStorage.removeItem('d_'+k)
+};
+
+const emitCmd = (type, payload) => window.dispatchEvent(new CustomEvent('dashCmd', { detail: { type, payload } }));
+const fmtDate = (dStr) => { const p = dStr.split('-'); return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : dStr; };
+
+const T = {
+    nl: { port: 'Portfolio', ag: 'Agenda', nws: 'Nieuws & Updates', rad: 'Investeringen', deal: 'Pepper Deals', rec: 'Recepten', lang: 'Talen', day: 'DAG', wk: 'WEEK', src: 'BRON', blk: 'BLOCK', cal: 'Kalender', std: 'Standings', lst: 'Laatste', new: 'Nieuw Spel' },
+    en: { port: 'Portfolio', ag: 'Schedule', nws: 'News & Updates', rad: 'Investments', deal: 'Deals', rec: 'Recipes', lang: 'Languages', day: 'DAY', wk: 'WEEK', src: 'SOURCE', blk: 'BLOCK', cal: 'Calendar', std: 'Standings', lst: 'Latest', new: 'New Game' }
 };
 
 const Ico = {
-    Lock: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>,
-    Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" strokeWidth="2"/></svg>,
-    Bot: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+    Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
+    Wea: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>,
+    Bot: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>,
+    Cry: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
+    Cal: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
+    Nws: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>,
+    Rad: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>,
+    Tag: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>,
+    F1: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>,
+    Glf: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path strokeWidth="2" d="M12 18a6 6 0 100-12 6 6 0 000 12z"/></svg>,
+    Lng: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 11.37 9.198 15.299 6 18.5"/></svg>,
+    Fod: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>,
+    Sud: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16M10 4v16M14 4v16"/></svg>,
+    Spk: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>,
+    Trs: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>,
+    Ref: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
+    Clip: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>,
+    Up: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
+    Dn: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>,
+    Drag: () => <svg className="w-4 h-4 text-gray-400 cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>,
+    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
 };
 
-// --- Sub-componenten ---
 function WeatherBar({ lang }) {
-    const [city, setCity] = useState(S.load('w_city', 'Zoetermeer'));
-    const [data, setData] = useState(null);
-
+    const [c, setC] = useState(S.load('wcity', 'Zoetermeer'));
+    const [w, setW] = useState(null);
+    useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_CITY') { setC(e.detail.payload); S.save('wcity', e.detail.payload); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, []);
     useEffect(() => {
-        const fetchW = async () => {
-            try {
-                const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1&language=nl`).then(r=>r.json());
-                if(geo.results) {
-                    const { latitude:lat, longitude:lon, name } = geo.results[0];
-                    const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature&hourly=precipitation_probability&timezone=auto`).then(r=>r.json());
-                    setData({ temp: Math.round(w.current.temperature_2m), feel: Math.round(w.current.apparent_temperature), name });
-                }
-            } catch(e) { console.error("Weather error", e); }
-        };
-        fetchW();
-    }, [city]);
+        fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${c}&count=1&language=${lang}`).then(r=>r.json()).then(d=>{
+            if(d.results){
+                const { latitude:lat, longitude:lon, name } = d.results[0];
+                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation&hourly=precipitation_probability&timezone=auto`)
+                .then(r=>r.json()).then(wd => { const ch=new Date().getHours(); let rf=null; for(let i=ch; i<ch+12; i++) { if(wd.hourly.precipitation_probability[i]>30){rf=i-ch;break;} } setW({ t: Math.round(wd.current.temperature_2m), f: Math.round(wd.current.apparent_temperature), rain: rf, name }); });
+            }
+        });
+    }, [c, lang]);
 
     return (
-        <div className="bg-white/10 px-6 py-3 border-b border-white/10 flex justify-between items-center text-white text-[10px] font-bold uppercase tracking-widest">
-            <div className="flex items-center gap-4">
-                <span className="cursor-pointer hover:text-blue-400" onClick={() => {const n=prompt("Stad:", city); if(n) {setCity(n); S.save('w_city', n);}}}>{data?.name || city}</span>
-                <span>{data ? `${data.temp}°C` : '--'}</span>
-                <span className="opacity-50 hidden md:inline">Gevoel: {data?.feel || '--'}°C</span>
-            </div>
-            <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span>Systeem Live</span>
+        <div className="bg-white/10 px-4 md:px-10 py-3 border-b border-white/10 flex justify-between items-center text-white text-xs font-bold uppercase tracking-widest">
+            <div className="flex gap-4 md:gap-8 items-center w-full">
+                <div className="flex items-center gap-2 cursor-pointer hover:text-blue-300 transition" onClick={()=>{const n=prompt(lang==='nl'?"Stad:":"City:",c);if(n){setC(n);S.save('wcity',n);}}}><Ico.Wea/> <span className="hidden md:inline">{w?.name||c}</span></div>
+                <div className="flex gap-3 md:gap-4 items-center"><span className="text-sm md:text-lg">{w?.t}°C</span><span className="opacity-60 text-[10px] md:text-xs">{lang==='nl'?'Gevoel':'Feels'}: {w?.f}°C</span></div>
+                <div className="ml-auto bg-blue-500/20 px-3 py-1.5 rounded flex items-center gap-2"><span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span><span className="hidden md:inline">{w?.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : w?.rain ? (lang==='nl'?`Regen over ${w.rain}u`:`Rain in ${w.rain}h`) : (lang==='nl'?"Geen regen verwacht":"No rain expected")}</span><span className="md:hidden">{w?.rain===0?"Regen":w?.rain?`${w.rain}u`:"Droog"}</span></div>
             </div>
         </div>
     );
 }
 
-// --- Main App ---
-function App() {
-    const [isAuth, setIsAuth] = useState(S.load('auth', false));
-    const [settingsOpen, setSettingsOpen] = useState(false);
-    const [layout, setLayout] = useState(S.load('layout', ['ai', 'crypto', 'agenda']));
+function DailyBriefing({ lang }) {
+    return (
+        <div className="bg-blue-600/20 border border-blue-500/30 text-blue-100 rounded-lg p-4 mb-6 flex flex-col md:flex-row items-center gap-4 shadow-lg backdrop-blur-md">
+            <div className="bg-blue-500 p-2 rounded-full text-white shrink-0"><Ico.Bot /></div>
+            <div className="text-sm font-medium leading-relaxed">
+                <span className="font-bold">System Briefing:</span> {lang==='nl' ? 'Live API systemen en veilige Vercel backend geactiveerd.' : 'Live API systems and secure Vercel backend activated.'}
+            </div>
+        </div>
+    );
+}
+
+function AIWidget({ lang }) {
+    const [msg, setMsg] = useState('');
+    const [hist, setHist] = useState(S.load('ai_hist', [{r: 'ai', t: lang==='nl'?'Welkom. Typ een dashboard commando of vraag.':'Welcome. Type a command or ask a question.'}]));
+    const [showHist, setShowHist] = useState(false);
+    const [model, setModel] = useState(S.load('ai_model', 'ChatGPT'));
+    const [exp, setExp] = useState(false);
+    
+    const speak = (txt) => { const u = new SpeechSynthesisUtterance(txt); u.lang = lang==='nl'?'nl-NL':'en-US'; window.speechSynthesis.speak(u); };
+    
+    const send = async () => {
+        if(!msg) return; const input = msg.toLowerCase(); const n = [...hist, {r: 'usr', t: msg}]; setHist(n); S.save('ai_hist', n); setMsg('');
+        if(input.includes('weer') || input.includes('weather')) { const city = input.split('naar')[1]?.trim() || input.split('to')[1]?.trim() || 'Amsterdam'; emitCmd('SET_CITY', city); setTimeout(() => { const r = [...n, {r: 'ai', t: lang==='nl'?`Weer aangepast naar ${city}.`:`Weather changed to ${city}.`}]; setHist(r); S.save('ai_hist', r); }, 500); return; }
+        if(input.includes('agenda') || input.includes('schedule')) { emitCmd('SET_AGENDA', input.split('agenda')[1]?.trim() || input.split('schedule')[1]?.trim()); setTimeout(() => { const r = [...n, {r: 'ai', t: lang==='nl'?`Agenda gefilterd.`:`Schedule filtered.`}]; setHist(r); S.save('ai_hist', r); }, 500); return; }
+        
+        const openAiKey = (S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('openai')) || {}).val;
+        if (openAiKey) {
+            try {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAiKey}` }, body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: [{role: 'user', content: msg}] }) });
+                const data = await res.json();
+                if(data.choices) { const r = [...n, {r: 'ai', t: data.choices[0].message.content}]; setHist(r); S.save('ai_hist', r); }
+            } catch(e) { const r = [...n, {r: 'ai', t: 'API Error.'}]; setHist(r); S.save('ai_hist', r); }
+        } else { setTimeout(() => { const r = [...n, {r: 'ai', t: `(${model}): Geen API key gevonden in Settings.`}]; setHist(r); S.save('ai_hist', r); }, 600); }
+    };
+
+    return (
+        <div className={`widget ai-transition ${exp ? 'h-[450px]' : 'h-[72px]'}`}>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center cursor-pointer" onClick={()=>setExp(true)}>
+                <div className="flex items-center gap-2 text-gray-500"><Ico.Bot/><h3 className="text-[10px] font-black uppercase tracking-widest">AI Assistant</h3></div>
+                {exp ? (
+                    <div className="flex gap-2 items-center"><select value={model} onChange={e=>{setModel(e.target.value);S.save('ai_model',e.target.value)}} className="bg-white border rounded px-2 py-1 text-[9px] font-bold text-blue-700 outline-none"><option>ChatGPT</option></select><button onClick={(e)=>{e.stopPropagation();setShowHist(!showHist)}} className="px-2 py-1 bg-gray-200 rounded text-[9px] font-bold">Historie</button><button onClick={(e)=>{e.stopPropagation();setExp(false)}} className="text-gray-400 font-bold ml-2 text-lg">&times;</button></div>
+                ) : <div className="text-[10px] font-bold text-gray-400 uppercase">Openen ▼</div>}
+            </div>
+            <div className={`flex-1 flex overflow-hidden bg-white ${exp ? 'opacity-100' : 'opacity-0'}`}>
+                <div className={`flex-1 p-4 overflow-y-auto space-y-4 ${showHist ? 'hidden md:block' : 'block'}`}>
+                    {hist.slice(-10).map((m, i) => (
+                        <div key={i} className={`flex flex-col ${m.r==='ai'?'items-start':'items-end'}`}>
+                            <div className={`p-3 rounded-lg text-sm max-w-[85%] shadow-sm ${m.r==='ai'?'bg-gray-100 text-gray-800':'bg-[#0073b1] text-white whitespace-pre-wrap'}`}>{m.t}</div>
+                            {m.r==='ai' && <button onClick={()=>speak(m.t)} className="mt-1 flex items-center gap-1 text-[9px] text-gray-400 hover:text-blue-600 font-bold uppercase"><Ico.Spk/> {lang==='nl'?'Voorlees':'Speak'}</button>}
+                        </div>
+                    ))}
+                </div>
+            </div>
+            {exp && <div className="p-3 border-t bg-gray-50 flex gap-2"><button className="px-3 bg-white border rounded text-gray-400 hover:text-blue-600 transition"><Ico.Clip/></button><input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} placeholder={lang==='nl'?"Commando of vraag...":"Command or question..."} className="flex-1 border p-2.5 rounded text-sm outline-none focus:border-blue-500 shadow-sm" /><button onClick={send} className="bg-[#0073b1] text-white px-5 font-bold rounded text-xs uppercase hover:bg-[#005a8c] transition">Zend</button></div>}
+        </div>
+    );
+}
+
+function CryptoWidget({ lang }) {
+    const [valuta, setValuta] = useState('EUR'); 
+    const [tf, setTf] = useState('1M'); 
+    const [view, setView] = useState('list');
+    const [portfolio, setPortfolio] = useState([]);
+    const [total, setTotal] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState('');
+    const chartRef = useRef(null); let cInst = useRef(null);
 
     useEffect(() => {
+        const fetchBitvavo = async () => {
+            const bvKeys = S.load('bitvavo_keys', {pub: '', sec: ''});
+            if(!bvKeys.pub || !bvKeys.sec) {
+                setErr(lang==='nl'?'Vul je Bitvavo keys in via Instellingen':'Enter Bitvavo keys in Settings');
+                setLoading(false); return;
+            }
+            try {
+                const res = await fetch('/api/bitvavo', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ key: bvKeys.pub, secret: bvKeys.sec })
+                });
+                const data = await res.json();
+                if(data.error) throw new Error(data.error);
+
+                let calcTotal = 0;
+                const combined = data.balances.map(b => {
+                    const amount = parseFloat(b.available) + parseFloat(b.inOrder);
+                    if(b.symbol === 'EUR') { calcTotal += amount; return { sym: 'EUR', amount, price: 1, val: amount }; }
+                    const priceObj = data.prices.find(p => p.market === `${b.symbol}-EUR`);
+                    const price = priceObj ? parseFloat(priceObj.price) : 0;
+                    const val = amount * price;
+                    calcTotal += val;
+                    return { sym: b.symbol, amount, price, val };
+                }).sort((a,b) => b.val - a.val);
+
+                setPortfolio(combined); setTotal(calcTotal); setErr('');
+            } catch (error) { setErr(error.message); }
+            setLoading(false);
+        };
+        fetchBitvavo();
+    }, [lang]);
+
+    useEffect(() => {
+        if(view === 'chart' && chartRef.current && !loading && !err) {
+            if(cInst.current) cInst.current.destroy();
+            const labels = tf==='1D'?['08:00','12:00','16:00','Nu'] : tf==='1M'?['Wk 1','Wk 2','Wk 3','Nu'] : tf==='1Y'?['Q1','Q2','Q3','Nu'] : ['2023','2024','2025','Nu'];
+            const dData = tf==='1D'?[0,1,0.5,2.4] : tf==='1M'?[0,4,-2,2.4] : tf==='1Y'?[0,15,10,42] : [0,50,150,210]; 
+            cInst.current = new Chart(chartRef.current, { type: 'line', data: { labels, datasets: [{ data: dData, borderColor: '#0073b1', backgroundColor: 'rgba(0,115,177,0.1)', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+        }
+    }, [view, tf, loading, err]);
+    
+    const sym = valuta==='EUR'?'€':valuta==='USD'?'$':'₿';
+    const displayTotal = valuta==='BTC' ? (total/90000).toFixed(4) : total; 
+    
+    return (
+        <div className="widget h-[450px]">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div><div className="flex gap-2"><div className="flex bg-gray-200 rounded p-1">{['list','chart'].map(v=><button key={v} onClick={()=>setView(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${view===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>)}</div></div></div>
+            <div className="p-5 flex-1 flex flex-col bg-white">
+                <div className="mb-4 flex justify-between items-start"><div><span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE ({valuta})</span><div className="text-3xl font-black">{loading ? '...' : err ? 'Error' : `${sym} ${displayTotal.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}</div></div></div>
+                
+                {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Syncing with Bitvavo...</div> : 
+                 err ? <div className="flex-1 text-[10px] text-red-500 font-bold p-4 bg-red-50 rounded border border-red-100">{err}</div> :
+                 view === 'list' ? (
+                    <div className="space-y-3 overflow-y-auto flex-1 hide-scroll">
+                        {portfolio.map((c, i) => (
+                            <div key={i} className="relative p-3 border rounded flex justify-between items-center bg-white shadow-sm hover:border-blue-300 group overflow-hidden">
+                                <div className="sparkline-bg"></div>
+                                <div className="relative z-10"><span className="font-bold text-sm block">{c.sym}</span><span className="text-[9px] text-gray-500 font-medium">{c.amount} units</span></div>
+                                <div className="text-right flex items-center gap-3 relative z-10"><div className="flex flex-col items-end"><span className="font-bold text-sm">{sym}{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span><span className="text-[9px] text-gray-400 font-mono">1 {c.sym} = {sym}{c.price.toLocaleString('nl-NL')}</span></div></div>
+                            </div>
+                        ))}
+                    </div>
+                ) : <div className="flex-1 flex flex-col"><div className="flex gap-2 mb-2">{['1D','1M','1Y','ALL'].map(t=><button key={t} onClick={()=>setTf(t)} className={`text-[9px] font-bold px-2 py-1 border rounded ${tf===t?'bg-blue-600 text-white':''}`}>{t}</button>)}</div><div className="flex-1 min-h-[150px]"><canvas ref={chartRef}></canvas></div></div>}
+            </div>
+        </div>
+    );
+}
+
+function AgendaWidget({ lang }) {
+    const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
+    const cals = rawCals.map(c=>c.name).filter(Boolean);
+    const [view, setView] = useState('week'); const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
+    const [f, setF] = useState(cals);
+    const [items, setItems] = useState([]);
+    
+    useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => c.toLowerCase().includes(e.detail.payload?.toLowerCase() || '')); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
+
+    useEffect(() => {
+        const fetchCals = async () => {
+            let allEvs = [];
+            for(let c of rawCals) {
+                if(!c.val) continue;
+                try {
+                    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(c.val)}`);
+                    const txt = await res.text();
+                    let cur = {}; const lines = txt.split(/\r?\n/);
+                    for(let l of lines) {
+                        if(l.startsWith('BEGIN:VEVENT')) cur = {};
+                        else if(l.startsWith('SUMMARY:')) cur.t = l.substring(8);
+                        else if(l.startsWith('DTSTART')) { const m = l.match(/:(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/); if(m) { cur.date = `${m[1]}-${m[2]}-${m[3]}`; cur.time = m[4] ? `${m[4]}:${m[5]}` : 'Hele dag'; } }
+                        else if(l.startsWith('END:VEVENT') && cur.t && cur.date) allEvs.push({...cur, p: c.name});
+                    }
+                } catch(e) { console.error("iCal error", e); }
+            }
+            if(allEvs.length === 0) allEvs = [{ t: 'Geen afspraken of vul iCal link in bij instellingen.', p: cals[0] || 'Systeem', date: new Date().toISOString().split('T')[0], time: '00:00' }];
+            setItems(allEvs);
+        };
+        fetchCals();
+    }, [JSON.stringify(rawCals)]);
+
+    const colors = ['border-red-500', 'border-blue-500', 'border-green-500', 'border-purple-500', 'border-yellow-500', 'border-pink-500'];
+    const getColor = (name) => colors[cals.indexOf(name) % colors.length];
+
+    const tEnd = new Date(d); tEnd.setDate(tEnd.getDate() + 7); const dEnd = tEnd.toISOString().split('T')[0];
+    const filteredItems = items.filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd))).sort((a,b)=>a.time.localeCompare(b.time));
+
+    return (
+        <div className="widget h-[450px]">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].ag}</h3></div><div className="flex bg-gray-200 p-1 rounded"><button onClick={()=>setView('dag')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='dag'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].day}</button><button onClick={()=>setView('week')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='week'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].wk}</button></div></div>
+            <div className="flex border-b bg-white overflow-x-auto p-2 gap-2 hide-scroll">{cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-2 py-1.5 text-[9px] font-bold border rounded uppercase whitespace-nowrap ${f.includes(p)?'bg-[#0073b1] text-white border-[#0073b1]':'text-gray-400 bg-gray-50'}`}>{p}</button>)}</div>
+            <div className="p-3 flex border-b bg-gray-50 justify-center"><div className="flex items-center gap-1 bg-white border rounded"><button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&lt;</button><span className="text-[10px] font-bold w-[90px] text-center">{fmtDate(d)}</span><button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&gt;</button></div></div>
+            <div className="flex-1 p-4 bg-white grid grid-cols-2 gap-3 overflow-y-auto content-start">
+                {filteredItems.map((i, idx) => <div key={idx} className={`p-3 border-l-4 ${getColor(i.p)} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}><div className="flex justify-between items-start mb-1"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week'?`${fmtDate(i.date).slice(0,5)} `:''}{i.p}</span><span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded">{i.time}</span></div><span className="font-bold text-xs leading-tight">{i.t}</span></div>)}
+            </div>
+        </div>
+    );
+}
+
+function NewsWidget({ lang }) {
+    const [cols, setCols] = useState(S.load('newscats', ['AI & Tech', 'Crypto', 'Biotech'])); const [manage, setManage] = useState(false);
+    const [newsData, setNewsData] = useState({});
+
+    useEffect(() => {
+        cols.forEach(cat => {
+            const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${lang==='nl'?'nl':'en-US'}&gl=${lang==='nl'?'NL':'US'}`;
+            fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
+            .then(r=>r.json()).then(d => { if(d.items) setNewsData(p => ({...p, [cat]: d.items.slice(0,5)})); })
+            .catch(e => console.error(e));
+        });
+    }, [cols, lang]);
+    
+    return (
+        <div className="widget h-[450px]">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Nws/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].nws}</h3></div><button onClick={()=>setManage(!manage)} className="text-gray-400 hover:text-blue-600"><Ico.Set/></button></div>
+            {manage && <div className="p-4 bg-gray-100 border-b flex justify-between text-[10px] font-bold"><span className="text-blue-600">Beheer je topics direct in dit scherm</span></div>}
+            <div className="flex overflow-x-auto flex-1 bg-white hide-scroll">
+                {cols.map(cat => (
+                    <div key={cat} className="min-w-[300px] w-[300px] border-r flex flex-col shrink-0">
+                        <div className="flex justify-between items-center p-3 border-b bg-white sticky top-0"><h4 className="text-[11px] font-black text-blue-600 uppercase">{cat}</h4>{manage&&<button onClick={()=>{const nx=cols.filter(x=>x!==cat);setCols(nx);S.save('newscats',nx)}} className="text-red-400">&times;</button>}</div>
+                        <div className="space-y-4 p-4 overflow-y-auto flex-1">
+                            {(newsData[cat] || []).map((item, i) => (
+                                <a href={item.link} target="_blank" key={i} className="block border-b pb-4 hover:bg-gray-50 transition p-1 rounded">
+                                    <p className="text-xs font-bold leading-relaxed">{item.title}</p>
+                                    <div className="flex justify-between text-[9px] font-black text-gray-400 mt-2 uppercase"><span>{item.source}</span><span>{item.pubDate.split(' ')[1]}</span></div>
+                                </a>
+                            ))}
+                            {(!newsData[cat] || newsData[cat].length===0) && <div className="text-xs text-gray-400 text-center mt-10 animate-pulse">Laden...</div>}
+                        </div>
+                    </div>
+                ))}
+                {manage && <div className="min-w-[100px] flex items-center justify-center bg-gray-50"><button onClick={()=>{const n=prompt("Nieuw Topic:");if(n&&!cols.includes(n)){const nx=[...cols,n];setCols(nx);S.save('newscats',nx)}}} className="text-2xl text-blue-600 hover:scale-125 transition">+</button></div>}
+            </div>
+        </div>
+    );
+}
+
+function RadarWidget({ lang }) {
+    const opps = [ { t: 'Novo Nordisk', m: '🔥 EXPLOSIVE', w: 'Europees fundament. GLP-1 marktuitbreiding.', r: {w:'Low', m:'Med', y:'Med', a:'Med'} }, { t: 'ASML Holding', m: '📈 BUILDING', w: 'Monopolie in EUV lithografie.', r: {w:'Low', m:'Low', y:'Low', a:'Low'} } ];
+    return (
+        <div className="widget h-[350px]">
+            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500"><Ico.Rad/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].rad}</h3></div>
+            <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-white">
+                {opps.map(o => (
+                    <a href={`https://news.google.com/search?q=${encodeURIComponent(o.t)}`} target="_blank" key={o.t} className="p-4 border rounded hover:border-blue-400 transition relative overflow-hidden bg-white shadow-sm block"><div className={`sparkline-bg ${o.m.includes('🔥')?'sparkline-red':''}`}></div><div className="relative z-10"><div className="flex justify-between items-start mb-2"><span className="text-xs font-bold leading-tight">{o.t}</span><span className={`text-[8px] font-black px-2 py-1 rounded ${o.m.includes('🔥')?'bg-red-100 text-red-700':'bg-blue-100 text-blue-700'}`}>{o.m}</span></div><p className="text-[10px] text-gray-600 mb-3 leading-relaxed line-clamp-2">{o.w}</p><div className="flex gap-1 text-[8px] font-bold text-gray-500 uppercase"><span className="bg-gray-100 px-1 py-0.5 rounded">1W: <span className={o.r.w==='High'?'text-red-500':'text-green-600'}>{o.r.w}</span></span><span className="bg-gray-100 px-1 py-0.5 rounded">1M: <span className={o.r.m==='High'?'text-red-500':o.r.m==='Med'?'text-yellow-600':'text-green-600'}>{o.r.m}</span></span><span className="bg-gray-100 px-1 py-0.5 rounded">1Y: <span className={o.r.y==='High'?'text-red-500':o.r.y==='Med'?'text-yellow-600':'text-green-600'}>{o.r.y}</span></span></div></div></a>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function PepperWidget({ lang }) {
+    const deals = [{ t: 'Sony WH-1000XM5', p: '€259', o: '€349', d: '25%', h: true }, { t: 'MacBook Air M2', p: '€899', o: '€1199', d: '25%', h: true }];
+    return (
+        <div className="widget h-[350px]">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest italic">{T[lang].deal}</h3></div></div>
+            <div className="p-4 flex gap-4 overflow-x-auto flex-1 items-center bg-white hide-scroll">
+                {deals.map((d, i) => (
+                    <div key={i} className="min-w-[180px] h-[260px] border rounded p-3 bg-white hover:border-red-400 transition flex flex-col shadow-sm">
+                        <div className="h-[80px] w-full bg-gray-100 rounded mb-3 flex items-center justify-center text-[9px] font-bold text-gray-400 border border-dashed">IMG</div>
+                        <div className="flex gap-1 mb-2">{d.h && <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">HOT</span>}<span className="bg-green-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">-{d.d}</span></div>
+                        <h4 className="text-[11px] font-bold leading-tight mb-auto">{d.t}</h4>
+                        <div className="flex items-baseline gap-2 mt-3"><span className="text-lg font-bold text-blue-600">{d.p}</span><span className="text-[10px] text-gray-400 line-through font-bold">{d.o}</span></div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function RecipeWidget({ lang }) {
+    const allRecs = [{ n: "Ribeye Herb Butter", p: 52, k: 650, t: 15, c: "Vlees", ing: "Ribeye\nBoter", stp: "1. Bakken.\n2. Rusten." }, { n: "Kip Teriyaki", p: 48, k: 510, t: 25, c: "Kip", ing: "Kip\nRijst", stp: "1. Koken.\n2. Bakken." }];
+    const [f, setF] = useState('All'); const [exp, setExp] = useState(null);
+    const filtered = allRecs.filter(r => f === 'All' || r.c === f);
+    return (
+        <div className="widget h-[350px]">
+            <div className="p-4 border-b bg-gray-50 flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Fod/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].rec}</h3></div></div>
+            <div className="flex gap-2 p-3 border-b bg-white overflow-x-auto hide-scroll">{['All', 'Vlees', 'Kip', 'Vis'].map(x => <button key={x} onClick={() => {setF(x); setExp(null);}} className={`px-3 py-1 rounded-full text-[9px] font-bold border transition ${f === x ? 'bg-gray-900 text-white border-gray-900' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'}`}>{x.toUpperCase()}</button>)}</div>
+            <div className="p-4 space-y-3 flex-1 overflow-y-auto bg-white">
+                {filtered.map((r, i) => (
+                    <div key={i} onClick={()=>setExp(exp===i?null:i)} className="p-3 border rounded cursor-pointer hover:border-blue-400 transition bg-white shadow-sm flex flex-col"><div className="flex justify-between items-start mb-2"><h4 className="text-xs font-bold text-gray-800">{r.n}</h4><span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[9px] font-black">{r.p}g EIWIT</span></div><p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{r.t} MIN | {r.k} KCAL</p>{exp === i && <div className="mt-3 pt-3 border-t text-[10px] text-gray-600 whitespace-pre-line leading-relaxed"><span className="font-bold text-gray-900 uppercase">Ingrediënten:</span><br/>{r.ing}<br/><br/><span className="font-bold text-gray-900 uppercase">Bereiding:</span><br/>{r.stp}</div>}</div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function SportWidget({ type, lang }) {
+    const [tab, setTab] = useState('lst');
+    const data = type === 'F1' ? { c: [{ r: "GP Bahrein", d: "02 Mar", t: "16:00" }], s: [{ p: 1, n: "Verstappen", fl: "🇳🇱", pt: 25 }], lst: { title: 'GP Abu Dhabi', p1: 'Verstappen', p2: 'Leclerc', p3: 'Russell' } } : { c: [{ r: "The Masters", d: "10 Apr", t: "14:00 NL" }], s: [{ p: 1, n: "Scheffler", fl: "🇺🇸", pt: "-12" }], lst: { title: 'Dubai Classic', p1: 'McIlroy (-14)', p2: 'Meronk (-13)', p3: 'Young (-12)' } };
+    return (
+        <div className="widget h-[400px]">
+            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500">{type === 'F1' ? <Ico.F1 /> : <Ico.Glf />}<h3 className="text-[10px] font-black uppercase tracking-widest">{type === 'F1' ? 'F1 TOUR' : 'GOLF TOUR'}</h3></div>
+            <div className="flex border-b bg-white">{[ {id:'cal', l:T[lang].cal}, {id:'std', l:T[lang].std}, {id:'lst', l:T[lang].lst} ].map(t => <button key={t.id} onClick={() => setTab(t.id)} className={`tab-btn ${tab === t.id ? 'active' : ''}`}>{t.l}</button>)}</div>
+            <div className="p-4 flex-1 overflow-y-auto space-y-2 bg-white">
+                {tab === 'cal' && data.c.map(r => <div key={r.r} className="flex justify-between text-xs p-3 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-1">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
+                {tab === 'std' && data.s.map((s,i) => <div key={s.n} className="flex justify-between items-center text-xs p-3 border-b"><div className="flex gap-3 items-center"><span className="font-black w-4">{i===0?'🥇':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{s.pt}</span></div>)}
+                {tab === 'lst' && <div className="flex flex-col gap-3"><div className="bg-blue-50 text-blue-800 font-bold text-center py-2 rounded uppercase text-[10px]">{data.lst.title}</div><div className="p-3 border rounded border-yellow-300 bg-yellow-50 flex justify-between"><span className="text-lg">🥇</span><span className="font-bold">{data.lst.p1}</span></div></div>}
+            </div>
+        </div>
+    );
+}
+
+function SudokuWidget({ lang }) {
+    const [diff, setDiff] = useState('Medium'); const [mode, setMode] = useState('normal'); 
+    const [grid, setGrid] = useState(Array(81).fill(null)); const [fixed, setFixed] = useState(Array(81).fill(false)); const [notes, setNotes] = useState(Array(81).fill([]));
+    const [history, setHistory] = useState([]); const [sel, setSel] = useState(null);
+
+    const generate = (d) => { const n=Array(81).fill(null); const f=Array(81).fill(false); const c=d==='Medium'?32:24; for(let i=0;i<c;i++){ let idx=Math.floor(Math.random()*81); n[idx]=Math.floor(Math.random()*9)+1; f[idx]=true; } setGrid(n); setFixed(f); setNotes(Array(81).fill([])); setHistory([]); setSel(null); };
+    useEffect(() => generate(diff), [diff]);
+
+    const push = () => setHistory(p => [...p, {grid: [...grid], notes: [...notes]}]);
+    const undo = () => { if(history.length === 0) return; const last = history[history.length - 1]; setGrid(last.grid); setNotes(last.notes); setHistory(history.slice(0, -1)); };
+    const num = (n) => { if(sel === null || fixed[sel]) return; push(); if(mode === 'normal') { const g = [...grid]; g[sel] = n; setGrid(g); } else { const nt = [...notes]; if(nt[sel].includes(n)) nt[sel] = nt[sel].filter(x => x !== n); else nt[sel] = [...nt[sel], n].sort(); setNotes(nt); } };
+
+    return (
+        <div className="widget p-6 h-[500px] bg-gray-50">
+            <div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2 text-gray-500"><Ico.Sud/><h3 className="text-[10px] font-black uppercase tracking-widest">SUDOKU</h3></div><select value={diff} onChange={e=>{setDiff(e.target.value); generate(e.target.value)}} className="text-[10px] font-bold border rounded px-2 py-1 outline-none text-blue-700 bg-white"><option>Medium</option><option>Hard</option></select></div>
+            <div className="flex-1 flex flex-col justify-center items-center w-full">
+                <div className="sudoku-container bg-white shadow-md">
+                    {grid.map((c, i) => <div key={i} onClick={()=>setSel(i)} className={`sudoku-cell ${Math.floor(i/9)%3===2 && Math.floor(i/9)!==8 ? 'border-b-thick' : ''} ${i%3===2 && i%9!==8 ? 'border-r-thick' : ''} ${fixed[i] ? 'fixed' : c ? 'input' : ''} ${sel === i ? 'selected' : ''}`}>{c ? c : (notes[i].length > 0 && <div className="sudoku-candidates">{[1,2,3,4,5,6,7,8,9].map(n => <span key={n}>{notes[i].includes(n) ? n : ''}</span>)}</div>)}</div>)}
+                </div>
+            </div>
+            <div className="mt-4 flex flex-col gap-2">
+                <div className="flex justify-between gap-1">{[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={()=>num(n)} className="flex-1 bg-white border py-2 rounded font-black shadow-sm">{n}</button>)}</div>
+                <div className="flex gap-2 h-10"><button onClick={()=>setMode('normal')} className={`flex-1 rounded font-bold text-[10px] uppercase border ${mode==='normal'?'bg-blue-600 text-white':'bg-white text-gray-600'}`}>Normaal</button><button onClick={()=>setMode('note')} className={`flex-1 rounded font-bold text-[10px] uppercase border ${mode==='note'?'bg-blue-600 text-white':'bg-white text-gray-600'}`}>Notitie</button><button onClick={undo} disabled={history.length===0} className="w-14 bg-white border rounded text-gray-500 disabled:opacity-30">Undo</button><button onClick={()=>generate(diff)} className="px-4 bg-gray-800 text-white rounded text-[10px] font-black uppercase">{T[lang].new}</button></div>
+            </div>
+        </div>
+    );
+}
+
+function LanguageWidget({ lang }) {
+    const [l, setL] = useState('Spaans'); const [t, setT] = useState('w');
+    const [h, setH] = useState(S.load('lang_hist', []));
+    const finish = () => { const dt = fmtDate(new Date().toISOString().split('T')[0]); const nh = [{d: dt, l, a: t==='w'?'Woord':t==='v'?'Werkwoord':'Gesprek'}, ...h]; setH(nh); S.save('lang_hist', nh); alert('Opgeslagen in Historie!'); };
+
+    return (
+        <div className="widget h-[400px]">
+            <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                <div className="flex items-center gap-2 text-gray-500"><Ico.Lng /><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].lang}</h3></div>
+                <select value={l} onChange={e=>setL(e.target.value)} className="bg-white border rounded text-[10px] font-bold px-2 py-1 outline-none text-blue-700">
+                    <option>Italiaans</option>
+                    <option>Spaans</option>
+                    <option>Engels</option>
+                    <option>Frans</option>
+                    <option>Duits</option>
+                    <option>Nederlands</option>
+                </select>
+            </div>
+            <div className="flex border-b bg-white">{[ {id:'w', l:'Woord'}, {id:'v', l:'Werkwoord'}, {id:'c', l:'Gesprek'}, {id:'h', l:'Historie'} ].map(x => <button key={x.id} onClick={()=>setT(x.id)} className={`tab-btn ${t === x.id ? 'active' : ''}`}>{x.l}</button>)}</div>
+            <div className="flex-1 p-6 flex flex-col items-center justify-center bg-white overflow-y-auto">
+                {t === 'w' && <div className="text-center"><span className="bg-blue-50 text-blue-700 px-2 py-1 text-[9px] font-bold uppercase rounded">A2 Niveau</span><h4 className="text-3xl font-black my-4">{l === 'Italiaans' ? 'Sviluppare' : 'Desarrollar'}</h4><p className="text-sm text-gray-500 italic mb-6">"Ontwikkelen"</p><button onClick={finish} className="bg-[#0073b1] text-white px-6 py-2 rounded text-[10px] font-black uppercase">Geleerd</button></div>}
+                {t === 'v' && <div className="w-full max-w-sm"><p className="text-[10px] font-black text-gray-400 mb-3 uppercase">{l === 'Italiaans' ? 'Parlare' : 'Hablar'} (Presente)</p><div className="grid grid-cols-2 gap-3 mb-6">{['Yo/Io', 'Tú/Tu', 'Él/Lui', 'Nosotros/Noi'].map(v => <input key={v} placeholder={v} className="p-3 border rounded text-xs outline-none focus:border-blue-500 bg-gray-50"/>)}</div><button onClick={finish} className="w-full bg-[#0073b1] text-white py-3 rounded text-[10px] font-black uppercase">Voltooi Sessie</button></div>}
+                {t === 'c' && <div className="w-full max-w-sm"><div className="bg-blue-50 p-5 rounded-lg text-sm italic border border-blue-100 text-gray-800 mb-6">{l === 'Italiaans' ? '"Lo sviluppo è fondamentale."' : '"El desarrollo es fundamental."'}</div><button onClick={finish} className="w-full bg-[#0073b1] text-white py-3 rounded text-[10px] font-black uppercase">Gesprek Klaar</button></div>}
+                {t === 'h' && <div className="w-full space-y-2">{h.length===0?<p className="text-center text-xs text-gray-400">Geen historie nog.</p>:h.map((x,i)=><div key={i} className="flex justify-between border-b p-2 text-xs"><span className="font-bold text-gray-800">{x.l} - {x.a}</span><span className="text-[10px] text-gray-500">{x.d}</span></div>)}</div>}
+            </div>
+        </div>
+    );
+}
+
+function Settings({ isOpen, onClose, layout, setLayout }) {
+    const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
+    const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'OpenAI', val: ''}]));
+    const [icals, setIcals] = useState(S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]));
+    const [aiUrl, setAiUrl] = useState(S.load('ai_chat_url', ''));
+    const [dragIdx, setDragIdx] = useState(null);
+
+    const handleDragStart = (e, idx) => { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; };
+    const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v6', n); setDragIdx(null); };
+    const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v6', n); };
+
+    const saveAll = () => { S.save('bitvavo_keys', bvKeys); S.save('api_keys_dyn', apis); S.save('icals_dyn', icals); S.save('ai_chat_url', aiUrl); onClose(); window.location.reload(); };
+
+    return (
+        <div className={`settings-panel p-6 md:p-8 ${isOpen ? 'open' : ''}`}>
+            <div className="flex justify-between items-center mb-8 border-b pb-4"><h2 className="text-2xl font-black uppercase">Configuratie</h2><button onClick={onClose} className="text-3xl text-gray-400 hover:text-gray-800 transition">&times;</button></div>
+            <div className="space-y-8">
+                
+                <section>
+                    <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Dashboard Indeling (Drag & Drop)</h3>
+                    <div className="space-y-1">
+                        {layout.map((w, i) => (
+                            <div key={w} draggable onDragStart={(e)=>handleDragStart(e, i)} onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>handleDrop(e, i)} className="flex justify-between items-center bg-white p-3 border rounded shadow-sm cursor-move hover:border-blue-400 transition">
+                                <div className="flex items-center gap-3"><Ico.Drag /><span className="text-xs font-bold uppercase">{w}</span></div>
+                                <div className="flex gap-2"><button onClick={()=>move(i, -1)} className="text-gray-400 hover:text-blue-600"><Ico.Up/></button><button onClick={()=>move(i, 1)} className="text-gray-400 hover:text-blue-600"><Ico.Dn/></button></div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                <section>
+                    <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Bitvavo Koppeling (Live)</h3>
+                    <div className="space-y-2">
+                        <input type="text" placeholder="Bitvavo API Key" value={bvKeys.pub} onChange={e=>setBvKeys({...bvKeys, pub: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                        <input type="password" placeholder="Bitvavo API Secret" value={bvKeys.sec} onChange={e=>setBvKeys({...bvKeys, sec: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                    </div>
+                </section>
+
+                <section>
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Overige API Keys</h3><button onClick={()=>setApis([...apis, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
+                    {apis.map((a, i) => (
+                        <div key={i} className="flex gap-2 mb-2">
+                            <input placeholder="Naam (bijv. OpenAI)" value={a.name} onChange={e=>{const n=[...apis]; n[i].name=e.target.value; setApis(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
+                            <input type="password" placeholder="API Key..." value={a.val} onChange={e=>{const n=[...apis]; n[i].val=e.target.value; setApis(n);}} className="flex-1 p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                            <button onClick={()=>{const n=apis.filter((_,idx)=>idx!==i); setApis(n);}} className="text-red-400 hover:text-red-600 font-bold px-1">&times;</button>
+                        </div>
+                    ))}
+                </section>
+
+                <section>
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Live iCal Links (.ics)</h3><button onClick={()=>setIcals([...icals, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
+                    {icals.map((c, i) => (
+                        <div key={i} className="flex gap-2 mb-2">
+                            <input placeholder="Naam (bijv. Werk)" value={c.name} onChange={e=>{const n=[...icals]; n[i].name=e.target.value; setIcals(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
+                            <input type="text" placeholder="https://..." value={c.val} onChange={e=>{const n=[...icals]; n[i].val=e.target.value; setIcals(n);}} className="flex-1 p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                            <button onClick={()=>{const n=icals.filter((_,idx)=>idx!==i); setIcals(n);}} className="text-red-400 hover:text-red-600 font-bold px-1">&times;</button>
+                        </div>
+                    ))}
+                </section>
+
+                <section className="bg-gray-50 p-4 rounded border border-gray-200">
+                    <h3 className="text-[10px] font-black text-gray-800 uppercase mb-3">Systeem & AI Beheer</h3>
+                    <label className="text-[9px] font-bold text-gray-500 uppercase block mb-1">AI Chat URL (Voor updates)</label>
+                    <div className="flex gap-2">
+                        <input type="text" placeholder="Link van AI chat..." value={aiUrl} onChange={e=>setAiUrl(e.target.value)} className="flex-1 p-3 border rounded text-xs font-mono bg-white shadow-sm outline-none focus:border-blue-500" />
+                        <a href={aiUrl || '#'} target="_blank" className="bg-blue-600 text-white px-4 rounded flex items-center justify-center font-bold text-xs hover:bg-blue-700 transition">Open Chat</a>
+                    </div>
+                </section>
+            </div>
+            <button onClick={saveAll} className="mt-10 w-full bg-[#1a1a1a] text-white py-4 text-[10px] font-black uppercase rounded shadow-lg hover:bg-black transition">Opslaan & Herladen</button>
+        </div>
+    );
+}
+
+function App() {
+    const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [lang, setLang] = useState(S.load('lang', 'nl'));
+    const [layout, setLayout] = useState(S.load('layout_v6', ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'f1', 'golf', 'sudoku', 'lang']));
+    
+    useEffect(() => {
         if (!isAuth && window.google) {
-            window.google.accounts.id.initialize({ 
-                client_id: GOOGLE_CLIENT_ID, 
-                callback: (res) => {
-                    const payload = JSON.parse(atob(res.credential.split('.')[1]));
-                    if(payload.email === ALLOWED_EMAIL) { setIsAuth(true); S.save('auth', true); }
-                    else alert("Toegang geweigerd.");
-                }
-            });
-            window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large" });
+            window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredentialResponse });
+            window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" });
         }
     }, [isAuth]);
 
+    const handleCredentialResponse = (response) => {
+        try {
+            const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+            if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { setIsAuth(true); S.save('auth_status', true); } 
+            else { alert("Toegang geweigerd! Dit account heeft geen permissie."); }
+        } catch(e) { console.error("Login failed"); }
+    };
+
+    const handleLogout = () => { setIsAuth(false); S.remove('auth_status'); window.location.reload(); };
+
     if (!isAuth) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#000a14]">
-                <div className="bg-white/5 p-12 rounded-2xl border border-white/10 text-center backdrop-blur-xl">
-                    <div className="text-blue-500 mb-6 flex justify-center"><Ico.Lock /></div>
-                    <h1 className="text-white font-black text-xl uppercase tracking-tighter mb-8">Michael's Strategic HQ</h1>
+            <div className="min-h-screen flex flex-col items-center justify-center bg-[#000a14] text-white">
+                <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
+                    <Ico.Lock />
+                    <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
+                    <p className="text-xs text-gray-400 mb-8">Personal Dashboard ver. 4.0</p>
                     <div id="google-btn"></div>
                 </div>
             </div>
         );
     }
 
+    const widgets = { ai: <div className="col-span-12 lg:col-span-8"><AIWidget lang={lang} /></div>, crypto: <div className="col-span-12 lg:col-span-4"><CryptoWidget lang={lang} /></div>, agenda: <div className="col-span-12 lg:col-span-4"><AgendaWidget lang={lang} /></div>, news: <div className="col-span-12 lg:col-span-8"><NewsWidget lang={lang} /></div>, radar: <div className="col-span-12 lg:col-span-4"><RadarWidget lang={lang} /></div>, pepper: <div className="col-span-12 lg:col-span-4"><PepperWidget lang={lang} /></div>, recipe: <div className="col-span-12 lg:col-span-4"><RecipeWidget lang={lang} /></div>, f1: <div className="col-span-12 lg:col-span-4"><SportWidget type="F1" lang={lang} /></div>, golf: <div className="col-span-12 lg:col-span-4"><SportWidget type="Golf" lang={lang} /></div>, sudoku: <div className="col-span-12 lg:col-span-4"><SudokuWidget lang={lang} /></div>, lang: <div className="col-span-12 lg:col-span-4"><LanguageWidget lang={lang} /></div> };
+
     return (
         <div className="flex flex-col min-h-screen">
-            <WeatherBar lang="nl" />
-            <header className="px-6 md:px-10 py-8 max-w-[1600px] mx-auto w-full flex justify-between items-end">
-                <div>
-                    <h1 className="text-2xl font-black text-white uppercase tracking-tight">Personal Dashboard</h1>
-                    <p className="text-blue-400 text-[10px] font-bold uppercase tracking-[0.3em] mt-1">Version 4.0.1 Stable</p>
+            <WeatherBar lang={lang} />
+            <header className="px-6 md:px-10 pt-8 pb-6 max-w-[1600px] mx-auto w-full flex justify-between items-end border-b border-white/10 mb-6">
+                <div><h1 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase drop-shadow-md leading-none">Personal Dashboard</h1><p className="text-blue-200 text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em] mt-2">Michael</p></div>
+                <div className="flex gap-2 md:gap-3 items-center">
+                    <button onClick={() => {const nL=lang==='nl'?'en':'nl'; setLang(nL); S.save('lang', nL)}} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition font-bold text-[10px] uppercase">{lang === 'nl' ? '🇳🇱 NL' : '🇬🇧 EN'}</button>
+                    <button onClick={handleLogout} className="p-2 md:p-3 bg-red-500/20 text-red-400 rounded hover:bg-red-500/40 hover:text-white transition backdrop-blur-sm flex items-center gap-2"><span className="text-[9px] font-bold uppercase tracking-widest hidden md:inline">Uitloggen</span><Ico.Lock /></button>
+                    <button onClick={() => setSettingsOpen(true)} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition"><Ico.Set /></button>
                 </div>
-                <button onClick={() => setSettingsOpen(true)} className="p-3 bg-white/10 text-white rounded-lg hover:bg-white/20 transition">
-                    <Ico.Set />
-                </button>
             </header>
-
-            <main className="px-6 md:px-10 pb-20 max-w-[1600px] mx-auto w-full">
-                <div className="grid grid-cols-12 gap-6">
-                    {/* De widgets worden hier geladen op basis van de layout state */}
-                    <div className="col-span-12 lg:col-span-8 bg-blue-600/10 border border-blue-500/20 rounded-xl p-6 text-blue-100 flex items-center gap-4">
-                        <Ico.Bot />
-                        <p className="text-sm font-medium">Welkom Michael. Alle systemen draaien op Vercel Edge. Bitvavo en iCal synchronisatie is actief.</p>
-                    </div>
-                    {/* Placeholder voor widget content */}
+            <main className="px-6 md:px-10 pb-16 max-w-[1600px] mx-auto w-full">
+                <DailyBriefing lang={lang} />
+                <div className="grid grid-cols-12 gap-6 md:gap-8">
+                    {layout.map(w => <React.Fragment key={w}>{widgets[w]}</React.Fragment>)}
                 </div>
             </main>
-
-            <div className={`settings-panel p-8 ${settingsOpen ? 'open' : ''}`}>
-                <div className="flex justify-between items-center mb-8">
-                    <h2 className="text-xl font-black uppercase">Instellingen</h2>
-                    <button onClick={() => setSettingsOpen(false)} className="text-2xl">&times;</button>
-                </div>
-                <div className="space-y-6">
-                    <section>
-                        <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Account</h3>
-                        <div className="p-4 bg-gray-50 rounded border text-xs font-bold">{ALLOWED_EMAIL}</div>
-                    </section>
-                    <button onClick={() => {S.remove('auth'); window.location.reload();}} className="w-full py-3 bg-red-50 text-red-600 rounded font-bold text-xs uppercase">Uitloggen</button>
-                </div>
-            </div>
+            <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} layout={layout} setLayout={setLayout} />
         </div>
     );
 }
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
