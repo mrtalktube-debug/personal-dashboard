@@ -27,7 +27,6 @@
         .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; box-shadow: -10px 0 30px rgba(0,0,0,0.5); transform: translateX(100%); transition: 0.3s ease; overflow-y: auto; }
         .settings-panel.open { transform: translateX(0); }
         .sparkline-bg { position: absolute; bottom: 0; left: 0; right: 0; height: 40px; opacity: 0.08; background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><path d="M0 30 L10 20 L20 25 L30 15 L40 18 L50 5 L60 10 L70 2 L80 12 L90 5 L100 0 L100 30 Z" fill="%230073b1"/></svg>'); background-size: cover; background-position: bottom; pointer-events: none; }
-        .sparkline-red { background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L10 10 L20 5 L30 15 L40 12 L50 25 L60 20 L70 28 L80 18 L90 25 L100 30 L0 30 Z" fill="%23ef4444"/></svg>'); opacity: 0.05; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 4px; }
         .hide-scroll::-webkit-scrollbar { display: none; }
@@ -41,7 +40,7 @@ const { useState, useEffect, useRef } = React;
 
 // ----- BEVEILIGINGS INSTELLINGEN -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
-const ALLOWED_EMAIL = "diabaas3@gmail.com"; // <<--- VUL HIER JOUW GMAIL IN
+const ALLOWED_EMAIL = "VUL_HIER_JE_GMAIL_IN@gmail.com"; // <<--- VUL HIER JOUW GMAIL IN
 // -------------------------------------
 
 const S = {
@@ -54,8 +53,8 @@ const emitCmd = (type, payload) => window.dispatchEvent(new CustomEvent('dashCmd
 const fmtDate = (dStr) => { const p = dStr.split('-'); return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : dStr; };
 
 const T = {
-    nl: { port: 'Portfolio', ag: 'Agenda', nws: 'Trending Nieuws', rad: 'Investeringen', deal: 'Pepper Deals', rec: 'High-Protein Meals', lang: 'Talen Leren', day: 'DAG', wk: 'WEEK', src: 'BRON', blk: 'BLOCK', cal: 'Kalender', std: 'Standings', lst: 'Laatste', new: 'Nieuw Spel' },
-    en: { port: 'Portfolio', ag: 'Schedule', nws: 'Trending News', rad: 'Investments', deal: 'Pepper Deals', rec: 'High-Protein Meals', lang: 'Languages', day: 'DAY', wk: 'WEEK', src: 'SOURCE', blk: 'BLOCK', cal: 'Calendar', std: 'Standings', lst: 'Latest', new: 'New Game' }
+    nl: { port: 'Portfolio', ag: 'Agenda', nws: 'Nieuws & Updates', rad: 'Investeringen', deal: 'Pepper Deals', rec: 'Recepten', lang: 'Talen', day: 'DAG', wk: 'WEEK', src: 'BRON', blk: 'BLOCK', cal: 'Kalender', std: 'Standings', lst: 'Laatste', new: 'Nieuw Spel' },
+    en: { port: 'Portfolio', ag: 'Schedule', nws: 'News & Updates', rad: 'Investments', deal: 'Deals', rec: 'Recipes', lang: 'Languages', day: 'DAY', wk: 'WEEK', src: 'SOURCE', blk: 'BLOCK', cal: 'Calendar', std: 'Standings', lst: 'Latest', new: 'New Game' }
 };
 
 const Ico = {
@@ -112,7 +111,7 @@ function DailyBriefing({ lang }) {
         <div className="bg-blue-600/20 border border-blue-500/30 text-blue-100 rounded-lg p-4 mb-6 flex flex-col md:flex-row items-center gap-4 shadow-lg backdrop-blur-md">
             <div className="bg-blue-500 p-2 rounded-full text-white shrink-0"><Ico.Bot /></div>
             <div className="text-sm font-medium leading-relaxed">
-                <span className="font-bold">System Briefing:</span> {lang==='nl' ? 'Geen regen verwacht. Wiskunde (Ryan) om 08:30. Crypto portfolio is ' : 'No rain expected. Math (Ryan) at 08:30. Crypto portfolio is '} <span className="text-green-400 font-bold">+2.4%</span>.
+                <span className="font-bold">System Briefing:</span> {lang==='nl' ? 'Live API systemen en veilige Vercel backend geactiveerd.' : 'Live API systems and secure Vercel backend activated.'}
             </div>
         </div>
     );
@@ -120,17 +119,26 @@ function DailyBriefing({ lang }) {
 
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
-    const [hist, setHist] = useState(S.load('ai_hist', [{r: 'ai', t: lang==='nl'?'Welkom Michael. Typ een vraag of geef een commando.':'Welcome Michael. Ask a question or type a command.'}]));
+    const [hist, setHist] = useState(S.load('ai_hist', [{r: 'ai', t: lang==='nl'?'Welkom. Typ een dashboard commando of vraag.':'Welcome. Type a command or ask a question.'}]));
     const [showHist, setShowHist] = useState(false);
-    const [model, setModel] = useState(S.load('ai_model', 'Claude 3.5 Sonnet'));
+    const [model, setModel] = useState(S.load('ai_model', 'ChatGPT'));
     const [exp, setExp] = useState(false);
     
     const speak = (txt) => { const u = new SpeechSynthesisUtterance(txt); u.lang = lang==='nl'?'nl-NL':'en-US'; window.speechSynthesis.speak(u); };
-    const send = () => {
+    
+    const send = async () => {
         if(!msg) return; const input = msg.toLowerCase(); const n = [...hist, {r: 'usr', t: msg}]; setHist(n); S.save('ai_hist', n); setMsg('');
         if(input.includes('weer') || input.includes('weather')) { const city = input.split('naar')[1]?.trim() || input.split('to')[1]?.trim() || 'Amsterdam'; emitCmd('SET_CITY', city); setTimeout(() => { const r = [...n, {r: 'ai', t: lang==='nl'?`Weer aangepast naar ${city}.`:`Weather changed to ${city}.`}]; setHist(r); S.save('ai_hist', r); }, 500); return; }
         if(input.includes('agenda') || input.includes('schedule')) { emitCmd('SET_AGENDA', input.split('agenda')[1]?.trim() || input.split('schedule')[1]?.trim()); setTimeout(() => { const r = [...n, {r: 'ai', t: lang==='nl'?`Agenda gefilterd.`:`Schedule filtered.`}]; setHist(r); S.save('ai_hist', r); }, 500); return; }
-        setTimeout(() => { const r = [...n, {r: 'ai', t: `(${model}): API config vereist.`}]; setHist(r); S.save('ai_hist', r); }, 600);
+        
+        const openAiKey = (S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('openai')) || {}).val;
+        if (openAiKey) {
+            try {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAiKey}` }, body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: [{role: 'user', content: msg}] }) });
+                const data = await res.json();
+                if(data.choices) { const r = [...n, {r: 'ai', t: data.choices[0].message.content}]; setHist(r); S.save('ai_hist', r); }
+            } catch(e) { const r = [...n, {r: 'ai', t: 'API Error.'}]; setHist(r); S.save('ai_hist', r); }
+        } else { setTimeout(() => { const r = [...n, {r: 'ai', t: `(${model}): Geen API key gevonden in Settings.`}]; setHist(r); S.save('ai_hist', r); }, 600); }
     };
 
     return (
@@ -138,14 +146,14 @@ function AIWidget({ lang }) {
             <div className="p-4 bg-gray-50 border-b flex justify-between items-center cursor-pointer" onClick={()=>setExp(true)}>
                 <div className="flex items-center gap-2 text-gray-500"><Ico.Bot/><h3 className="text-[10px] font-black uppercase tracking-widest">AI Assistant</h3></div>
                 {exp ? (
-                    <div className="flex gap-2 items-center"><select value={model} onChange={e=>{setModel(e.target.value);S.save('ai_model',e.target.value)}} className="bg-white border rounded px-2 py-1 text-[9px] font-bold text-blue-700 outline-none">{['Claude 3.5 Sonnet', 'GPT-4o', 'Gemini 1.5 Pro', 'Mistral Large'].map(m=><option key={m} value={m}>{m}</option>)}</select><button onClick={(e)=>{e.stopPropagation();setShowHist(!showHist)}} className="px-2 py-1 bg-gray-200 rounded text-[9px] font-bold">Historie</button><button onClick={(e)=>{e.stopPropagation();setExp(false)}} className="text-gray-400 font-bold ml-2 text-lg">&times;</button></div>
+                    <div className="flex gap-2 items-center"><select value={model} onChange={e=>{setModel(e.target.value);S.save('ai_model',e.target.value)}} className="bg-white border rounded px-2 py-1 text-[9px] font-bold text-blue-700 outline-none"><option>ChatGPT</option></select><button onClick={(e)=>{e.stopPropagation();setShowHist(!showHist)}} className="px-2 py-1 bg-gray-200 rounded text-[9px] font-bold">Historie</button><button onClick={(e)=>{e.stopPropagation();setExp(false)}} className="text-gray-400 font-bold ml-2 text-lg">&times;</button></div>
                 ) : <div className="text-[10px] font-bold text-gray-400 uppercase">Openen ▼</div>}
             </div>
             <div className={`flex-1 flex overflow-hidden bg-white ${exp ? 'opacity-100' : 'opacity-0'}`}>
                 <div className={`flex-1 p-4 overflow-y-auto space-y-4 ${showHist ? 'hidden md:block' : 'block'}`}>
                     {hist.slice(-10).map((m, i) => (
                         <div key={i} className={`flex flex-col ${m.r==='ai'?'items-start':'items-end'}`}>
-                            <div className={`p-3 rounded-lg text-sm max-w-[85%] shadow-sm ${m.r==='ai'?'bg-gray-100 text-gray-800':'bg-[#0073b1] text-white'}`}>{m.t}</div>
+                            <div className={`p-3 rounded-lg text-sm max-w-[85%] shadow-sm ${m.r==='ai'?'bg-gray-100 text-gray-800':'bg-[#0073b1] text-white whitespace-pre-wrap'}`}>{m.t}</div>
                             {m.r==='ai' && <button onClick={()=>speak(m.t)} className="mt-1 flex items-center gap-1 text-[9px] text-gray-400 hover:text-blue-600 font-bold uppercase"><Ico.Spk/> {lang==='nl'?'Voorlees':'Speak'}</button>}
                         </div>
                     ))}
@@ -157,40 +165,78 @@ function AIWidget({ lang }) {
 }
 
 function CryptoWidget({ lang }) {
-    const [valuta, setValuta] = useState('EUR'); const [tf, setTf] = useState('1M'); const [view, setView] = useState('list');
-    const [coins, setCoins] = useState(S.load('portfolio', [{id:'bitcoin', s:'BTC', a:0.5}, {id:'ethereum', s:'ETH', a:5}, {id:'cardano', s:'ADA', a:10000}]));
+    const [valuta, setValuta] = useState('EUR'); 
+    const [tf, setTf] = useState('1M'); 
+    const [view, setView] = useState('list');
+    const [portfolio, setPortfolio] = useState([]);
+    const [total, setTotal] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState('');
     const chartRef = useRef(null); let cInst = useRef(null);
-    const data = { bitcoin: {eur: 88450, usd: 95000, btc: 1, eur_24h_change: 2.4}, ethereum: {eur: 3150, usd: 3400, btc: 0.035, eur_24h_change: -1.2}, cardano: {eur: 0.65, usd: 0.70, btc: 0.000007, eur_24h_change: 5.7} };
 
-    const addCoin = () => { const id=prompt("Coin ID:"); const s=prompt("SYM:"); const a=prompt("Aantal:"); if(id&&s&&a){setCoins([...coins,{id:id.toLowerCase(),s:s.toUpperCase(),a:parseFloat(a)}]);S.save('portfolio',coins);} };
-    const vLow = valuta.toLowerCase(); const sym = valuta==='EUR'?'€':valuta==='USD'?'$':'₿';
-    let total = 0; coins.forEach(c => { if(data[c.id]) total += c.a * (data[c.id][vLow]||0); });
+    // LIVE BITVAVO API FETCH VIA VERCEL BACKEND
+    useEffect(() => {
+        const fetchBitvavo = async () => {
+            const bvKeys = S.load('bitvavo_keys', {pub: '', sec: ''});
+            if(!bvKeys.pub || !bvKeys.sec) {
+                setErr(lang==='nl'?'Vul je Bitvavo keys in via Instellingen':'Enter Bitvavo keys in Settings');
+                setLoading(false); return;
+            }
+            try {
+                const res = await fetch('/api/bitvavo', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ key: bvKeys.pub, secret: bvKeys.sec })
+                });
+                const data = await res.json();
+                if(data.error) throw new Error(data.error);
+
+                let calcTotal = 0;
+                const combined = data.balances.map(b => {
+                    const amount = parseFloat(b.available) + parseFloat(b.inOrder);
+                    if(b.symbol === 'EUR') { calcTotal += amount; return { sym: 'EUR', amount, price: 1, val: amount }; }
+                    const priceObj = data.prices.find(p => p.market === `${b.symbol}-EUR`);
+                    const price = priceObj ? parseFloat(priceObj.price) : 0;
+                    const val = amount * price;
+                    calcTotal += val;
+                    return { sym: b.symbol, amount, price, val };
+                }).sort((a,b) => b.val - a.val);
+
+                setPortfolio(combined); setTotal(calcTotal); setErr('');
+            } catch (error) { setErr(error.message); }
+            setLoading(false);
+        };
+        fetchBitvavo();
+    }, [lang]);
 
     useEffect(() => {
-        if(view === 'chart' && chartRef.current) {
+        if(view === 'chart' && chartRef.current && !loading && !err) {
             if(cInst.current) cInst.current.destroy();
             const labels = tf==='1D'?['08:00','12:00','16:00','Nu'] : tf==='1M'?['Wk 1','Wk 2','Wk 3','Nu'] : tf==='1Y'?['Q1','Q2','Q3','Nu'] : ['2023','2024','2025','Nu'];
-            const dData = tf==='1D'?[0,1,0.5,2.4] : tf==='1M'?[0,4,-2,2.4] : tf==='1Y'?[0,15,10,42] : [0,50,150,210];
+            const dData = tf==='1D'?[0,1,0.5,2.4] : tf==='1M'?[0,4,-2,2.4] : tf==='1Y'?[0,15,10,42] : [0,50,150,210]; // Mock chart data still, real historical chart requires extra API
             cInst.current = new Chart(chartRef.current, { type: 'line', data: { labels, datasets: [{ data: dData, borderColor: '#0073b1', backgroundColor: 'rgba(0,115,177,0.1)', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
         }
-    }, [view, tf]);
+    }, [view, tf, loading, err]);
+    
+    const sym = valuta==='EUR'?'€':valuta==='USD'?'$':'₿';
+    const displayTotal = valuta==='BTC' ? (total/90000).toFixed(4) : total; // Simplified conversion for demo
     
     return (
         <div className="widget h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].port}</h3></div><div className="flex gap-2"><div className="flex bg-gray-200 rounded p-1">{['list','chart'].map(v=><button key={v} onClick={()=>setView(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${view===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>)}</div><div className="flex bg-gray-200 rounded p-1">{['EUR','USD','BTC'].map(v=><button key={v} onClick={()=>setValuta(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded ${valuta===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>)}</div></div></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div><div className="flex gap-2"><div className="flex bg-gray-200 rounded p-1">{['list','chart'].map(v=><button key={v} onClick={()=>setView(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${view===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>)}</div></div></div>
             <div className="p-5 flex-1 flex flex-col bg-white">
-                <div className="mb-4 flex justify-between items-start"><div><span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE ({valuta})</span><div className="text-3xl font-black">{sym} {valuta==='BTC'?total.toFixed(4):total.toLocaleString('nl-NL', {maximumFractionDigits:0})}</div></div>{view==='list'&&<button onClick={addCoin} className="bg-gray-100 px-3 py-1.5 rounded font-black">+</button>}</div>
-                {view === 'list' ? (
+                <div className="mb-4 flex justify-between items-start"><div><span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE ({valuta})</span><div className="text-3xl font-black">{loading ? '...' : err ? 'Error' : `${sym} ${displayTotal.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}</div></div></div>
+                
+                {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Syncing with Bitvavo...</div> : 
+                 err ? <div className="flex-1 text-[10px] text-red-500 font-bold p-4 bg-red-50 rounded border border-red-100">{err}</div> :
+                 view === 'list' ? (
                     <div className="space-y-3 overflow-y-auto flex-1 hide-scroll">
-                        {coins.map((c, i) => {
-                            const p = (data[c.id]||{})[vLow] || 0; const chg = (data[c.id]||{}).eur_24h_change || 0;
-                            return (
-                                <div key={i} className="relative p-3 border rounded flex justify-between items-center bg-white shadow-sm hover:border-blue-300 group overflow-hidden">
-                                    <div className={`sparkline-bg ${chg<0?'sparkline-red':''}`}></div><div className="relative z-10"><span className="font-bold text-sm block">{c.s}</span><span className="text-[9px] text-gray-500 font-medium">{c.a} units</span></div>
-                                    <div className="text-right flex items-center gap-3 relative z-10"><div className="flex flex-col items-end"><span className="font-bold text-sm">{sym}{valuta==='BTC'?(c.a*p).toFixed(4):(c.a*p).toLocaleString('nl-NL',{maximumFractionDigits:0})}</span><span className="text-[9px] text-gray-400 font-mono">1 {c.s} = {sym}{p.toLocaleString('nl-NL')}</span></div><span className={`text-[10px] font-black w-10 text-right ${chg>=0?'text-green-600':'text-red-500'}`}>{chg>0?'▲':'▼'} {Math.abs(chg).toFixed(1)}%</span><button onClick={()=>{const n=coins.filter((_,idx)=>i!==idx);setCoins(n);S.save('portfolio',n)}} className="opacity-0 group-hover:opacity-100 text-red-400"><Ico.Trs/></button></div>
-                                </div>
-                            )
-                        })}
+                        {portfolio.map((c, i) => (
+                            <div key={i} className="relative p-3 border rounded flex justify-between items-center bg-white shadow-sm hover:border-blue-300 group overflow-hidden">
+                                <div className="sparkline-bg"></div>
+                                <div className="relative z-10"><span className="font-bold text-sm block">{c.sym}</span><span className="text-[9px] text-gray-500 font-medium">{c.amount} units</span></div>
+                                <div className="text-right flex items-center gap-3 relative z-10"><div className="flex flex-col items-end"><span className="font-bold text-sm">{sym}{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span><span className="text-[9px] text-gray-400 font-mono">1 {c.sym} = {sym}{c.price.toLocaleString('nl-NL')}</span></div></div>
+                            </div>
+                        ))}
                     </div>
                 ) : <div className="flex-1 flex flex-col"><div className="flex gap-2 mb-2">{['1D','1M','1Y','ALL'].map(t=><button key={t} onClick={()=>setTf(t)} className={`text-[9px] font-bold px-2 py-1 border rounded ${tf===t?'bg-blue-600 text-white':''}`}>{t}</button>)}</div><div className="flex-1 min-h-[150px]"><canvas ref={chartRef}></canvas></div></div>}
             </div>
@@ -199,30 +245,43 @@ function CryptoWidget({ lang }) {
 }
 
 function AgendaWidget({ lang }) {
-    const defaultCals = [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}];
-    const dynCals = S.load('icals_dyn', defaultCals).map(c=>c.name).filter(Boolean);
-    const cals = dynCals.length > 0 ? dynCals : ['Agenda 1'];
-
+    const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
+    const cals = rawCals.map(c=>c.name).filter(Boolean);
     const [view, setView] = useState('week'); const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
     const [f, setF] = useState(cals);
+    const [items, setItems] = useState([]);
     
     useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => c.toLowerCase().includes(e.detail.payload?.toLowerCase() || '')); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
 
-    const td = new Date(); const d1 = td.toISOString().split('T')[0]; td.setDate(td.getDate()+1); const d2 = td.toISOString().split('T')[0]; td.setDate(td.getDate()+1); const d3 = td.toISOString().split('T')[0];
-    
-    const allItems = cals.flatMap((name, idx) => {
-        if(idx === 0) return [{ t: 'Wiskunde Toets', p: name, date: d1, time: '08:30' }, { t: 'Tandarts', p: name, date: d1, time: '11:00' }];
-        if(idx === 1) return [{ t: 'Voetbal Training', p: name, date: d2, time: '15:30' }];
-        if(idx === 2) return [{ t: 'Strategy Review', p: name, date: d1, time: '14:00' }];
-        if(idx === 3) return [{ t: 'Familie Diner', p: name, date: d3, time: '18:30' }];
-        return [{ t: 'Nieuwe Afspraak', p: name, date: d1, time: '10:00' }];
-    });
+    // LIVE ICAL FETCHING VIA ALLORIGINS PROXY
+    useEffect(() => {
+        const fetchCals = async () => {
+            let allEvs = [];
+            for(let c of rawCals) {
+                if(!c.val) continue;
+                try {
+                    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(c.val)}`);
+                    const txt = await res.text();
+                    let cur = {}; const lines = txt.split(/\r?\n/);
+                    for(let l of lines) {
+                        if(l.startsWith('BEGIN:VEVENT')) cur = {};
+                        else if(l.startsWith('SUMMARY:')) cur.t = l.substring(8);
+                        else if(l.startsWith('DTSTART')) { const m = l.match(/:(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/); if(m) { cur.date = `${m[1]}-${m[2]}-${m[3]}`; cur.time = m[4] ? `${m[4]}:${m[5]}` : 'Hele dag'; } }
+                        else if(l.startsWith('END:VEVENT') && cur.t && cur.date) allEvs.push({...cur, p: c.name});
+                    }
+                } catch(e) { console.error("iCal error", e); }
+            }
+            if(allEvs.length === 0) allEvs = [{ t: 'Geen afspraken of vul iCal link in bij instellingen.', p: cals[0] || 'Systeem', date: new Date().toISOString().split('T')[0], time: '00:00' }];
+            setItems(allEvs);
+        };
+        fetchCals();
+    }, [JSON.stringify(rawCals)]);
 
     const colors = ['border-red-500', 'border-blue-500', 'border-green-500', 'border-purple-500', 'border-yellow-500', 'border-pink-500'];
     const getColor = (name) => colors[cals.indexOf(name) % colors.length];
 
     const tEnd = new Date(d); tEnd.setDate(tEnd.getDate() + 7); const dEnd = tEnd.toISOString().split('T')[0];
-    const items = allItems.filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd))).sort((a,b)=>a.time.localeCompare(b.time));
+    const filteredItems = items.filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd))).sort((a,b)=>a.time.localeCompare(b.time));
 
     return (
         <div className="widget h-[450px]">
@@ -230,7 +289,7 @@ function AgendaWidget({ lang }) {
             <div className="flex border-b bg-white overflow-x-auto p-2 gap-2 hide-scroll">{cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-2 py-1.5 text-[9px] font-bold border rounded uppercase whitespace-nowrap ${f.includes(p)?'bg-[#0073b1] text-white border-[#0073b1]':'text-gray-400 bg-gray-50'}`}>{p}</button>)}</div>
             <div className="p-3 flex border-b bg-gray-50 justify-center"><div className="flex items-center gap-1 bg-white border rounded"><button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&lt;</button><span className="text-[10px] font-bold w-[90px] text-center">{fmtDate(d)}</span><button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&gt;</button></div></div>
             <div className="flex-1 p-4 bg-white grid grid-cols-2 gap-3 overflow-y-auto content-start">
-                {items.map((i, idx) => <div key={idx} className={`p-3 border-l-4 ${getColor(i.p)} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}><div className="flex justify-between items-start mb-1"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week'?`${fmtDate(i.date).slice(0,5)} `:''}{i.p}</span><span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded">{i.time}</span></div><span className="font-bold text-xs leading-tight">{i.t}</span></div>)}
+                {filteredItems.map((i, idx) => <div key={idx} className={`p-3 border-l-4 ${getColor(i.p)} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}><div className="flex justify-between items-start mb-1"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week'?`${fmtDate(i.date).slice(0,5)} `:''}{i.p}</span><span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded">{i.time}</span></div><span className="font-bold text-xs leading-tight">{i.t}</span></div>)}
             </div>
         </div>
     );
@@ -238,17 +297,38 @@ function AgendaWidget({ lang }) {
 
 function NewsWidget({ lang }) {
     const [cols, setCols] = useState(S.load('newscats', ['AI & Tech', 'Crypto', 'Biotech'])); const [manage, setManage] = useState(false);
-    const [srcs, setSrcs] = useState(S.load('nsrc', ['NOS', 'Reuters', '@elonmusk', '@OpenAI'])); const [blocks, setBlocks] = useState(S.load('nblk', ['voetbal', 'roddel']));
+    const [newsData, setNewsData] = useState({});
+
+    // LIVE GOOGLE NEWS RSS FETCHING
+    useEffect(() => {
+        cols.forEach(cat => {
+            const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${lang==='nl'?'nl':'en-US'}&gl=${lang==='nl'?'NL':'US'}`;
+            fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
+            .then(r=>r.json()).then(d => { if(d.items) setNewsData(p => ({...p, [cat]: d.items.slice(0,5)})); })
+            .catch(e => console.error(e));
+        });
+    }, [cols, lang]);
     
     return (
         <div className="widget h-[450px]">
             <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Nws/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].nws}</h3></div><button onClick={()=>setManage(!manage)} className="text-gray-400 hover:text-blue-600"><Ico.Set/></button></div>
-            {manage && <div className="p-4 bg-gray-100 border-b flex flex-col gap-2 text-[10px] font-bold text-gray-600"><div className="flex items-center gap-2 flex-wrap"><span>{T[lang].src}:</span>{srcs.map(s=><span key={s} className="bg-white border px-1 rounded flex gap-1 items-center">{s}<button onClick={()=>{const n=srcs.filter(x=>x!==s);setSrcs(n);S.save('nsrc',n)}} className="text-red-400">&times;</button></span>)}<button onClick={()=>{const s=prompt("Bron:");if(s){const n=[...srcs,s];setSrcs(n);S.save('nsrc',n)}}} className="bg-gray-200 px-1 rounded">+</button></div><div className="flex items-center gap-2 flex-wrap"><span>{T[lang].blk}:</span>{blocks.map(s=><span key={s} className="bg-red-50 text-red-600 border px-1 rounded flex gap-1 items-center">{s}<button onClick={()=>{const n=blocks.filter(x=>x!==s);setBlocks(n);S.save('nblk',n)}}>&times;</button></span>)}<button onClick={()=>{const b=prompt("Block:");if(b){const n=[...blocks,b];setBlocks(n);S.save('nblk',n)}}} className="bg-gray-200 px-1 rounded">+</button></div></div>}
+            {manage && <div className="p-4 bg-gray-100 border-b flex justify-between text-[10px] font-bold"><span className="text-blue-600">Beheer je topics direct in dit scherm</span></div>}
             <div className="flex overflow-x-auto flex-1 bg-white hide-scroll">
                 {cols.map(cat => (
-                    <div key={cat} className="min-w-[280px] border-r flex flex-col shrink-0"><div className="flex justify-between items-center p-3 border-b bg-white sticky top-0"><h4 className="text-[11px] font-black text-blue-600 uppercase">{cat}</h4>{manage&&<button onClick={()=>{const nx=cols.filter(x=>x!==cat);setCols(nx);S.save('newscats',nx)}} className="text-red-400">&times;</button>}</div><div className="space-y-4 p-4 overflow-y-auto flex-1">{[1,2,3].map(i=><div key={i} className="border-b pb-4"><p className="text-xs font-bold">Update: Nieuws over {cat}.</p><div className="flex justify-between text-[9px] font-black text-gray-400 mt-2"><span>{srcs[i%srcs.length]}</span><span>{i}U GELEDEN</span></div></div>)}</div></div>
+                    <div key={cat} className="min-w-[300px] w-[300px] border-r flex flex-col shrink-0">
+                        <div className="flex justify-between items-center p-3 border-b bg-white sticky top-0"><h4 className="text-[11px] font-black text-blue-600 uppercase">{cat}</h4>{manage&&<button onClick={()=>{const nx=cols.filter(x=>x!==cat);setCols(nx);S.save('newscats',nx)}} className="text-red-400">&times;</button>}</div>
+                        <div className="space-y-4 p-4 overflow-y-auto flex-1">
+                            {(newsData[cat] || []).map((item, i) => (
+                                <a href={item.link} target="_blank" key={i} className="block border-b pb-4 hover:bg-gray-50 transition p-1 rounded">
+                                    <p className="text-xs font-bold leading-relaxed">{item.title}</p>
+                                    <div className="flex justify-between text-[9px] font-black text-gray-400 mt-2 uppercase"><span>{item.source}</span><span>{item.pubDate.split(' ')[1]}</span></div>
+                                </a>
+                            ))}
+                            {(!newsData[cat] || newsData[cat].length===0) && <div className="text-xs text-gray-400 text-center mt-10 animate-pulse">Laden...</div>}
+                        </div>
+                    </div>
                 ))}
-                {manage && <div className="min-w-[100px] flex items-center justify-center bg-gray-50"><button onClick={()=>{const n=prompt("Topic:");if(n&&!cols.includes(n)){const nx=[...cols,n];setCols(nx);S.save('newscats',nx)}}} className="text-2xl text-blue-600">+</button></div>}
+                {manage && <div className="min-w-[100px] flex items-center justify-center bg-gray-50"><button onClick={()=>{const n=prompt("Nieuw Topic:");if(n&&!cols.includes(n)){const nx=[...cols,n];setCols(nx);S.save('newscats',nx)}}} className="text-2xl text-blue-600 hover:scale-125 transition">+</button></div>}
             </div>
         </div>
     );
@@ -309,7 +389,7 @@ function SportWidget({ type, lang }) {
     const data = type === 'F1' ? { c: [{ r: "GP Bahrein", d: "02 Mar", t: "16:00" }], s: [{ p: 1, n: "Verstappen", fl: "🇳🇱", pt: 25 }], lst: { title: 'GP Abu Dhabi', p1: 'Verstappen', p2: 'Leclerc', p3: 'Russell' } } : { c: [{ r: "The Masters", d: "10 Apr", t: "14:00 NL" }], s: [{ p: 1, n: "Scheffler", fl: "🇺🇸", pt: "-12" }], lst: { title: 'Dubai Classic', p1: 'McIlroy (-14)', p2: 'Meronk (-13)', p3: 'Young (-12)' } };
     return (
         <div className="widget h-[400px]">
-            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500">{type === 'F1' ? <Ico.F1 /> : <Ico.Glf />}<h3 className="text-[10px] font-black uppercase tracking-widest">{type === 'F1' ? T[lang].f1 || 'F1 TOUR' : T[lang].glf || 'GOLF TOUR'}</h3></div>
+            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500">{type === 'F1' ? <Ico.F1 /> : <Ico.Glf />}<h3 className="text-[10px] font-black uppercase tracking-widest">{type === 'F1' ? 'F1 TOUR' : 'GOLF TOUR'}</h3></div>
             <div className="flex border-b bg-white">{[ {id:'cal', l:T[lang].cal}, {id:'std', l:T[lang].std}, {id:'lst', l:T[lang].lst} ].map(t => <button key={t.id} onClick={() => setTab(t.id)} className={`tab-btn ${tab === t.id ? 'active' : ''}`}>{t.l}</button>)}</div>
             <div className="p-4 flex-1 overflow-y-auto space-y-2 bg-white">
                 {tab === 'cal' && data.c.map(r => <div key={r.r} className="flex justify-between text-xs p-3 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-1">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
@@ -334,7 +414,7 @@ function SudokuWidget({ lang }) {
 
     return (
         <div className="widget p-6 h-[500px] bg-gray-50">
-            <div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2 text-gray-500"><Ico.Sud/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].sud || 'SUDOKU'}</h3></div><select value={diff} onChange={e=>{setDiff(e.target.value); generate(e.target.value)}} className="text-[10px] font-bold border rounded px-2 py-1 outline-none text-blue-700 bg-white"><option>Medium</option><option>Hard</option></select></div>
+            <div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2 text-gray-500"><Ico.Sud/><h3 className="text-[10px] font-black uppercase tracking-widest">SUDOKU</h3></div><select value={diff} onChange={e=>{setDiff(e.target.value); generate(e.target.value)}} className="text-[10px] font-bold border rounded px-2 py-1 outline-none text-blue-700 bg-white"><option>Medium</option><option>Hard</option></select></div>
             <div className="flex-1 flex flex-col justify-center items-center w-full">
                 <div className="sudoku-container bg-white shadow-md">
                     {grid.map((c, i) => <div key={i} onClick={()=>setSel(i)} className={`sudoku-cell ${Math.floor(i/9)%3===2 && Math.floor(i/9)!==8 ? 'border-b-thick' : ''} ${i%3===2 && i%9!==8 ? 'border-r-thick' : ''} ${fixed[i] ? 'fixed' : c ? 'input' : ''} ${sel === i ? 'selected' : ''}`}>{c ? c : (notes[i].length > 0 && <div className="sudoku-candidates">{[1,2,3,4,5,6,7,8,9].map(n => <span key={n}>{notes[i].includes(n) ? n : ''}</span>)}</div>)}</div>)}
@@ -368,7 +448,8 @@ function LanguageWidget({ lang }) {
 }
 
 function Settings({ isOpen, onClose, layout, setLayout }) {
-    const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'Claude AI', val: ''}, {name: 'Bitvavo Pub', val: ''}]));
+    const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
+    const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'OpenAI', val: ''}]));
     const [icals, setIcals] = useState(S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]));
     const [aiUrl, setAiUrl] = useState(S.load('ai_chat_url', ''));
     const [dragIdx, setDragIdx] = useState(null);
@@ -377,7 +458,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v6', n); setDragIdx(null); };
     const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v6', n); };
 
-    const saveAll = () => { S.save('api_keys_dyn', apis); S.save('icals_dyn', icals); S.save('ai_chat_url', aiUrl); onClose(); window.location.reload(); };
+    const saveAll = () => { S.save('bitvavo_keys', bvKeys); S.save('api_keys_dyn', apis); S.save('icals_dyn', icals); S.save('ai_chat_url', aiUrl); onClose(); window.location.reload(); };
 
     return (
         <div className={`settings-panel p-6 md:p-8 ${isOpen ? 'open' : ''}`}>
@@ -397,10 +478,18 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                 </section>
 
                 <section>
-                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">API Keys</h3><button onClick={()=>setApis([...apis, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
+                    <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Bitvavo Koppeling (Live)</h3>
+                    <div className="space-y-2">
+                        <input type="text" placeholder="Bitvavo API Key" value={bvKeys.pub} onChange={e=>setBvKeys({...bvKeys, pub: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                        <input type="password" placeholder="Bitvavo API Secret" value={bvKeys.sec} onChange={e=>setBvKeys({...bvKeys, sec: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                    </div>
+                </section>
+
+                <section>
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Overige API Keys</h3><button onClick={()=>setApis([...apis, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
                     {apis.map((a, i) => (
                         <div key={i} className="flex gap-2 mb-2">
-                            <input placeholder="Naam" value={a.name} onChange={e=>{const n=[...apis]; n[i].name=e.target.value; setApis(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
+                            <input placeholder="Naam (bijv. OpenAI)" value={a.name} onChange={e=>{const n=[...apis]; n[i].name=e.target.value; setApis(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
                             <input type="password" placeholder="API Key..." value={a.val} onChange={e=>{const n=[...apis]; n[i].val=e.target.value; setApis(n);}} className="flex-1 p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
                             <button onClick={()=>{const n=apis.filter((_,idx)=>idx!==i); setApis(n);}} className="text-red-400 hover:text-red-600 font-bold px-1">&times;</button>
                         </div>
@@ -408,10 +497,10 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                 </section>
 
                 <section>
-                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">iCal Links (Agenda)</h3><button onClick={()=>setIcals([...icals, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Live iCal Links (.ics)</h3><button onClick={()=>setIcals([...icals, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
                     {icals.map((c, i) => (
                         <div key={i} className="flex gap-2 mb-2">
-                            <input placeholder="Naam" value={c.name} onChange={e=>{const n=[...icals]; n[i].name=e.target.value; setIcals(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
+                            <input placeholder="Naam (bijv. Werk)" value={c.name} onChange={e=>{const n=[...icals]; n[i].name=e.target.value; setIcals(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
                             <input type="text" placeholder="https://..." value={c.val} onChange={e=>{const n=[...icals]; n[i].val=e.target.value; setIcals(n);}} className="flex-1 p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
                             <button onClick={()=>{const n=icals.filter((_,idx)=>idx!==i); setIcals(n);}} className="text-red-400 hover:text-red-600 font-bold px-1">&times;</button>
                         </div>
@@ -440,10 +529,7 @@ function App() {
     
     useEffect(() => {
         if (!isAuth && window.google) {
-            window.google.accounts.id.initialize({
-                client_id: GOOGLE_CLIENT_ID,
-                callback: handleCredentialResponse
-            });
+            window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredentialResponse });
             window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" });
         }
     }, [isAuth]);
@@ -451,11 +537,8 @@ function App() {
     const handleCredentialResponse = (response) => {
         try {
             const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-            if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) {
-                setIsAuth(true); S.save('auth_status', true);
-            } else {
-                alert("Toegang geweigerd! Dit account heeft geen permissie.");
-            }
+            if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { setIsAuth(true); S.save('auth_status', true); } 
+            else { alert("Toegang geweigerd! Dit account heeft geen permissie."); }
         } catch(e) { console.error("Login failed"); }
     };
 
@@ -467,7 +550,7 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">Personal Dashboard ver. 3.8</p>
+                    <p className="text-xs text-gray-400 mb-8">Personal Dashboard ver. 4.0</p>
                     <div id="google-btn"></div>
                 </div>
             </div>
