@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Dashboard</title>
+    <title>Personal Dashboard - Michael</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -12,12 +12,13 @@
     <style>
         :root { --p-blue: #0073b1; --bg: linear-gradient(135deg, #001a33 0%, #000a14 100%); }
         body { background: var(--bg); min-height: 100vh; font-family: 'Inter', sans-serif; margin: 0; color: #1a1a1a; }
-        .widget { background: rgba(255,255,255,0.98); border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; }
+        .widget { background: rgba(255,255,255,0.98); border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; position: relative; overflow: hidden; }
         .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; transition: 0.2s; text-align: center; cursor: pointer; }
         .tab-btn.active { color: var(--p-blue); border-bottom-color: var(--p-blue); background: rgba(0,115,177,0.05); }
         .btn-toggle { font-size: 0.6rem; font-weight: 800; padding: 4px 8px; border-radius: 2px; transition: 0.2s; border: 1px solid #ddd; text-transform: uppercase; cursor: pointer; }
         .btn-toggle.active { background: var(--p-blue); color: white; border-color: var(--p-blue); }
-        .sudoku-container { width: 100%; max-width: 300px; aspect-ratio: 1/1; margin: 0 auto; display: grid; grid-template-columns: repeat(9, 1fr); border: 2px solid #1a1a1a; background: white; }
+        
+        .sudoku-container { width: 100%; max-width: 320px; aspect-ratio: 1/1; margin: 0 auto; display: grid; grid-template-columns: repeat(9, 1fr); border: 2px solid #1a1a1a; background: white; }
         .sudoku-cell { width: 100%; height: 100%; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.1s; position: relative; user-select: none; }
         .sudoku-cell.selected { background: #e0f2fe; border-color: var(--p-blue); z-index: 10; }
         .sudoku-cell.fixed { background: #f8fafc; font-weight: 900; color: #1e293b; font-size: 1.1rem; }
@@ -26,13 +27,16 @@
         .sudoku-candidates span { display: flex; align-items: center; justify-content: center; }
         .border-r-thick { border-right: 2px solid #1a1a1a !important; }
         .border-b-thick { border-bottom: 2px solid #1a1a1a !important; }
+        
         .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 450px; background: white; z-index: 100; box-shadow: -10px 0 30px rgba(0,0,0,0.5); transform: translateX(100%); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); overflow-y: auto; }
         .settings-panel.open { transform: translateX(0); }
         .sparkline-bg { position: absolute; bottom: 0; left: 0; right: 0; height: 40px; opacity: 0.08; background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><path d="M0 30 L10 20 L20 25 L30 15 L40 18 L50 5 L60 10 L70 2 L80 12 L90 5 L100 0 L100 30 Z" fill="%230073b1"/></svg>'); background-size: cover; background-position: bottom; pointer-events: none; }
         .sparkline-red { background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L10 10 L20 5 L30 15 L40 12 L50 25 L60 20 L70 28 L80 18 L90 25 L100 30 L0 30 Z" fill="%23ef4444"/></svg>'); opacity: 0.05; }
+        
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 10px; }
         .hide-scroll::-webkit-scrollbar { display: none; }
+        .ai-transition { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
 <body>
@@ -44,6 +48,9 @@ const S = {
     load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
     save: (k, v) => localStorage.setItem('d_'+k, JSON.stringify(v))
 };
+
+// Global event bus for AI commands
+const emitCommand = (type, payload) => window.dispatchEvent(new CustomEvent('dashCmd', { detail: { type, payload } }));
 
 const Ico = {
     Settings: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
@@ -65,12 +72,24 @@ const Ico = {
     Clip: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
 };
 
-function WeatherBar() {
+// Dictionaries for basic translation
+const T = {
+    nl: { weather: 'Weer', portfolio: 'Portfolio', agenda: 'Agenda', news: 'Trending Nieuws', radar: 'Investeringen', deals: 'Aanbiedingen', recipes: 'Recepten', spanish: 'Spaans' },
+    en: { weather: 'Weather', portfolio: 'Portfolio', agenda: 'Schedule', news: 'Trending News', radar: 'Investments', deals: 'Deals', recipes: 'Recipes', spanish: 'Spanish' }
+};
+
+function WeatherBar({ lang }) {
     const [c, setC] = useState(S.load('wcity', 'Zoetermeer'));
     const [w, setW] = useState(null);
 
     useEffect(() => {
-        fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${c}&count=1&language=nl`).then(r=>r.json()).then(d=>{
+        const handleCmd = (e) => { if(e.detail.type === 'SET_CITY') { setC(e.detail.payload); S.save('wcity', e.detail.payload); }};
+        window.addEventListener('dashCmd', handleCmd);
+        return () => window.removeEventListener('dashCmd', handleCmd);
+    }, []);
+
+    useEffect(() => {
+        fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${c}&count=1&language=${lang}`).then(r=>r.json()).then(d=>{
             if(d.results){
                 const { latitude:lat, longitude:lon, name } = d.results[0];
                 fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation&hourly=precipitation_probability&timezone=auto`)
@@ -81,25 +100,25 @@ function WeatherBar() {
                 });
             }
         });
-    }, [c]);
+    }, [c, lang]);
 
     return (
         <div className="bg-white/10 px-4 md:px-10 py-3 border-b border-white/10 flex justify-between items-center text-white text-xs font-bold uppercase tracking-widest">
             <div className="flex gap-4 md:gap-8 items-center w-full">
-                <div className="flex items-center gap-2 cursor-pointer hover:text-blue-300 transition" onClick={() => {const n=prompt("Stad:",c); if(n){setC(n);S.save('wcity',n);}}}><Ico.Weather/> <span className="hidden md:inline">{w?.name||c}</span></div>
-                <div className="flex gap-3 md:gap-4 items-center"><span className="text-sm md:text-lg">{w?.t}°C</span><span className="opacity-60 text-[10px] md:text-xs">Gevoel: {w?.f}°C</span></div>
-                <div className="ml-auto bg-blue-500/20 px-3 py-1.5 rounded flex items-center gap-2"><span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span><span className="hidden md:inline">{w?.rain === 0 ? "Nu regen" : w?.rain ? `Regen over ${w.rain}u` : "Geen regen verwacht"}</span><span className="md:hidden">{w?.rain===0?"Nu regen":w?.rain?`${w.rain}u`:"Droog"}</span></div>
+                <div className="flex items-center gap-2 cursor-pointer hover:text-blue-300 transition" onClick={() => {const n=prompt(lang==='nl'?"Stad:":"City:",c); if(n){setC(n);S.save('wcity',n);}}}><Ico.Weather/> <span className="hidden md:inline">{w?.name||c}</span></div>
+                <div className="flex gap-3 md:gap-4 items-center"><span className="text-sm md:text-lg">{w?.t}°C</span><span className="opacity-60 text-[10px] md:text-xs">{lang==='nl'?'Gevoel':'Feels'}: {w?.f}°C</span></div>
+                <div className="ml-auto bg-blue-500/20 px-3 py-1.5 rounded flex items-center gap-2"><span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span><span className="hidden md:inline">{w?.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : w?.rain ? (lang==='nl'?`Regen over ${w.rain}u`:`Rain in ${w.rain}h`) : (lang==='nl'?"Geen regen verwacht":"No rain expected")}</span></div>
             </div>
         </div>
     );
 }
 
-function DailyBriefing() {
+function DailyBriefing({ lang }) {
     return (
         <div className="bg-blue-600/20 border border-blue-500/30 text-blue-100 rounded-lg p-4 mb-6 flex flex-col md:flex-row items-center gap-4 shadow-lg backdrop-blur-md">
             <div className="bg-blue-500 p-2 rounded-full text-white shrink-0"><Ico.Bot /></div>
             <div className="text-sm font-medium leading-relaxed">
-                <span className="font-bold">Systeem Briefing:</span> Geen regen verwacht vanmiddag. Wiskunde (Ryan) om 08:30. Je crypto portfolio is <span className="text-green-400 font-bold">+2.4%</span> gestegen t.o.v. gisteren.
+                <span className="font-bold">System Briefing:</span> {lang==='nl'?'Geen regen verwacht vanmiddag. Wiskunde (Ryan) om 08:30. Je crypto portfolio is ':'No rain expected. Math (Ryan) at 08:30. Crypto portfolio is '}<span className="text-green-400 font-bold">+2.4%</span>.
             </div>
         </div>
     );
@@ -107,29 +126,56 @@ function DailyBriefing() {
 
 function AIWidget() {
     const [msg, setMsg] = useState('');
-    const [hist, setHist] = useState(S.load('ai_hist', [{r: 'ai', t: 'Welkom Michael. Welk model wil je vandaag gebruiken?'}]));
+    const [hist, setHist] = useState(S.load('ai_hist', [{r: 'ai', t: 'Welkom Michael. Typ een vraag of geef een dashboard commando (bijv. "verander weer naar Amsterdam").'}]));
     const [showHist, setShowHist] = useState(false);
-    const [model, setModel] = useState(S.load('ai_model', 'Claude 3.5 Sonnet'));
+    const [model, setModel] = useState(S.load('ai_model', 'GPT-4o'));
+    const [expanded, setExpanded] = useState(false);
     
     const speak = (txt) => { const u = new SpeechSynthesisUtterance(txt); u.lang = 'nl-NL'; window.speechSynthesis.speak(u); };
+    
     const send = () => {
         if(!msg) return;
+        const input = msg.toLowerCase();
         const n = [...hist, {r: 'usr', t: msg}]; setHist(n); S.save('ai_hist', n); setMsg('');
-        setTimeout(() => { const r = [...n, {r: 'ai', t: `(${model}): API configuratie vereist voor deze actie in Settings.`}]; setHist(r); S.save('ai_hist', r); }, 600);
+        
+        // Command Parser
+        if(input.includes('weer naar') || input.includes('weer in')) {
+            const city = input.includes('weer naar') ? input.split('weer naar')[1].trim() : input.split('weer in')[1].trim();
+            emitCommand('SET_CITY', city);
+            setTimeout(() => { const r = [...n, {r: 'ai', t: `Ik heb de weer-locatie aangepast naar ${city.charAt(0).toUpperCase() + city.slice(1)}.`}]; setHist(r); S.save('ai_hist', r); }, 500);
+            return;
+        }
+        if(input.includes('agenda van') || input.includes('laat agenda')) {
+            let p = '';
+            if(input.includes('ryan')) p = 'Ryan'; else if(input.includes('yaron')) p = 'Yaron'; else if(input.includes('michael')) p = 'Michael'; else if(input.includes('fam')) p = 'Fam-Sch';
+            if(p) {
+                emitCommand('SET_AGENDA', p);
+                setTimeout(() => { const r = [...n, {r: 'ai', t: `Ik heb de agenda gefilterd op ${p}.`}]; setHist(r); S.save('ai_hist', r); }, 500);
+                return;
+            }
+        }
+
+        setTimeout(() => { const r = [...n, {r: 'ai', t: `(${model}): API configuratie vereist voor deze vraag in Settings.`}]; setHist(r); S.save('ai_hist', r); }, 600);
     };
 
     return (
-        <div className="widget col-span-12 lg:col-span-8 h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex flex-wrap justify-between items-center gap-2">
+        <div className={`widget col-span-12 lg:col-span-8 ai-transition ${expanded ? 'h-[450px]' : 'h-[72px]'}`}>
+            <div className="p-4 bg-gray-50 border-b flex flex-wrap justify-between items-center gap-2 cursor-pointer" onClick={()=>setExpanded(true)}>
                 <div className="flex items-center gap-2 text-gray-500"><Ico.Bot/><h3 className="text-[10px] font-black uppercase tracking-widest">AI Assistant</h3></div>
-                <div className="flex gap-2 items-center">
-                    <select value={model} onChange={e => {setModel(e.target.value); S.save('ai_model', e.target.value)}} className="bg-white border rounded px-2 py-1.5 text-[9px] font-bold text-blue-700 outline-none cursor-pointer">
-                        {['Claude 3.5 Sonnet', 'GPT-4o', 'Gemini 1.5 Pro', 'Mistral Large'].map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <button onClick={() => setShowHist(!showHist)} className={`px-3 py-1.5 rounded text-[9px] font-bold transition ${showHist ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}>Historie</button>
-                </div>
+                {expanded ? (
+                    <div className="flex gap-2 items-center">
+                        <select value={model} onChange={e => {setModel(e.target.value); S.save('ai_model', e.target.value)}} className="bg-white border rounded px-2 py-1 text-[9px] font-bold text-blue-700 outline-none cursor-pointer">
+                            {['Claude 3.5 Sonnet', 'GPT-4o', 'Gemini 1.5 Pro', 'Mistral Large'].map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <button onClick={(e) => {e.stopPropagation(); setShowHist(!showHist)}} className={`px-2 py-1 rounded text-[9px] font-bold transition ${showHist ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}>Historie</button>
+                        <button onClick={(e) => {e.stopPropagation(); setExpanded(false)}} className="text-gray-400 hover:text-gray-800 ml-2 font-bold text-lg leading-none">&times;</button>
+                    </div>
+                ) : (
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">Klik om te openen <span className="text-blue-500">▼</span></div>
+                )}
             </div>
-            <div className="flex-1 flex overflow-hidden bg-white">
+            
+            <div className={`flex-1 flex overflow-hidden bg-white ${expanded ? 'opacity-100' : 'opacity-0'}`}>
                 <div className={`flex-1 p-4 overflow-y-auto space-y-4 transition-all ${showHist ? 'hidden md:block' : 'block'}`}>
                     {hist.slice(-10).map((m, i) => (
                         <div key={i} className={`flex flex-col ${m.r==='ai'?'items-start':'items-end'}`}>
@@ -145,80 +191,114 @@ function AIWidget() {
                     </div>
                 )}
             </div>
-            <div className="p-3 border-t bg-gray-50 flex gap-2">
-                <button className="px-3 bg-white border rounded text-gray-400 hover:text-blue-600 transition"><Ico.Clip/></button>
-                <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} placeholder="Bericht of commando..." className="flex-1 border p-2.5 rounded text-sm outline-none focus:border-blue-500 shadow-sm" />
-                <button onClick={send} className="bg-[#0073b1] text-white px-5 font-bold rounded text-xs uppercase hover:bg-[#005a8c] transition">Zend</button>
-            </div>
+            
+            {expanded && (
+                <div className="p-3 border-t bg-gray-50 flex gap-2">
+                    <button className="px-3 bg-white border rounded text-gray-400 hover:text-blue-600 transition"><Ico.Clip/></button>
+                    <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} placeholder="Commando (bijv. 'weer naar Parijs') of vraag..." className="flex-1 border p-2.5 rounded text-sm outline-none focus:border-blue-500 shadow-sm" />
+                    <button onClick={send} className="bg-[#0073b1] text-white px-5 font-bold rounded text-xs uppercase hover:bg-[#005a8c] transition">Zend</button>
+                </div>
+            )}
         </div>
     );
 }
 
-function CryptoWidget() {
+function CryptoWidget({ lang }) {
     const [valuta, setValuta] = useState('EUR');
+    const [tf, setTf] = useState('1M'); // Timeframe 1D, 1M, 1Y, ALL
+    const [view, setView] = useState('list');
     const [coins, setCoins] = useState(S.load('portfolio', [{id:'bitcoin', s:'BTC', a:0.5}, {id:'ethereum', s:'ETH', a:5}, {id:'cardano', s:'ADA', a:10000}]));
+    const chartRef = useRef(null);
+    let chartInstance = useRef(null);
+    
+    // Mock data 
     const data = { bitcoin: {eur: 88450, usd: 95000, btc: 1, eur_24h_change: 2.4}, ethereum: {eur: 3150, usd: 3400, btc: 0.035, eur_24h_change: -1.2}, cardano: {eur: 0.65, usd: 0.70, btc: 0.000007, eur_24h_change: 5.7} };
 
     const addCoin = () => {
         const id = prompt("Coin ID (bijv. solana):"); if(!id) return;
         const s = prompt("Symbool (bijv. SOL):"); if(!s) return;
         const a = prompt("Aantal:"); if(!a || isNaN(a)) return;
-        const n = [...coins, {id: id.toLowerCase(), s: s.toUpperCase(), a: parseFloat(a)}];
-        setCoins(n); S.save('portfolio', n);
+        const n = [...coins, {id: id.toLowerCase(), s: s.toUpperCase(), a: parseFloat(a)}]; setCoins(n); S.save('portfolio', n);
     };
     const remCoin = (idx) => { const n = coins.filter((_,i)=>i!==idx); setCoins(n); S.save('portfolio', n); };
 
     const vLow = valuta.toLowerCase();
     const sym = valuta === 'EUR' ? '€' : valuta === 'USD' ? '$' : '₿';
     let total = 0; coins.forEach(c => { if(data[c.id]) total += c.a * data[c.id][vLow]; });
+
+    useEffect(() => {
+        if (view === 'chart' && chartRef.current) {
+            if(chartInstance.current) chartInstance.current.destroy();
+            const labels = tf==='1D'?['08:00','12:00','16:00','20:00','Nu'] : tf==='1M'?['Wk 1','Wk 2','Wk 3','Wk 4','Nu'] : tf==='1Y'?['Q1','Q2','Q3','Q4','Nu'] : ['2023','2024','2025','2026','Nu'];
+            const dData = tf==='1D'?[0,1,0.5,2,2.4] : tf==='1M'?[0,4,-2,8,2.4] : tf==='1Y'?[0,15,10,35,42] : [0,50,150,80,210];
+            
+            chartInstance.current = new Chart(chartRef.current, {
+                type: 'line', data: { labels, datasets: [{ label: 'ROI %', data: dData, borderColor: '#0073b1', backgroundColor: 'rgba(0,115,177,0.1)', fill: true, tension: 0.4 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x:{display:true}, y:{display:true} } }
+            });
+        }
+    }, [view, tf]);
     
     return (
         <div className="widget col-span-12 lg:col-span-4 h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Crypto/><h3 className="text-[10px] font-black uppercase tracking-widest">Portfolio</h3></div><div className="flex bg-gray-200 rounded p-1">{['EUR','USD','BTC'].map(v => <button key={v} onClick={()=>setValuta(v)} className={`px-2 py-1 text-[9px] font-bold rounded ${valuta===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>)}</div></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Crypto/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].portfolio}</h3></div><div className="flex gap-2"><div className="flex bg-gray-200 rounded p-1">{['list','chart'].map(v => <button key={v} onClick={()=>setView(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${view===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>)}</div><div className="flex bg-gray-200 rounded p-1">{['EUR','USD','BTC'].map(v => <button key={v} onClick={()=>setValuta(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded ${valuta===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>)}</div></div></div>
             <div className="p-5 flex-1 flex flex-col bg-white">
                 <div className="mb-4 flex justify-between items-start">
                     <div><span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE ({valuta})</span><div className="text-3xl font-black">{sym} {valuta==='BTC'?total.toFixed(4):total.toLocaleString('nl-NL', {maximumFractionDigits:0})}</div></div>
-                    <button onClick={addCoin} className="bg-gray-100 px-3 py-1.5 rounded text-xs font-black hover:bg-gray-200 transition">+</button>
+                    {view === 'list' && <button onClick={addCoin} className="bg-gray-100 px-3 py-1.5 rounded text-xs font-black hover:bg-gray-200 transition">+</button>}
                 </div>
-                <div className="space-y-3 overflow-y-auto flex-1 pr-1 hide-scroll">
-                    {coins.map((c, i) => {
-                        const d = data[c.id] || {}; const p = d[vLow] || 0; const chg = d[`eur_24h_change`] || 0;
-                        return (
-                            <div key={i} className="relative p-3 border rounded flex justify-between items-center bg-white shadow-sm hover:border-blue-300 group overflow-hidden">
-                                <div className={`sparkline-bg ${chg < 0 ? 'sparkline-red' : ''}`}></div>
-                                <div className="relative z-10"><span className="font-bold text-sm block text-gray-800">{c.s}</span><span className="text-[9px] text-gray-500 font-medium">{c.a} units</span></div>
-                                <div className="text-right flex items-center gap-3 relative z-10">
-                                    <div className="flex flex-col items-end">
-                                        <span className="font-bold text-sm block">{sym}{valuta==='BTC'?(c.a*p).toFixed(4):(c.a*p).toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
-                                        <span className="text-[9px] text-gray-400 font-mono">1 {c.s} = {sym}{p.toLocaleString('nl-NL')}</span>
+                {view === 'list' ? (
+                    <div className="space-y-3 overflow-y-auto flex-1 pr-1 hide-scroll">
+                        {coins.map((c, i) => {
+                            const d = data[c.id] || {}; const p = d[vLow] || 0; const chg = d[`eur_24h_change`] || 0;
+                            return (
+                                <div key={i} className="relative p-3 border rounded flex justify-between items-center bg-white shadow-sm hover:border-blue-300 group overflow-hidden">
+                                    <div className={`sparkline-bg ${chg < 0 ? 'sparkline-red' : ''}`}></div>
+                                    <div className="relative z-10"><span className="font-bold text-sm block text-gray-800">{c.s}</span><span className="text-[9px] text-gray-500 font-medium">{c.a} units</span></div>
+                                    <div className="text-right flex items-center gap-3 relative z-10">
+                                        <div className="flex flex-col items-end">
+                                            <span className="font-bold text-sm block">{sym}{valuta==='BTC'?(c.a*p).toFixed(4):(c.a*p).toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
+                                            <span className="text-[9px] text-gray-400 font-mono">1 {c.s} = {sym}{p.toLocaleString('nl-NL')}</span>
+                                        </div>
+                                        <span className={`text-[10px] font-black w-10 text-right ${chg>=0?'text-green-600':'text-red-500'}`}>{chg>0?'▲':'▼'} {Math.abs(chg).toFixed(1)}%</span>
+                                        <button onClick={()=>remCoin(i)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition absolute right-1"><Ico.Trash/></button>
                                     </div>
-                                    <span className={`text-[10px] font-black w-10 text-right ${chg>=0?'text-green-600':'text-red-500'}`}>{chg>0?'▲':'▼'} {Math.abs(chg).toFixed(1)}%</span>
-                                    <button onClick={()=>remCoin(i)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition absolute right-1"><Ico.Trash/></button>
                                 </div>
-                            </div>
-                        )
-                    })}
-                </div>
+                            )
+                        })}
+                    </div>
+                ) : (
+                    <div className="flex-1 flex flex-col">
+                        <div className="flex gap-2 mb-2">{['1D','1M','1Y','ALL'].map(t => <button key={t} onClick={()=>setTf(t)} className={`text-[9px] font-bold px-2 py-1 border rounded ${tf===t?'bg-blue-600 text-white':'text-gray-500'}`}>{t}</button>)}</div>
+                        <div className="flex-1 min-h-[150px]"><canvas ref={chartRef}></canvas></div>
+                    </div>
+                )}
             </div>
         </div>
     );
 }
 
-function AgendaWidget() {
+function AgendaWidget({ lang }) {
     const [view, setView] = useState('dag');
     const [d, setD] = useState(new Date().toISOString().split('T')[0]);
-    const [s, setS] = useState('');
     const [f, setF] = useState(['Ryan', 'Yaron', 'Michael', 'Fam-Sch']);
     const colors = { Ryan: 'border-red-500', Yaron: 'border-blue-500', Michael: 'border-green-500', 'Fam-Sch': 'border-purple-500' };
     
+    useEffect(() => {
+        const handleCmd = (e) => { if(e.detail.type === 'SET_AGENDA') { setF([e.detail.payload]); }};
+        window.addEventListener('dashCmd', handleCmd);
+        return () => window.removeEventListener('dashCmd', handleCmd);
+    }, []);
+
     const tday = new Date(); const d1 = tday.toISOString().split('T')[0]; tday.setDate(tday.getDate() + 2); const d2 = tday.toISOString().split('T')[0]; tday.setDate(tday.getDate() + 1); const d3 = tday.toISOString().split('T')[0];
-    const allItems = [ { t: 'Wiskunde Toets', p: 'Ryan', date: d1, time: '08:30' }, { t: 'Strategy Review', p: 'Michael', date: d1, time: '14:00' }, { t: 'Voetbal Training', p: 'Yaron', date: d2, time: '15:30' }, { t: 'Familie Diner', p: 'Fam-Sch', date: d3, time: '18:30' } ];
+    const allItems = [ { t: 'Wiskunde Toets', p: 'Ryan', date: d1, time: '08:30' }, { t: 'Strategy Review', p: 'Michael', date: d1, time: '14:00' }, { t: 'Voetbal Training', p: 'Yaron', date: d2, time: '15:30' }, { t: 'Familie Diner', p: 'Fam-Sch', date: d3, time: '18:30' }, { t: 'Tandarts', p: 'Ryan', date: d1, time: '11:00'} ];
     const targetEnd = new Date(d); targetEnd.setDate(targetEnd.getDate() + 7); const dEnd = targetEnd.toISOString().split('T')[0];
-    const items = allItems.filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd)));
+    
+    const items = allItems.filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd))).sort((a,b) => a.time.localeCompare(b.time));
 
     return (
         <div className="widget col-span-12 lg:col-span-4 h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Calendar/><h3 className="text-[10px] font-black uppercase tracking-widest">Agenda</h3></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Calendar/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].agenda}</h3></div>
                 <div className="flex bg-gray-200 p-1 rounded">
                     <button onClick={()=>setView('dag')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='dag'?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>DAG</button>
                     <button onClick={()=>setView('week')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='week'?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>WEEK</button>
@@ -227,44 +307,66 @@ function AgendaWidget() {
             <div className="flex border-b bg-white overflow-x-auto p-2 gap-2 hide-scroll">
                 {['Ryan', 'Yaron', 'Michael', 'Fam-Sch'].map(p => <button key={p} onClick={() => setF(prev => prev.includes(p) ? prev.filter(x=>x!==p) : [...prev, p])} className={`px-2 py-1.5 text-[9px] font-bold border rounded uppercase whitespace-nowrap transition ${f.includes(p) ? 'bg-[#0073b1] text-white border-[#0073b1]' : 'text-gray-400 bg-gray-50 hover:bg-gray-100'}`}>{p}</button>)}
             </div>
-            <div className="p-3 flex gap-2 border-b bg-gray-50 justify-center">
+            <div className="p-3 flex border-b bg-gray-50 justify-center">
                 <div className="flex items-center gap-1 bg-white border rounded">
                     <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&lt;</button>
                     <input type="date" value={d} onChange={e=>setD(e.target.value)} className="text-[10px] outline-none font-bold bg-transparent text-center w-[110px]" />
                     <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&gt;</button>
                 </div>
             </div>
-            <div className="flex-1 p-4 bg-white space-y-3 overflow-y-auto">
-                {items.map((i, idx) => <div key={idx} className={`p-3 border-l-4 ${colors[i.p]} bg-gray-50 rounded flex justify-between items-center shadow-sm`}><div className="flex flex-col"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week' ? `${i.date} • ` : ''}{i.p}</span><span className="font-bold text-sm text-gray-800">{i.t}</span></div><span className="text-blue-600 font-bold font-mono text-sm bg-blue-50 px-2 py-1 rounded">{i.time}</span></div>)}
-                {items.length === 0 && <div className="text-center text-xs text-gray-400 mt-6 font-medium">Geen afspraken.</div>}
+            {/* 2-Column Grid for Items */}
+            <div className="flex-1 p-4 bg-white grid grid-cols-2 gap-3 overflow-y-auto content-start">
+                {items.map((i, idx) => (
+                    <div key={idx} className={`p-3 border-l-4 ${colors[i.p]} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}>
+                        <div className="flex justify-between items-start mb-1">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week' ? `${i.date.slice(5)} ` : ''}{i.p}</span>
+                            <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded">{i.time}</span>
+                        </div>
+                        <span className="font-bold text-xs text-gray-800 leading-tight">{i.t}</span>
+                    </div>
+                ))}
+                {items.length === 0 && <div className="col-span-2 text-center text-xs text-gray-400 mt-6 font-medium">Geen afspraken.</div>}
             </div>
         </div>
     );
 }
 
-function NewsWidget() {
+function NewsWidget({ lang }) {
     const [cols, setCols] = useState(S.load('newscats', ['AI & Tech', 'Crypto', 'Biotech']));
     const [visible, setVisible] = useState({}); 
+    const [manage, setManage] = useState(false);
+    const [srcs, setSrcs] = useState(['NOS', 'Reuters', 'Bloomberg', 'TechCrunch']);
+    const [blocks, setBlocks] = useState(['voetbal', 'roddel']);
 
     const loadMore = (cat) => { setVisible(p => ({...p, [cat]: (p[cat] || 3) + 3})); };
+    const addCol = () => { const n = prompt("Nieuw topic:"); if(n && !cols.includes(n)) { const nx = [...cols, n]; setCols(nx); S.save('newscats', nx); } };
 
     return (
         <div className="widget col-span-12 lg:col-span-8 h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.News/><h3 className="text-[10px] font-black uppercase tracking-widest">Trending Intelligence</h3></div></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.News/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].news}</h3></div><button onClick={()=>setManage(!manage)} className="text-gray-400 hover:text-blue-600"><Ico.Settings/></button></div>
+            
+            {manage && (
+                <div className="p-4 bg-gray-100 border-b flex flex-wrap gap-4 text-[10px] font-bold text-gray-600">
+                    <div className="flex items-center gap-2"><span>BRONNEN:</span>{srcs.map(s => <span key={s} className="bg-white border px-1 rounded">{s}</span>)}</div>
+                    <div className="flex items-center gap-2"><span>BLOCK:</span>{blocks.map(s => <span key={s} className="bg-red-50 text-red-600 border border-red-200 px-1 rounded">{s}</span>)}</div>
+                    <button onClick={addCol} className="ml-auto bg-blue-600 text-white px-2 py-1 rounded">+ Toevoegen Topic</button>
+                </div>
+            )}
+
             <div className="flex overflow-x-auto overflow-y-hidden flex-1 bg-white hide-scroll">
                 {cols.map(cat => {
                     const count = visible[cat] || 3;
                     return (
-                        <div key={cat} className="min-w-[280px] w-[280px] border-r flex flex-col h-full shrink-0">
-                            <div className="flex justify-between items-center p-3 border-b bg-gray-50 sticky top-0"><h4 className="text-[11px] font-black text-blue-600 uppercase tracking-tighter">{cat}</h4></div>
+                        <div key={cat} className="min-w-[280px] w-[280px] border-r flex flex-col h-full shrink-0 relative">
+                            <div className="flex justify-between items-center p-3 border-b bg-white sticky top-0 z-10"><h4 className="text-[11px] font-black text-blue-600 uppercase tracking-tighter">{cat}</h4>{manage&&<button onClick={()=>{const nx=cols.filter(x=>x!==cat);setCols(nx);S.save('newscats',nx);}} className="text-red-400 hover:text-red-600">&times;</button>}</div>
                             <div className="space-y-4 p-4 overflow-y-auto flex-1">
                                 {Array.from({length: count}).map((_, i) => (
                                     <div key={i} className="group cursor-pointer border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                                        <p className="text-xs font-bold leading-relaxed group-hover:text-blue-600 transition">Update {i+1}: Ontwikkelingen in {cat}.</p>
-                                        <div className="flex justify-between text-[9px] font-black text-gray-400 mt-2 uppercase"><span>REUTERS</span><span>{i+1}U GELEDEN</span></div>
+                                        <p className="text-xs font-bold leading-relaxed group-hover:text-blue-600 transition">Update {i+1}: Recente ontwikkelingen in {cat} geanalyseerd.</p>
+                                        <div className="flex justify-between text-[9px] font-black text-gray-400 mt-2 uppercase"><span>{srcs[i%srcs.length]}</span><span>{i+1}U GELEDEN</span></div>
                                     </div>
                                 ))}
-                                <button onClick={()=>loadMore(cat)} className="w-full text-[9px] font-bold bg-gray-100 text-gray-600 py-2 rounded hover:bg-gray-200 uppercase tracking-widest">Meer Laden ↓</button>
+                                <button onClick={()=>loadMore(cat)} className="w-full text-[9px] font-bold bg-gray-50 text-gray-500 border py-2 rounded hover:bg-gray-100 uppercase tracking-widest mt-2 transition">Meer Laden ↓</button>
                             </div>
                         </div>
                     )
@@ -274,23 +376,28 @@ function NewsWidget() {
     );
 }
 
-function RadarWidget() {
+function RadarWidget({ lang }) {
     const opps = [
-        { t: 'Novo Nordisk (NOVO-B.CO)', m: '🔥 EXPLOSIVE', w: 'Europees fundament. GLP-1 marktuitbreiding naar neurologie.', r: 'Med' },
-        { t: 'ASML Holding (ASML.AS)', m: '📈 BUILDING', w: 'Monopolie EUV lithografie, absolute basis voor AI hardware.', r: 'Low' },
-        { t: 'Nuclear Energy (CCJ)', m: '🔥 EXPLOSIVE', w: 'Datacenters vereisen modulaire reactoren voor schone stroom.', r: 'High' }
+        { t: 'Novo Nordisk', m: '🔥 EXPLOSIVE', w: 'Europees fundament. GLP-1 marktuitbreiding naar neurologie. Blijft de concurrentie voor.', r: {w:'Low', m:'Med', y:'Med', a:'Med'} },
+        { t: 'ASML Holding', m: '📈 BUILDING', w: 'Monopolie in EUV lithografie, de absolute basis voor alle next-gen AI hardware.', r: {w:'Low', m:'Low', y:'Low', a:'Low'} },
+        { t: 'Nuclear Energy', m: '🔥 EXPLOSIVE', w: 'Datacenters (Microsoft, AWS) vereisen modulaire reactoren voor massale schone stroom.', r: {w:'High', m:'High', y:'Med', a:'Med'} }
     ];
     return (
-        <div className="widget col-span-12 lg:col-span-4 h-[350px]">
-            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500"><Ico.Radar/><h3 className="text-[10px] font-black uppercase tracking-widest">Investment Radar</h3></div>
+        <div className="widget col-span-12 lg:col-span-4 h-[400px]">
+            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500"><Ico.Radar/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].radar}</h3></div>
             <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-white">
                 {opps.map(o => (
                     <a href={`https://news.google.com/search?q=${encodeURIComponent(o.t)}`} target="_blank" rel="noopener noreferrer" key={o.t} className="p-4 border rounded hover:border-blue-400 transition group relative overflow-hidden bg-white shadow-sm block">
                         <div className={`sparkline-bg ${o.m.includes('🔥') ? 'sparkline-red' : ''}`}></div>
                         <div className="relative z-10">
-                            <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold w-2/3 leading-tight">{o.t}</span><span className={`text-[8px] font-black px-2 py-1 rounded whitespace-nowrap ${o.m.includes('🔥') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{o.m}</span></div>
+                            <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold leading-tight">{o.t}</span><span className={`text-[8px] font-black px-2 py-1 rounded whitespace-nowrap ${o.m.includes('🔥') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{o.m}</span></div>
                             <p className="text-[10px] text-gray-600 mb-3 leading-relaxed line-clamp-2">{o.w}</p>
-                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">RISICO: {o.r}</span>
+                            <div className="flex gap-1 text-[8px] font-bold text-gray-500 uppercase">
+                                <span className="bg-gray-100 px-1 py-0.5 rounded">1W: <span className={o.r.w==='High'?'text-red-500':'text-green-600'}>{o.r.w}</span></span>
+                                <span className="bg-gray-100 px-1 py-0.5 rounded">1M: <span className={o.r.m==='High'?'text-red-500':o.r.m==='Med'?'text-yellow-600':'text-green-600'}>{o.r.m}</span></span>
+                                <span className="bg-gray-100 px-1 py-0.5 rounded">1Y: <span className={o.r.y==='High'?'text-red-500':o.r.y==='Med'?'text-yellow-600':'text-green-600'}>{o.r.y}</span></span>
+                                <span className="bg-gray-100 px-1 py-0.5 rounded">ALL: <span className={o.r.a==='High'?'text-red-500':o.r.a==='Med'?'text-yellow-600':'text-green-600'}>{o.r.a}</span></span>
+                            </div>
                         </div>
                     </a>
                 ))}
@@ -299,66 +406,33 @@ function RadarWidget() {
     );
 }
 
-function PepperWidget() {
-    const deals = [{ t: 'Sony WH-1000XM5', p: '€259', o: '€349', d: '25%', h: true }, { t: 'MacBook Air M2', p: '€899', o: '€1199', d: '25%', h: true }];
-    return (
-        <div className="widget col-span-12 lg:col-span-4 h-[350px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper Deals</h3></div></div>
-            <div className="p-4 flex gap-4 overflow-x-auto flex-1 items-center bg-white hide-scroll">
-                {deals.map((d, i) => (
-                    <div key={i} className="min-w-[180px] h-[260px] border rounded p-3 bg-white hover:border-red-400 transition flex flex-col shadow-sm">
-                        <div className="h-[80px] w-full bg-gray-100 rounded mb-3 flex items-center justify-center text-[9px] font-bold text-gray-400 border border-dashed">IMG</div>
-                        <div className="flex gap-1 mb-2">{d.h && <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">HOT</span>}<span className="bg-green-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">-{d.d}</span></div>
-                        <h4 className="text-[11px] font-bold leading-tight mb-auto">{d.t}</h4>
-                        <div className="flex items-baseline gap-2 mt-3"><span className="text-lg font-bold text-blue-600">{d.p}</span><span className="text-[10px] text-gray-400 line-through font-bold">{d.o}</span></div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
 function SportWidget({ type }) {
-    const [tab, setTab] = useState('cal');
+    const [tab, setTab] = useState('lst');
     const data = type === 'F1' ? { 
         c: [{ r: "GP Bahrein", d: "02 Mar", t: "16:00 Race" }, { r: "GP Saudi", d: "09 Mar", t: "18:00 Race" }], 
-        s: [{ p: 1, n: "Verstappen", fl: "🇳🇱", pt: 25 }, { p: 2, n: "Norris", fl: "🇬🇧", pt: 18 }] 
+        s: [{ p: 1, n: "Verstappen", fl: "🇳🇱", pt: 25 }, { p: 2, n: "Norris", fl: "🇬🇧", pt: 18 }],
+        lst: { title: 'GP Abu Dhabi', p1: 'Verstappen', p2: 'Leclerc', p3: 'Russell', fl: 'Verstappen (1:26.4)' }
     } : { 
         c: [{ r: "The Masters", d: "10 Apr", t: "14:00 NL" }], 
-        s: [{ p: 1, n: "Scheffler", fl: "🇺🇸", pt: "-12" }, { p: 2, n: "McIlroy", fl: "🇬🇧", pt: "-10" }] 
+        s: [{ p: 1, n: "Scheffler", fl: "🇺🇸", pt: "-12" }, { p: 2, n: "McIlroy", fl: "🇬🇧", pt: "-10" }],
+        lst: { title: 'Dubai Desert Classic', p1: 'McIlroy (-14)', p2: 'Meronk (-13)', p3: 'Young (-12)' }
     };
     return (
-        <div className="widget h-[350px] col-span-12 lg:col-span-4">
+        <div className="widget h-[400px] col-span-12 lg:col-span-4">
             <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500">{type === 'F1' ? <Ico.F1 /> : <Ico.Golf />}<h3 className="text-[10px] font-black uppercase tracking-widest">{type} Tour</h3></div>
-            <div className="flex border-b bg-white">{[ {id:'cal', l:'Kalender'}, {id:'std', l:'Standings'}].map(t => <div key={t.id} onClick={() => setTab(t.id)} className={`tab-btn ${tab === t.id ? 'active' : ''}`}>{t.l}</div>)}</div>
+            <div className="flex border-b bg-white">{[ {id:'cal', l:'Kalender'}, {id:'std', l:'Standings'}, {id:'lst', l:'Laatste'} ].map(t => <div key={t.id} onClick={() => setTab(t.id)} className={`tab-btn ${tab === t.id ? 'active' : ''}`}>{t.l}</div>)}</div>
             <div className="p-4 flex-1 overflow-y-auto space-y-2 bg-white">
                 {tab === 'cal' && data.c.map(r => <div key={r.r} className="flex justify-between text-xs p-3 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold text-gray-800">{r.r}</span><span className="text-[9px] font-black text-gray-400 uppercase mt-1">{r.d}</span></div><div className="text-right flex flex-col justify-center"><span className="font-mono text-blue-600 font-bold block">{r.t}</span></div></div>)}
-                {tab === 'std' && data.s.map((s,i) => <div key={s.n} className={`flex justify-between items-center text-xs p-3 border-b`}><div className="flex gap-3 items-center"><span className="font-black text-gray-400 w-4 text-center">{i===0?'🥇':i===1?'🥈':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold text-gray-800">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{s.pt}</span></div>)}
-            </div>
-        </div>
-    );
-}
-
-function RecipeWidget() {
-    const allRecs = [{ n: "Ribeye Herb Butter", p: 52, k: 650, t: 15, c: "Vlees", ing: "Ribeye 300g\nBoter", stp: "1. Bakken.\n2. Rusten." }, { n: "Kip Teriyaki", p: 48, k: 510, t: 25, c: "Kip", ing: "Kip 200g\nRijst", stp: "1. Koken.\n2. Bakken." }, { n: "Eiwit Pancakes", p: 35, k: 380, t: 10, c: "All", ing: "Whey\nEi", stp: "1. Mixen.\n2. Bakken." }];
-    const [f, setF] = useState('All');
-    const [page, setPage] = useState(0);
-    const [exp, setExp] = useState(null);
-    const filtered = allRecs.filter(r => f === 'All' || r.c === f);
-    const displayed = filtered.slice(page*3, (page+1)*3);
-    
-    return (
-        <div className="widget h-[350px] col-span-12 lg:col-span-4 flex flex-col">
-            <div className="p-4 border-b bg-gray-50 flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Food /><h3 className="text-[10px] font-black uppercase tracking-widest">High-Protein</h3></div><button onClick={()=>setPage(p=>(p+1)*3>=filtered.length?0:p+1)} className="text-gray-500 hover:text-blue-600 bg-white p-1.5 rounded border shadow-sm transition"><Ico.Refresh/></button></div>
-            <div className="flex gap-2 p-3 border-b bg-white overflow-x-auto hide-scroll">{['All', 'Vlees', 'Kip', 'Vis'].map(x => <button key={x} onClick={() => {setF(x); setPage(0); setExp(null);}} className={`px-3 py-1 rounded-full text-[9px] font-bold border transition ${f === x ? 'bg-gray-900 text-white border-gray-900' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'}`}>{x.toUpperCase()}</button>)}</div>
-            <div className="p-4 space-y-3 flex-1 overflow-y-auto bg-white">
-                {displayed.map((r, i) => (
-                    <div key={i} onClick={()=>setExp(exp===i?null:i)} className="p-3 border rounded cursor-pointer hover:border-blue-400 transition bg-white shadow-sm flex flex-col">
-                        <div className="flex justify-between items-start mb-2"><h4 className="text-xs font-bold text-gray-800">{r.n}</h4><span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[9px] font-black">{r.p}g EIWIT</span></div>
-                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{r.t} MIN | {r.k} KCAL</p>
-                        {exp === i && <div className="mt-3 pt-3 border-t text-[10px] text-gray-600 whitespace-pre-line leading-relaxed"><span className="font-bold text-gray-900">Ingrediënten:</span><br/>{r.ing}<br/><br/><span className="font-bold text-gray-900">Bereiding:</span><br/>{r.stp}</div>}
+                {tab === 'std' && data.s.map((s,i) => <div key={s.n} className={`flex justify-between items-center text-xs p-3 border-b`}><div className="flex gap-3 items-center"><span className="font-black text-gray-400 w-4 text-center">{i===0?'🥇':i===1?'🥈':i===2?'🥉':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold text-gray-800">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{s.pt}</span></div>)}
+                {tab === 'lst' && (
+                    <div className="flex flex-col gap-3">
+                        <div className="bg-blue-50 text-blue-800 font-bold text-center py-2 rounded uppercase tracking-widest text-[10px]">{data.lst.title}</div>
+                        <div className="p-3 border rounded border-yellow-300 bg-yellow-50 flex justify-between items-center"><span className="text-lg">🥇</span><span className="font-bold text-sm">{data.lst.p1}</span></div>
+                        <div className="p-3 border rounded border-gray-300 bg-gray-50 flex justify-between items-center"><span className="text-lg">🥈</span><span className="font-bold text-sm">{data.lst.p2}</span></div>
+                        <div className="p-3 border rounded border-orange-200 bg-orange-50 flex justify-between items-center"><span className="text-lg">🥉</span><span className="font-bold text-sm">{data.lst.p3}</span></div>
+                        {type === 'F1' && <div className="mt-2 text-center text-[10px] font-bold text-gray-500 uppercase">Snelste Ronde: <span className="text-purple-600">{data.lst.fl}</span></div>}
                     </div>
-                ))}
+                )}
             </div>
         </div>
     );
@@ -409,14 +483,15 @@ function SudokuWidget() {
 
             <div className="mt-4 flex flex-col gap-2">
                 <div className="flex justify-between gap-1">
-                    {[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={()=>handleNum(n)} className="flex-1 bg-white border py-2 rounded font-black text-gray-800 shadow-sm active:bg-gray-100">{n}</button>)}
+                    {[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={()=>handleNum(n)} className="flex-1 bg-white border py-2 rounded font-black text-gray-800 shadow-sm active:bg-gray-100 transition">{n}</button>)}
                 </div>
                 <div className="flex gap-2 h-10">
                     <button onClick={()=>setMode('normal')} className={`flex-1 rounded font-bold text-[10px] uppercase tracking-widest border transition ${mode==='normal'?'bg-blue-600 text-white':'bg-white text-gray-600'}`}>Normaal</button>
                     <button onClick={()=>setMode('note')} className={`flex-1 rounded font-bold text-[10px] uppercase tracking-widest border transition ${mode==='note'?'bg-blue-600 text-white':'bg-white text-gray-600'}`}>Notitie</button>
-                    <button onClick={handleUndo} disabled={history.length===0} className="w-16 bg-white border rounded flex items-center justify-center text-gray-500 disabled:opacity-30">Undo</button>
-                    <button onClick={handleClear} className="w-16 bg-white border rounded flex items-center justify-center text-red-500"><Ico.Trash/></button>
+                    <button onClick={handleUndo} disabled={history.length===0} className="w-14 bg-white border rounded flex items-center justify-center text-gray-500 disabled:opacity-30">Undo</button>
+                    <button onClick={handleClear} className="w-10 bg-white border rounded flex items-center justify-center text-red-500"><Ico.Trash/></button>
                 </div>
+                <button onClick={()=>generate(diff)} className="w-full mt-2 bg-gray-800 text-white text-[10px] font-black py-3 rounded uppercase tracking-widest hover:bg-gray-700 transition">Nieuwe Sudoku</button>
             </div>
         </div>
     );
@@ -428,7 +503,7 @@ function Settings({ isOpen, onClose }) {
         <div className={`settings-panel p-8 ${isOpen ? 'open' : ''}`}>
             <div className="flex justify-between items-center mb-8 border-b pb-4"><h2 className="text-2xl font-black uppercase tracking-tighter">Configuratie</h2><button onClick={onClose} className="text-3xl text-gray-400 hover:text-gray-800 transition">&times;</button></div>
             <div className="space-y-8">
-                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-4 tracking-widest">API Keys</h3><input type="password" placeholder="AI API Key" value={k.claude} onChange={e=>setK({...k, claude: e.target.value})} className="w-full p-3 border rounded text-xs font-mono mb-3 bg-gray-50 focus:bg-white outline-none focus:border-blue-500" /><input type="text" placeholder="Bitvavo Public Key" value={k.bitvavo_k} onChange={e=>setK({...k, bitvavo_k: e.target.value})} className="w-full p-3 border rounded text-xs font-mono mb-3 bg-gray-50 focus:bg-white outline-none focus:border-blue-500" /><input type="password" placeholder="Bitvavo Secret Key" value={k.bitvavo_s} onChange={e=>setK({...k, bitvavo_s: e.target.value})} className="w-full p-3 border rounded text-xs font-mono bg-gray-50 focus:bg-white outline-none focus:border-blue-500" /></section>
+                <section><h3 className="text-[10px] font-black text-blue-600 uppercase mb-4 tracking-widest">API Keys</h3><input type="password" placeholder="AI API Key" value={k.claude} onChange={e=>setK({...k, claude: e.target.value})} className="w-full p-3 border rounded text-xs font-mono mb-3 bg-gray-50 focus:bg-white outline-none focus:border-blue-500" /><input type="text" placeholder="Bitvavo Public Key" value={k.bitvavo_k} onChange={e=>setK({...k, bitvavo_k: e.target.value})} className="w-full p-3 border rounded text-xs font-mono mb-3 bg-gray-50 focus:bg-white outline-none focus:border-blue-500" /><input type="password" placeholder="Bitvavo Secret Key" value={k.bitvavo_s} onChange={e=>setK({...k, bitvavo_s: e.target.value})} className="w-full p-3 border rounded text-xs font-mono mb-3 bg-gray-50 focus:bg-white outline-none focus:border-blue-500" /></section>
                 <section><h3 className="text-[10px] font-black text-purple-600 uppercase mb-4 tracking-widest">iCal Links</h3>{['Ryan', 'Yaron', 'Michael', 'Fam-Sch'].map((p, i) => { const id = ['cal_r', 'cal_y', 'cal_m', 'cal_f'][i]; return <div key={p} className="mb-3"><label className="text-[9px] font-bold text-gray-500 uppercase block mb-1">{p}</label><input type="text" placeholder="https://..." value={k[id]} onChange={e=>setK({...k, [id]: e.target.value})} className="w-full p-3 border rounded text-xs font-mono bg-gray-50 focus:bg-white outline-none focus:border-purple-500" /></div> })}</section>
             </div>
             <button onClick={() => { S.save('apikeys', k); onClose(); }} className="mt-10 w-full bg-[#1a1a1a] text-white py-4 text-[10px] font-black uppercase tracking-widest rounded hover:bg-black transition shadow-lg">Opslaan</button>
@@ -438,28 +513,30 @@ function Settings({ isOpen, onClose }) {
 
 function App() {
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [lang, setLang] = useState('nl');
     return (
         <div className="flex flex-col min-h-screen">
-            <WeatherBar />
+            <WeatherBar lang={lang} />
             <header className="px-6 md:px-10 pt-8 pb-6 max-w-[1600px] mx-auto w-full flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white/10 mb-6">
                 <div>
                     <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter italic uppercase drop-shadow-md leading-none">Personal Dashboard</h1>
                     <p className="text-blue-200 text-[10px] md:text-xs font-black uppercase tracking-[0.4em] mt-3">Michael</p>
                 </div>
-                <button onClick={() => setSettingsOpen(true)} className="p-3 bg-white/10 text-white rounded hover:bg-white/20 transition backdrop-blur-sm shadow-sm"><Ico.Settings /></button>
+                <div className="flex gap-3">
+                    <button onClick={() => setLang(lang==='nl'?'en':'nl')} className="px-4 py-2 bg-white/10 text-white rounded hover:bg-white/20 transition font-bold text-[10px] uppercase tracking-widest">{lang === 'nl' ? '🇳🇱 NL' : '🇬🇧 EN'}</button>
+                    <button onClick={() => setSettingsOpen(true)} className="p-3 bg-white/10 text-white rounded hover:bg-white/20 transition backdrop-blur-sm shadow-sm"><Ico.Settings /></button>
+                </div>
             </header>
             <main className="px-6 md:px-10 pb-16 max-w-[1600px] mx-auto w-full">
-                <DailyBriefing />
+                <DailyBriefing lang={lang} />
                 <div className="grid grid-cols-12 gap-6 md:gap-8">
                     <AIWidget />
-                    <CryptoWidget />
-                    <AgendaWidget />
-                    <NewsWidget />
-                    <RadarWidget />
-                    <RecipeWidget />
+                    <CryptoWidget lang={lang} />
+                    <AgendaWidget lang={lang} />
+                    <NewsWidget lang={lang} />
+                    <RadarWidget lang={lang} />
                     <SportWidget type="F1" />
                     <SportWidget type="Golf" />
-                    <PepperWidget />
                     <SudokuWidget />
                 </div>
             </main>
