@@ -878,9 +878,10 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'OpenAI', val: ''}]));
     const [icals, setIcals] = useState(S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]));
     const [aiUrl, setAiUrl] = useState(S.load('ai_chat_url', ''));
+    const [dragIdx, setDragIdx] = useState(null);
 
-    const handleDragStart = (e, idx) => { e.dataTransfer.setData("idx", idx); };
-    const handleDrop = (e, idx) => { e.preventDefault(); const dragIdx = parseInt(e.dataTransfer.getData("idx")); if (dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v7', n); };
+    const handleDragStart = (e, idx) => { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; };
+    const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v7', n); setDragIdx(null); };
     const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v7', n); };
 
     const saveAll = async () => { 
@@ -890,6 +891,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
         S.save('ai_chat_url', aiUrl); 
         S.save('layout_v7', layout);
         
+        // Push naar Vercel KV cloud
         const cloudSettings = {
             bitvavo_keys: bvKeys,
             api_keys_dyn: apis,
@@ -990,7 +992,7 @@ function App() {
         }
     }, [isAuth]);
 
-    // Check Cloud on Load
+    // Check Cloud on Load (Automatische sync)
     useEffect(() => {
         const syncOnLoad = async () => {
             if (isAuth) {
@@ -1005,7 +1007,7 @@ function App() {
                         }
                     }
                 } catch(e) { console.error("Cloud check gefaald:", e); }
-                setIsSyncing(false); // Stop loading screen and render dashboard
+                setIsSyncing(false); 
             }
         };
         syncOnLoad();
@@ -1018,7 +1020,7 @@ function App() {
                 setIsSyncing(true);
                 setIsAuth(true); 
                 S.save('auth_status', true); 
-                // useEffect(syncOnLoad) will now trigger automatically!
+                // useEffect(syncOnLoad) will nu automatisch starten
             } 
             else { alert("Toegang geweigerd! Dit account heeft geen permissie."); }
         } catch(e) { console.error("Login failed"); }
