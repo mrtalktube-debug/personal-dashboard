@@ -30,14 +30,14 @@
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 4px; }
         .hide-scroll::-webkit-scrollbar { display: none; }
-        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .ai-transition { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 // ----- CONFIGURATIE -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
@@ -167,13 +167,22 @@ function AIWidget({ lang }) {
 
 function CryptoWidget({ lang }) {
     const [valuta, setValuta] = useState('EUR'); 
-    const [tf, setTf] = useState('1M'); 
-    const [view, setView] = useState('list');
     const [portfolio, setPortfolio] = useState([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState('');
-    const chartRef = useRef(null); let cInst = useRef(null);
+
+    const getMockTrends = (sym) => {
+        const hash = sym.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
+        return {
+            h: ((hash%5) - 2) + 0.4,
+            d: ((hash%15) - 5) + 0.2, // 1D Trend
+            w: ((hash%30) - 10) + 1.1,
+            m: ((hash%60) - 20) + 5.5,
+            y: ((hash%200) - 50) + 40.0,
+            a: hash * 5 + 120
+        };
+    };
 
     useEffect(() => {
         const fetchBitvavo = async () => {
@@ -193,12 +202,12 @@ function CryptoWidget({ lang }) {
                 let calcTotal = 0;
                 const combined = data.balances.map(b => {
                     const amount = parseFloat(b.available) + parseFloat(b.inOrder);
-                    if(b.symbol === 'EUR') { calcTotal += amount; return { sym: 'EUR', amount, price: 1, val: amount }; }
+                    if(b.symbol === 'EUR') { calcTotal += amount; return { sym: 'EUR', amount, price: 1, val: amount, tr: getMockTrends('EUR') }; }
                     const priceObj = data.prices.find(p => p.market === `${b.symbol}-EUR`);
                     const price = priceObj ? parseFloat(priceObj.price) : 0;
                     const val = amount * price;
                     calcTotal += val;
-                    return { sym: b.symbol, amount, price, val };
+                    return { sym: b.symbol, amount, price, val, tr: getMockTrends(b.symbol) };
                 }).sort((a,b) => b.val - a.val);
 
                 setPortfolio(combined); setTotal(calcTotal); setErr('');
@@ -207,38 +216,55 @@ function CryptoWidget({ lang }) {
         };
         fetchBitvavo();
     }, [lang]);
-
-    useEffect(() => {
-        if(view === 'chart' && chartRef.current && !loading && !err) {
-            if(cInst.current) cInst.current.destroy();
-            const labels = tf==='1D'?['08:00','12:00','16:00','Nu'] : tf==='1M'?['Wk 1','Wk 2','Wk 3','Nu'] : tf==='1Y'?['Q1','Q2','Q3','Nu'] : ['2023','2024','2025','Nu'];
-            const dData = tf==='1D'?[0,1,0.5,2.4] : tf==='1M'?[0,4,-2,2.4] : tf==='1Y'?[0,15,10,42] : [0,50,150,210]; 
-            cInst.current = new Chart(chartRef.current, { type: 'line', data: { labels, datasets: [{ data: dData, borderColor: '#0073b1', backgroundColor: 'rgba(0,115,177,0.1)', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
-        }
-    }, [view, tf, loading, err]);
     
     const sym = valuta==='EUR'?'€':valuta==='USD'?'$':'₿';
     const displayTotal = valuta==='BTC' ? (total/90000).toFixed(4) : total; 
     
+    const totalTrend = portfolio.reduce((acc, c) => acc + (c.tr.d * (c.val / (total || 1))), 0);
+    const totalColor = totalTrend >= 0 ? 'text-green-600' : 'text-red-600';
+
     return (
-        <div className="widget h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div><div className="flex gap-2"><div className="flex bg-gray-200 rounded p-1">{['list','chart'].map(v=><button key={v} onClick={()=>setView(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${view===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>)}</div></div></div>
-            <div className="p-5 flex-1 flex flex-col bg-white">
-                <div className="mb-4 flex justify-between items-start"><div><span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE ({valuta})</span><div className="text-3xl font-black">{loading ? '...' : err ? 'Error' : `${sym} ${displayTotal.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}</div></div></div>
+        <div className="widget h-[450px] flex flex-col">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center shrink-0"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div></div>
+            <div className="p-5 flex-1 flex flex-col bg-white overflow-hidden">
+                <div className="mb-4 shrink-0 flex justify-between items-start">
+                    <div>
+                        <span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE ({valuta})</span>
+                        <div className={`text-3xl font-black ${loading || err ? 'text-gray-900' : totalColor}`}>
+                            {loading ? '...' : err ? 'Error' : `${sym} ${displayTotal.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}
+                        </div>
+                    </div>
+                </div>
                 
                 {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Syncing with Bitvavo...</div> : 
                  err ? <div className="flex-1 text-[10px] text-red-500 font-bold p-4 bg-red-50 rounded border border-red-100">{err}</div> :
-                 view === 'list' ? (
-                    <div className="space-y-3 overflow-y-auto flex-1 hide-scroll">
-                        {portfolio.map((c, i) => (
-                            <div key={i} className="relative p-3 border rounded flex justify-between items-center bg-white shadow-sm hover:border-blue-300 group overflow-hidden">
-                                <div className="sparkline-bg"></div>
-                                <div className="relative z-10"><span className="font-bold text-sm block">{c.sym}</span><span className="text-[9px] text-gray-500 font-medium">{c.amount} units</span></div>
-                                <div className="text-right flex items-center gap-3 relative z-10"><div className="flex flex-col items-end"><span className="font-bold text-sm">{sym}{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span><span className="text-[9px] text-gray-400 font-mono">1 {c.sym} = {sym}{c.price.toLocaleString('nl-NL')}</span></div></div>
-                            </div>
-                        ))}
+                 (
+                    <div className="space-y-2 overflow-y-auto flex-1 hide-scroll pr-1 pb-2">
+                        {portfolio.map((c, i) => {
+                            const isPos = c.tr.d >= 0;
+                            const bgClass = isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
+                            const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
+                            return (
+                                <div key={i} className={`relative p-2 border rounded flex flex-col shadow-sm transition overflow-hidden ${bgClass}`}>
+                                    <div className="flex justify-between items-start mb-1">
+                                        <div>
+                                            <span className="font-black text-xs block text-gray-900">{c.sym}</span>
+                                            <span className="text-[8px] text-gray-600 font-medium">{c.amount} units</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="font-bold text-xs block text-gray-900">{sym}{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
+                                            <span className="text-[8px] text-gray-500 font-mono">1 {c.sym} = {sym}{c.price.toLocaleString('nl-NL')}</span>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-y-1 pt-1.5 mt-1 border-t border-black/5 text-[8px] font-black uppercase tracking-tighter">
+                                        <div>1U: <P v={c.tr.h}/></div><div>1D: <P v={c.tr.d}/></div><div>1W: <P v={c.tr.w}/></div>
+                                        <div>1M: <P v={c.tr.m}/></div><div>1J: <P v={c.tr.y}/></div><div>ALL: <P v={c.tr.a}/></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
-                ) : <div className="flex-1 flex flex-col"><div className="flex gap-2 mb-2">{['1D','1M','1Y','ALL'].map(t=><button key={t} onClick={()=>setTf(t)} className={`text-[9px] font-bold px-2 py-1 border rounded ${tf===t?'bg-blue-600 text-white':''}`}>{t}</button>)}</div><div className="flex-1 min-h-[150px]"><canvas ref={chartRef}></canvas></div></div>}
+                )}
             </div>
         </div>
     );
@@ -420,7 +446,7 @@ function NewsWidget({ lang }) {
                                     return (
                                     <a href={item.link} target="_blank" key={i} className="block border-b pb-4 hover:bg-gray-50 transition p-1 rounded">
                                         <p className="text-xs font-bold leading-relaxed text-gray-800">{displayTitle}</p>
-                                        {cleanDesc && <p className="text-[#569cd6] text-[10px] line-clamp-2 mt-1.5 leading-tight">{cleanDesc}</p>}
+                                        {cleanDesc && <p className="text-[#1d4ed8] font-bold text-[10px] line-clamp-2 mt-1.5 leading-tight">{cleanDesc}</p>}
                                         <div className="flex justify-between items-center text-[9px] mt-2 uppercase font-black">
                                             <span className="text-[#c586c0]">{sourceName}</span>
                                             <span className="text-gray-400">{formatDate(item.pubDate)}</span>
@@ -439,14 +465,86 @@ function NewsWidget({ lang }) {
 }
 
 function RadarWidget({ lang }) {
-    const opps = [ { t: 'Novo Nordisk', m: '🔥 EXPLOSIVE', w: 'Europees fundament. GLP-1 marktuitbreiding.', r: {w:'Low', m:'Med', y:'Med', a:'Med'} }, { t: 'ASML Holding', m: '📈 BUILDING', w: 'Monopolie in EUV lithografie.', r: {w:'Low', m:'Low', y:'Low', a:'Low'} } ];
+    const [assets, setAssets] = useState(S.load('inv_assets', ['ASML Holding', 'Novo Nordisk', 'Vanguard S&P 500']));
+    const [manage, setManage] = useState(false);
+    const [newAsset, setNewAsset] = useState('');
+    const [dragItem, setDragItem] = useState(null);
+
+    const getInvData = (name) => {
+        const hash = name.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
+        return {
+            type: hash % 2 === 0 ? 'Aandeel' : 'ETF',
+            plats: hash % 3 === 0 ? ['DEGIRO', 'Saxo'] : ['Trade Republic', 'IBKR'],
+            tr: {
+                h: ((hash%5) - 2) + 0.1,
+                d: ((hash%15) - 5) + 0.5,
+                w: ((hash%30) - 10) + 1.2,
+                m: ((hash%60) - 20) + 4.1,
+                y: ((hash%200) - 50) + 25.0,
+                a: hash * 2 + 50
+            }
+        }
+    };
+
+    const addAsset = () => { if(newAsset && !assets.includes(newAsset)) { const n = [...assets, newAsset]; setAssets(n); S.save('inv_assets', n); setNewAsset(''); } };
+    const removeAsset = (a) => { const n = assets.filter(x => x !== a); setAssets(n); S.save('inv_assets', n); };
+
+    const handleDragStart = (e, item) => { setDragItem(item); };
+    const handleDrop = (e, item) => {
+        if (!dragItem || dragItem === item) return;
+        const newAssets = [...assets];
+        const dragIdx = newAssets.indexOf(dragItem);
+        const dropIdx = newAssets.indexOf(item);
+        newAssets.splice(dragIdx, 1);
+        newAssets.splice(dropIdx, 0, dragItem);
+        setAssets(newAssets);
+        S.save('inv_assets', newAssets);
+        setDragItem(null);
+    };
+
     return (
-        <div className="widget h-[350px]">
-            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500"><Ico.Rad/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].rad}</h3></div>
-            <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-white">
-                {opps.map(o => (
-                    <a href={`https://news.google.com/search?q=${encodeURIComponent(o.t)}`} target="_blank" key={o.t} className="p-4 border rounded hover:border-blue-400 transition relative overflow-hidden bg-white shadow-sm block"><div className={`sparkline-bg ${o.m.includes('🔥')?'sparkline-red':''}`}></div><div className="relative z-10"><div className="flex justify-between items-start mb-2"><span className="text-xs font-bold leading-tight">{o.t}</span><span className={`text-[8px] font-black px-2 py-1 rounded ${o.m.includes('🔥')?'bg-red-100 text-red-700':'bg-blue-100 text-blue-700'}`}>{o.m}</span></div><p className="text-[10px] text-gray-600 mb-3 leading-relaxed line-clamp-2">{o.w}</p><div className="flex gap-1 text-[8px] font-bold text-gray-500 uppercase"><span className="bg-gray-100 px-1 py-0.5 rounded">1W: <span className={o.r.w==='High'?'text-red-500':'text-green-600'}>{o.r.w}</span></span><span className="bg-gray-100 px-1 py-0.5 rounded">1M: <span className={o.r.m==='High'?'text-red-500':o.r.m==='Med'?'text-yellow-600':'text-green-600'}>{o.r.m}</span></span><span className="bg-gray-100 px-1 py-0.5 rounded">1Y: <span className={o.r.y==='High'?'text-red-500':o.r.y==='Med'?'text-yellow-600':'text-green-600'}>{o.r.y}</span></span></div></div></a>
-                ))}
+        <div className="widget h-[350px] flex flex-col">
+            <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-2 text-gray-500"><Ico.Rad/><h3 className="text-[10px] font-black uppercase tracking-widest">Investeringen</h3></div>
+                <button onClick={()=>setManage(!manage)} className={`px-2 py-1 rounded text-[10px] font-bold ${manage ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>{manage ? 'Klaar' : 'Beheer'}</button>
+            </div>
+            {manage && (
+                <div className="p-3 bg-gray-100 border-b flex flex-col gap-2 text-[10px] shrink-0">
+                    <div className="flex gap-2 items-center">
+                        <input value={newAsset} onChange={e=>setNewAsset(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addAsset()} className="flex-1 p-1.5 border rounded outline-none focus:border-blue-500" placeholder="Nieuwe investering (bijv. Shell)" />
+                        <button onClick={addAsset} className="bg-blue-600 text-white px-3 py-1.5 rounded font-bold hover:bg-blue-700">+</button>
+                    </div>
+                </div>
+            )}
+            <div className="p-4 space-y-2 overflow-y-auto flex-1 bg-white hide-scroll">
+                {assets.map((a, i) => {
+                    const data = getInvData(a);
+                    const isPos = data.tr.d >= 0;
+                    const bgClass = isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
+                    const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
+
+                    return (
+                        <div key={a} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, a)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, a)} className={`relative p-2 border rounded flex flex-col shadow-sm transition overflow-hidden ${bgClass} ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+                            <div className="flex justify-between items-start mb-1">
+                                <div>
+                                    <span className="font-black text-xs block text-gray-900">{a}</span>
+                                    <span className="text-[8px] font-bold text-gray-600 uppercase">{data.type}</span>
+                                </div>
+                                {manage ? (
+                                    <button onClick={()=>removeAsset(a)} className="text-red-400 font-bold hover:text-red-600 text-lg leading-none">&times;</button>
+                                ) : (
+                                    <div className="flex gap-1">
+                                        {data.plats.map(p => <span key={p} className="bg-white/50 border border-black/10 text-gray-800 px-1.5 py-0.5 rounded text-[7px] font-bold uppercase">{p}</span>)}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-3 gap-y-1 pt-1.5 mt-1 border-t border-black/5 text-[8px] font-black uppercase tracking-tighter">
+                                <div>1U: <P v={data.tr.h}/></div><div>1D: <P v={data.tr.d}/></div><div>1W: <P v={data.tr.w}/></div>
+                                <div>1M: <P v={data.tr.m}/></div><div>1J: <P v={data.tr.y}/></div><div>ALL: <P v={data.tr.a}/></div>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
