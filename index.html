@@ -30,6 +30,7 @@
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 4px; }
         .hide-scroll::-webkit-scrollbar { display: none; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .ai-transition { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
@@ -308,7 +309,7 @@ function NewsWidget({ lang }) {
             const isUrl = cat.startsWith('http');
             const rssUrl = isUrl ? cat : `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${lang==='nl'?'nl':'en-US'}&gl=${lang==='nl'?'NL':'US'}`;
             fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
-            .then(r=>r.json()).then(d => { if(d.items) setNewsData(p => ({...p, [cat]: d.items.slice(0,10)})); })
+            .then(r=>r.json()).then(d => { if(d.items) setNewsData(p => ({...p, [cat]: d.items})); })
             .catch(e => console.error(e));
         });
     }, [cols, lang]);
@@ -368,8 +369,8 @@ function NewsWidget({ lang }) {
 
             <div className="flex overflow-x-auto flex-1 bg-white hide-scroll">
                 {cols.map(cat => {
-                    const items = (newsData[cat] || []).filter(item => {
-                        const text = (item.title + " " + item.source + " " + item.description).toLowerCase();
+                    let items = (newsData[cat] || []).filter(item => {
+                        const text = (item.title + " " + (item.source || '') + " " + (item.description || '')).toLowerCase();
                         if (blocked.some(b => text.includes(b.toLowerCase()))) return false;
                         if (search) {
                             const terms = search.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
@@ -378,6 +379,8 @@ function NewsWidget({ lang }) {
                         return true;
                     });
 
+                    items.sort((a, b) => new Date(b.pubDate.replace(/-/g, '/')) - new Date(a.pubDate.replace(/-/g, '/')));
+
                     return (
                         <div key={cat} draggable onDragStart={(e)=>handleDragStart(e, cat)} onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>handleDrop(e, cat)} className="min-w-[300px] w-[300px] border-r flex flex-col shrink-0 cursor-grab active:cursor-grabbing">
                             <div className="flex justify-between items-center p-3 border-b bg-white sticky top-0">
@@ -385,15 +388,37 @@ function NewsWidget({ lang }) {
                                 {manage&&<button onClick={()=>removeCol(cat)} className="text-red-400 font-bold hover:text-red-600 text-lg leading-none">&times;</button>}
                             </div>
                             <div className="space-y-4 p-4 overflow-y-auto flex-1 hide-scroll">
-                                {items.map((item, i) => {
-                                    const cleanDesc = item.description?.replace(/<[^>]+>/g, '').trim() || '';
+                                {items.slice(0, 15).map((item, i) => {
+                                    let cleanDesc = item.description?.replace(/<[^>]+>/g, '').trim() || '';
+                                    
+                                    let sourceName = item.source || '';
+                                    let displayTitle = item.title || '';
+                                    
+                                    const titleParts = displayTitle.split(' - ');
+                                    if (titleParts.length > 1) {
+                                        const possibleSource = titleParts.pop().trim();
+                                        displayTitle = titleParts.join(' - ');
+                                        if (!sourceName || sourceName === 'RSS' || sourceName === 'Nieuws') {
+                                            sourceName = possibleSource;
+                                        }
+                                    }
+                                    if (!sourceName || sourceName === 'RSS') sourceName = 'Nieuwsbron';
+
+                                    let formattedDate = item.pubDate;
+                                    if (item.pubDate && item.pubDate.includes(' ')) {
+                                        const [dPart, tPart] = item.pubDate.split(' ');
+                                        const [y, m, d] = dPart.split('-');
+                                        const [h, min] = tPart.split(':');
+                                        formattedDate = `${d}-${m}-${y} | ${h}:${min}`;
+                                    }
+
                                     return (
                                     <a href={item.link} target="_blank" key={i} className="block border-b pb-4 hover:bg-gray-50 transition p-1 rounded">
-                                        <p className="text-xs font-bold leading-relaxed text-gray-800">{item.title}</p>
-                                        {cleanDesc && <p className="text-[#0284c7] text-[10px] line-clamp-2 mt-1 leading-tight">{cleanDesc}</p>}
+                                        <p className="text-xs font-bold leading-relaxed text-gray-800">{displayTitle}</p>
+                                        {cleanDesc && <p className="text-[#569cd6] text-[10px] line-clamp-2 mt-1.5 leading-tight">{cleanDesc}</p>}
                                         <div className="flex justify-between items-center text-[9px] mt-2 uppercase font-black">
-                                            <span className="text-[#9333ea]">{item.source || 'RSS'}</span>
-                                            <span className="text-gray-400">{item.pubDate.replace('T', ' ')}</span>
+                                            <span className="text-[#c586c0]">{sourceName}</span>
+                                            <span className="text-gray-400">{formattedDate}</span>
                                         </div>
                                     </a>
                                 )})}
