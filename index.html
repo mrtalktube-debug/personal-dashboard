@@ -39,10 +39,8 @@
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
-// ----- CONFIGURATIE -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
-// ------------------------
 
 const S = {
     load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
@@ -167,8 +165,9 @@ function AIWidget({ lang }) {
 
 function CryptoWidget({ lang }) {
     const [valuta, setValuta] = useState('EUR'); 
+    const [exRate, setExRate] = useState(1);
     const [portfolio, setPortfolio] = useState([]);
-    const [total, setTotal] = useState(0);
+    const [totalEur, setTotalEur] = useState(0);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState('');
 
@@ -183,6 +182,16 @@ function CryptoWidget({ lang }) {
             a: hash * 5 + 120
         };
     };
+
+    useEffect(() => {
+        if(valuta === 'USD') {
+            fetch('https://open.er-api.com/v6/latest/EUR')
+                .then(r=>r.json()).then(d => setExRate(d.rates.USD))
+                .catch(() => setExRate(1.08)); 
+        } else {
+            setExRate(1);
+        }
+    }, [valuta]);
 
     useEffect(() => {
         const fetchBitvavo = async () => {
@@ -210,22 +219,29 @@ function CryptoWidget({ lang }) {
                     return { sym: b.symbol, amount, price, val, tr: getMockTrends(b.symbol) };
                 }).sort((a,b) => b.val - a.val);
 
-                setPortfolio(combined); setTotal(calcTotal); setErr('');
+                setPortfolio(combined); setTotalEur(calcTotal); setErr('');
             } catch (error) { setErr(error.message); }
             setLoading(false);
         };
         fetchBitvavo();
     }, [lang]);
     
-    const sym = valuta==='EUR'?'€':valuta==='USD'?'$':'₿';
-    const displayTotal = valuta==='BTC' ? (total/90000).toFixed(4) : total; 
+    const sym = valuta === 'EUR' ? '€' : '$';
+    const displayTotal = totalEur * exRate;
     
-    const totalTrend = portfolio.reduce((acc, c) => acc + (c.tr.d * (c.val / (total || 1))), 0);
+    const totalTrend = portfolio.reduce((acc, c) => acc + (c.tr.d * (c.val / (totalEur || 1))), 0);
     const totalColor = totalTrend >= 0 ? 'text-green-600' : 'text-red-600';
 
     return (
         <div className="widget h-[450px] flex flex-col">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center shrink-0"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div>
+                <div className="flex gap-1 bg-gray-200 p-1 rounded">
+                    {['EUR', 'USD'].map(v => (
+                        <button key={v} onClick={()=>setValuta(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${valuta===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>
+                    ))}
+                </div>
+            </div>
             <div className="p-5 flex-1 flex flex-col bg-white overflow-hidden">
                 <div className="mb-4 shrink-0 flex justify-between items-start">
                     <div>
@@ -244,6 +260,10 @@ function CryptoWidget({ lang }) {
                             const isPos = c.tr.d >= 0;
                             const bgClass = isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
                             const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
+                            
+                            const displayVal = c.val * exRate;
+                            const displayPrice = c.price * exRate;
+
                             return (
                                 <div key={i} className={`relative p-3 border rounded flex flex-col shadow-sm transition overflow-hidden ${bgClass}`}>
                                     <div className="flex justify-between items-start mb-2">
@@ -252,8 +272,8 @@ function CryptoWidget({ lang }) {
                                             <span className="text-[9px] text-gray-600 font-medium">{c.amount} units</span>
                                         </div>
                                         <div className="text-right">
-                                            <span className="font-bold text-sm block text-gray-900">{sym}{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
-                                            <span className="text-[9px] text-gray-500 font-mono">1 {c.sym} = {sym}{c.price.toLocaleString('nl-NL')}</span>
+                                            <span className="font-bold text-sm block text-gray-900">{sym}{displayVal.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
+                                            <span className="text-[9px] text-gray-500 font-mono">1 {c.sym} = {sym}{displayPrice.toLocaleString('nl-NL', {maximumFractionDigits: displayPrice < 1 ? 4 : 2})}</span>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 gap-y-2 pt-2 border-t border-black/5 text-[9px] font-black uppercase tracking-tighter">
@@ -431,7 +451,6 @@ function NewsWidget({ lang }) {
                             <div className="space-y-4 p-4 overflow-y-auto flex-1 hide-scroll">
                                 {items.slice(0, 15).map((item, i) => {
                                     let cleanDesc = item.description?.replace(/<[^>]+>/g, '').trim() || '';
-                                    
                                     let sourceName = item.source || '';
                                     let displayTitle = item.title || '';
                                     
@@ -470,13 +489,32 @@ function NewsWidget({ lang }) {
 }
 
 function RadarWidget({ lang }) {
-    const opps = [ { t: 'Novo Nordisk', m: '🔥 EXPLOSIVE', w: 'Europees fundament. GLP-1 marktuitbreiding.', r: {w:'Low', m:'Med', y:'Med', a:'Med'} }, { t: 'ASML Holding', m: '📈 BUILDING', w: 'Monopolie in EUV lithografie.', r: {w:'Low', m:'Low', y:'Low', a:'Low'} } ];
+    const opps = [ 
+        { t: 'Novo Nordisk', type: 'Aandeel', w: 'Sterk Europees fundament door dominante positie in de GLP-1 markt. Verwachting aanhoudende groei.', p: '+2.4%', plats: ['DEGIRO', 'Saxo', 'IBKR'] }, 
+        { t: 'ASML Holding', type: 'Aandeel', w: 'Wereldwijd monopolie in EUV lithografie apparatuur. Essentieel voor AI-chips en tech-markt.', p: '+1.8%', plats: ['DEGIRO', 'Trade Republic', 'BUX'] },
+        { t: 'Vanguard S&P 500', type: 'ETF', w: 'Brede spreiding over Amerikaanse top 500 bedrijven. Ideaal voor de lange termijn door lage TER.', p: '+0.5%', plats: ['Trade Republic', 'DEGIRO', 'eToro'] }
+    ];
     return (
         <div className="widget h-[350px]">
-            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500"><Ico.Rad/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].rad}</h3></div>
-            <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-white">
-                {opps.map(o => (
-                    <a href={`https://news.google.com/search?q=${encodeURIComponent(o.t)}`} target="_blank" key={o.t} className="p-4 border rounded hover:border-blue-400 transition relative overflow-hidden bg-white shadow-sm block"><div className={`sparkline-bg ${o.m.includes('🔥')?'sparkline-red':''}`}></div><div className="relative z-10"><div className="flex justify-between items-start mb-2"><span className="text-xs font-bold leading-tight">{o.t}</span><span className={`text-[8px] font-black px-2 py-1 rounded ${o.m.includes('🔥')?'bg-red-100 text-red-700':'bg-blue-100 text-blue-700'}`}>{o.m}</span></div><p className="text-[10px] text-gray-600 mb-3 leading-relaxed line-clamp-2">{o.w}</p><div className="flex gap-1 text-[8px] font-bold text-gray-500 uppercase"><span className="bg-gray-100 px-1 py-0.5 rounded">1W: <span className={o.r.w==='High'?'text-red-500':'text-green-600'}>{o.r.w}</span></span><span className="bg-gray-100 px-1 py-0.5 rounded">1M: <span className={o.r.m==='High'?'text-red-500':o.r.m==='Med'?'text-yellow-600':'text-green-600'}>{o.r.m}</span></span><span className="bg-gray-100 px-1 py-0.5 rounded">1Y: <span className={o.r.y==='High'?'text-red-500':o.r.y==='Med'?'text-yellow-600':'text-green-600'}>{o.r.y}</span></span></div></div></a>
+            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500"><Ico.Rad/><h3 className="text-[10px] font-black uppercase tracking-widest">Investeringen</h3></div>
+            <div className="space-y-3 overflow-y-auto flex-1 hide-scroll p-4">
+                {opps.map((o, i) => (
+                    <div key={i} className="relative p-3 border rounded flex flex-col bg-white shadow-sm hover:border-blue-300 transition overflow-hidden">
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <span className="font-black text-sm block text-gray-900">{o.t}</span>
+                                <span className="text-[9px] font-bold text-[#c586c0] uppercase">{o.type}</span>
+                            </div>
+                            <div className="text-right">
+                                <span className="font-bold text-sm block text-green-600">{o.p} <span className="text-[9px] font-black text-gray-400 uppercase">(1D)</span></span>
+                            </div>
+                        </div>
+                        <p className="text-[#1d4ed8] font-semibold text-[10px] line-clamp-2 mb-2 leading-tight">{o.w}</p>
+                        <div className="pt-2 border-t border-black/5 flex flex-wrap gap-1 items-center">
+                            <span className="text-[8px] font-black text-gray-400 uppercase mr-1 mt-0.5">Top 3 Platforms (EU):</span>
+                            {o.plats.map(p => <span key={p} className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[8px] font-bold">{p}</span>)}
+                        </div>
+                    </div>
                 ))}
             </div>
         </div>
