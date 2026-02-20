@@ -37,7 +37,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 // ----- CONFIGURATIE -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
@@ -172,11 +172,11 @@ function CryptoWidget({ lang }) {
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState('');
 
-    const getMockChanges = (sym) => {
+    const getMockTrends = (sym) => {
         const hash = sym.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
         return {
             h: ((hash%5) - 2) + 0.4,
-            d: ((hash%15) - 5) + 0.2,
+            d: ((hash%15) - 5) + 0.2, // 1D Trend
             w: ((hash%30) - 10) + 1.1,
             m: ((hash%60) - 20) + 5.5,
             y: ((hash%200) - 50) + 40.0,
@@ -202,12 +202,12 @@ function CryptoWidget({ lang }) {
                 let calcTotal = 0;
                 const combined = data.balances.map(b => {
                     const amount = parseFloat(b.available) + parseFloat(b.inOrder);
-                    if(b.symbol === 'EUR') { calcTotal += amount; return { sym: 'EUR', amount, price: 1, val: amount }; }
+                    if(b.symbol === 'EUR') { calcTotal += amount; return { sym: 'EUR', amount, price: 1, val: amount, tr: getMockTrends('EUR') }; }
                     const priceObj = data.prices.find(p => p.market === `${b.symbol}-EUR`);
                     const price = priceObj ? parseFloat(priceObj.price) : 0;
                     const val = amount * price;
                     calcTotal += val;
-                    return { sym: b.symbol, amount, price, val };
+                    return { sym: b.symbol, amount, price, val, tr: getMockTrends(b.symbol) };
                 }).sort((a,b) => b.val - a.val);
 
                 setPortfolio(combined); setTotal(calcTotal); setErr('');
@@ -220,41 +220,53 @@ function CryptoWidget({ lang }) {
     const sym = valuta==='EUR'?'€':valuta==='USD'?'$':'₿';
     const displayTotal = valuta==='BTC' ? (total/90000).toFixed(4) : total; 
     
+    const totalTrend = portfolio.reduce((acc, c) => acc + (c.tr.d * (c.val / (total || 1))), 0);
+    const totalColor = totalTrend >= 0 ? 'text-green-600' : 'text-red-600';
+
     return (
-        <div className="widget h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div></div>
-            <div className="p-5 flex-1 flex flex-col bg-white">
-                <div className="mb-4 flex justify-between items-start"><div><span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE ({valuta})</span><div className="text-3xl font-black">{loading ? '...' : err ? 'Error' : `${sym} ${displayTotal.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}</div></div></div>
+        <div className="widget h-[450px] flex flex-col">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center shrink-0"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div></div>
+            <div className="p-5 flex-1 flex flex-col bg-white overflow-hidden">
+                <div className="mb-4 shrink-0 flex justify-between items-start">
+                    <div>
+                        <span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE ({valuta})</span>
+                        <div className={`text-3xl font-black ${loading || err ? 'text-gray-900' : totalColor}`}>
+                            {loading ? '...' : err ? 'Error' : `${sym} ${displayTotal.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}
+                        </div>
+                    </div>
+                </div>
                 
                 {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Syncing with Bitvavo...</div> : 
                  err ? <div className="flex-1 text-[10px] text-red-500 font-bold p-4 bg-red-50 rounded border border-red-100">{err}</div> :
                  (
-                    <div className="space-y-3 overflow-y-auto flex-1 hide-scroll">
+                    <div className="space-y-3 overflow-y-auto flex-1 hide-scroll pr-1 pb-2">
                         {portfolio.map((c, i) => {
-                            const ch = getMockChanges(c.sym);
-                            const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-500'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
+                            const isPos = c.tr.d >= 0;
+                            const bgClass = isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
+                            const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
                             return (
-                            <div key={i} className="relative p-3 border rounded flex flex-col bg-white shadow-sm hover:border-blue-300 transition overflow-hidden">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <span className="font-black text-sm block">{c.sym}</span>
-                                        <span className="text-[9px] text-gray-500 font-medium">{c.amount} units</span>
+                                <div key={i} className={`relative p-3 border rounded flex flex-col shadow-sm transition overflow-hidden ${bgClass}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <span className="font-black text-sm block text-gray-900">{c.sym}</span>
+                                            <span className="text-[9px] text-gray-600 font-medium">{c.amount} units</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="font-bold text-sm block text-gray-900">{sym}{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
+                                            <span className="text-[9px] text-gray-500 font-mono">1 {c.sym} = {sym}{c.price.toLocaleString('nl-NL')}</span>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="font-bold text-sm block">{sym}{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
-                                        <span className="text-[9px] text-gray-400 font-mono">1 {c.sym} = {sym}{c.price.toLocaleString('nl-NL')}</span>
+                                    <div className="grid grid-cols-3 gap-y-2 pt-2 border-t border-black/5 text-[9px] font-black uppercase tracking-tighter">
+                                        <div>1U: <P v={c.tr.h}/></div>
+                                        <div>1D: <P v={c.tr.d}/></div>
+                                        <div>1W: <P v={c.tr.w}/></div>
+                                        <div>1M: <P v={c.tr.m}/></div>
+                                        <div>1J: <P v={c.tr.y}/></div>
+                                        <div>ALL: <P v={c.tr.a}/></div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-3 gap-y-2 pt-2 border-t text-[9px] font-black uppercase tracking-tighter">
-                                    <div>1U: <P v={ch.h}/></div>
-                                    <div>1D: <P v={ch.d}/></div>
-                                    <div>1W: <P v={ch.w}/></div>
-                                    <div>1M: <P v={ch.m}/></div>
-                                    <div>1J: <P v={ch.y}/></div>
-                                    <div>ALL: <P v={ch.a}/></div>
-                                </div>
-                            </div>
-                        )})}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -313,7 +325,7 @@ function AgendaWidget({ lang }) {
 }
 
 function NewsWidget({ lang }) {
-    const [cols, setCols] = useState(S.load('newscats', ['Nieuws', 'Tech', 'Crypto'])); 
+    const [cols, setCols] = useState(S.load('newscats', ['Nieuws', 'Tech', 'Beurs'])); 
     const [manage, setManage] = useState(false);
     const [newsData, setNewsData] = useState({});
     const [search, setSearch] = useState('');
@@ -379,12 +391,12 @@ function NewsWidget({ lang }) {
                 <div className="p-4 bg-gray-100 border-b flex flex-col gap-3 text-[10px]">
                     <div className="flex gap-2 items-center">
                         <span className="font-bold w-20">Nieuw Topic:</span>
-                        <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addCol()} className="flex-1 p-1.5 border rounded outline-none" placeholder="Onderwerp of link..." />
+                        <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addCol()} className="flex-1 p-1.5 border rounded outline-none" placeholder="Onderwerp, domein of RSS link..." />
                         <button onClick={addCol} className="bg-blue-600 text-white px-3 py-1.5 rounded font-bold hover:bg-blue-700">+</button>
                     </div>
                     <div className="flex gap-2 items-center">
                         <span className="font-bold w-20 text-red-600">Vermijd:</span>
-                        <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addBlock()} className="flex-1 p-1.5 border rounded outline-none" placeholder="Bron of woord uitsluiten..." />
+                        <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addBlock()} className="flex-1 p-1.5 border rounded outline-none" placeholder="Te vermijden bron of woord..." />
                         <button onClick={addBlock} className="bg-red-600 text-white px-3 py-1.5 rounded font-bold hover:bg-red-700">+</button>
                     </div>
                     {blocked.length > 0 && (
@@ -392,7 +404,7 @@ function NewsWidget({ lang }) {
                             {blocked.map(b => <span key={b} className="bg-red-100 text-red-800 px-2 py-1 rounded font-bold flex items-center gap-1">{b} <button onClick={()=>removeBlock(b)} className="text-red-500 hover:text-red-900 ml-1">&times;</button></span>)}
                         </div>
                     )}
-                    <span className="text-gray-500 italic mt-1">Je kunt de kolommen hieronder slepen (Drag & Drop) om de volgorde te wijzigen.</span>
+                    <span className="text-gray-500 italic mt-1">Slepen (Drag & Drop) is actief voor de kolommen hieronder.</span>
                 </div>
             )}
 
@@ -411,7 +423,7 @@ function NewsWidget({ lang }) {
                     items.sort((a, b) => new Date(b.pubDate.replace(/-/g, '/')) - new Date(a.pubDate.replace(/-/g, '/')));
 
                     return (
-                        <div key={cat} draggable onDragStart={(e)=>handleDragStart(e, cat)} onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>handleDrop(e, cat)} className="min-w-[300px] w-[300px] border-r flex flex-col shrink-0 cursor-grab active:cursor-grabbing">
+                        <div key={cat} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, cat)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, cat)} className={`min-w-[300px] w-[300px] border-r flex flex-col shrink-0 ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                             <div className="flex justify-between items-center p-3 border-b bg-white sticky top-0">
                                 <h4 className="text-[11px] font-black text-blue-600 uppercase truncate pr-2" title={cat}>{cat.startsWith('http') ? 'Custom Feed' : cat}</h4>
                                 {manage&&<button onClick={()=>removeCol(cat)} className="text-red-400 font-bold hover:text-red-600 text-lg leading-none">&times;</button>}
@@ -433,10 +445,13 @@ function NewsWidget({ lang }) {
                                     }
                                     if (!sourceName || sourceName === 'RSS') sourceName = 'Nieuwsbron';
 
+                                    const srcRegex = new RegExp(`[\\-\\|]?\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+                                    cleanDesc = cleanDesc.replace(srcRegex, '').trim();
+
                                     return (
                                     <a href={item.link} target="_blank" key={i} className="block border-b pb-4 hover:bg-gray-50 transition p-1 rounded">
                                         <p className="text-xs font-bold leading-relaxed text-gray-800">{displayTitle}</p>
-                                        {cleanDesc && <p className="text-[#1d4ed8] font-semibold text-[10px] line-clamp-2 mt-1.5 leading-tight">{cleanDesc}</p>}
+                                        {cleanDesc && <p className="text-[#1d4ed8] font-bold text-[10px] line-clamp-2 mt-1.5 leading-tight">{cleanDesc}</p>}
                                         <div className="flex justify-between items-center text-[9px] mt-2 uppercase font-black">
                                             <span className="text-[#c586c0]">{sourceName}</span>
                                             <span className="text-gray-400">{formatDate(item.pubDate)}</span>
