@@ -294,41 +294,96 @@ function AgendaWidget({ lang }) {
 }
 
 function NewsWidget({ lang }) {
-    const [cols, setCols] = useState(S.load('newscats', ['AI & Tech', 'Crypto', 'Biotech'])); const [manage, setManage] = useState(false);
+    const [cols, setCols] = useState(S.load('newscats', ['Nieuws', 'Tech', 'Beurs'])); 
+    const [manage, setManage] = useState(false);
     const [newsData, setNewsData] = useState({});
+    const [search, setSearch] = useState('');
+    const [blocked, setBlocked] = useState(S.load('news_blocked', []));
+    const [newCol, setNewCol] = useState('');
+    const [newBlock, setNewBlock] = useState('');
 
     useEffect(() => {
         cols.forEach(cat => {
             const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${lang==='nl'?'nl':'en-US'}&gl=${lang==='nl'?'NL':'US'}`;
             fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
-            .then(r=>r.json()).then(d => { if(d.items) setNewsData(p => ({...p, [cat]: d.items.slice(0,5)})); })
+            .then(r=>r.json()).then(d => { if(d.items) setNewsData(p => ({...p, [cat]: d.items.slice(0, 10)})); })
             .catch(e => console.error(e));
         });
     }, [cols, lang]);
+
+    const addCol = () => { if(newCol && !cols.includes(newCol)) { const n = [...cols, newCol]; setCols(n); S.save('newscats', n); setNewCol(''); } };
+    const removeCol = (c) => { const n = cols.filter(x => x !== c); setCols(n); S.save('newscats', n); };
     
+    const addBlock = () => { if(newBlock && !blocked.includes(newBlock)) { const n = [...blocked, newBlock]; setBlocked(n); S.save('news_blocked', n); setNewBlock(''); } };
+    const removeBlock = (b) => { const n = blocked.filter(x => x !== b); setBlocked(n); S.save('news_blocked', n); };
+
     return (
-        <div className="widget h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Nws/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].nws}</h3></div><button onClick={()=>setManage(!manage)} className="text-gray-400 hover:text-blue-600"><Ico.Set/></button></div>
-            {manage && <div className="p-4 bg-gray-100 border-b flex justify-between text-[10px] font-bold"><span className="text-blue-600">Beheer je topics direct in dit scherm</span></div>}
-            <div className="flex overflow-x-auto flex-1 bg-white hide-scroll">
-                {cols.map(cat => (
-                    <div key={cat} className="min-w-[300px] w-[300px] border-r flex flex-col shrink-0">
-                        <div className="flex justify-between items-center p-3 border-b bg-white sticky top-0"><h4 className="text-[11px] font-black text-blue-600 uppercase">{cat}</h4>{manage&&<button onClick={()=>{const nx=cols.filter(x=>x!==cat);setCols(nx);S.save('newscats',nx)}} className="text-red-400">&times;</button>}</div>
-                        <div className="space-y-4 p-4 overflow-y-auto flex-1">
-                            {(newsData[cat] || []).map((item, i) => (
-                                <a href={item.link} target="_blank" key={i} className="block border-b pb-4 hover:bg-gray-50 transition p-1 rounded">
-                                    <p className="text-xs font-bold leading-relaxed">{item.title}</p>
-                                    <div className="flex justify-between text-[9px] font-black mt-2 uppercase">
-                                        <span className="text-blue-900">{item.source}</span>
-                                        <span className="text-gray-400">{item.pubDate.split(' ')[1]}</span>
-                                    </div>
-                                </a>
-                            ))}
-                            {(!newsData[cat] || newsData[cat].length===0) && <div className="text-xs text-gray-400 text-center mt-10 animate-pulse">Laden...</div>}
-                        </div>
+        <div className="widget h-[500px]">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                <div className="flex items-center gap-2 text-gray-500">
+                    <Ico.Nws/>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].nws}</h3>
+                </div>
+                <div className="flex gap-2 w-1/2">
+                    <input type="text" placeholder={lang==='nl'?"Zoek (bijv. trump, groenland)...":"Search..."} value={search} onChange={e=>setSearch(e.target.value)} className="w-full px-2 py-1 text-[10px] border rounded outline-none focus:border-blue-500 shadow-sm" />
+                    <button onClick={()=>setManage(!manage)} className={`px-2 py-1 rounded text-[10px] font-bold ${manage ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>{manage ? 'Klaar' : 'Beheer'}</button>
+                </div>
+            </div>
+            
+            {manage && (
+                <div className="p-4 bg-gray-100 border-b flex flex-col gap-3 text-[10px]">
+                    <div className="flex gap-2 items-center">
+                        <span className="font-bold w-20">Nieuw Topic:</span>
+                        <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addCol()} className="flex-1 p-1.5 border rounded outline-none" placeholder="Bijv. Politiek" />
+                        <button onClick={addCol} className="bg-blue-600 text-white px-3 py-1.5 rounded font-bold hover:bg-blue-700">+</button>
                     </div>
-                ))}
-                {manage && <div className="min-w-[100px] flex items-center justify-center bg-gray-50"><button onClick={()=>{const n=prompt("Nieuw Topic:");if(n&&!cols.includes(n)){const nx=[...cols,n];setCols(nx);S.save('newscats',nx)}}} className="text-2xl text-blue-600 hover:scale-125 transition">+</button></div>}
+                    <div className="flex gap-2 items-center">
+                        <span className="font-bold w-20 text-red-600">Vermijd:</span>
+                        <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addBlock()} className="flex-1 p-1.5 border rounded outline-none" placeholder="Bron of woord (bijv. Telegraaf)" />
+                        <button onClick={addBlock} className="bg-red-600 text-white px-3 py-1.5 rounded font-bold hover:bg-red-700">+</button>
+                    </div>
+                    {blocked.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {blocked.map(b => <span key={b} className="bg-red-100 text-red-800 px-2 py-1 rounded font-bold flex items-center gap-1">{b} <button onClick={()=>removeBlock(b)} className="text-red-500 hover:text-red-900">&times;</button></span>)}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <div className="flex overflow-x-auto flex-1 bg-white hide-scroll">
+                {cols.map(cat => {
+                    const items = (newsData[cat] || []).filter(item => {
+                        const text = (item.title + " " + item.source).toLowerCase();
+                        if (blocked.some(b => text.includes(b.toLowerCase()))) return false;
+                        if (search) {
+                            const terms = search.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
+                            if (!terms.every(term => text.includes(term))) return false;
+                        }
+                        return true;
+                    });
+
+                    return (
+                        <div key={cat} className="min-w-[300px] w-[300px] border-r flex flex-col shrink-0">
+                            <div className="flex justify-between items-center p-3 border-b bg-white sticky top-0">
+                                <h4 className="text-[11px] font-black text-blue-600 uppercase">{cat}</h4>
+                                {manage&&<button onClick={()=>removeCol(cat)} className="text-red-400 font-bold hover:text-red-600 text-lg leading-none">&times;</button>}
+                            </div>
+                            <div className="space-y-4 p-4 overflow-y-auto flex-1 hide-scroll">
+                                {items.map((item, i) => (
+                                    <a href={item.link} target="_blank" key={i} className="block border-b pb-4 hover:bg-gray-50 transition p-1 rounded">
+                                        <p className="text-xs font-bold leading-relaxed text-gray-800">{item.title}</p>
+                                        <div className="flex justify-between items-center text-[9px] mt-2 uppercase">
+                                            <span className="text-[#00008b] font-black">{item.source}</span>
+                                            <span className="text-gray-400 font-bold">{item.pubDate.split(' ')[1] || item.pubDate.split('T')[0]}</span>
+                                        </div>
+                                    </a>
+                                ))}
+                                {(!newsData[cat]) && <div className="text-xs text-gray-400 text-center mt-10 animate-pulse">Laden...</div>}
+                                {(newsData[cat] && items.length === 0) && <div className="text-xs text-gray-400 text-center mt-10">Geen resultaten gevonden.</div>}
+                            </div>
+                        </div>
+                    )
+                })}
             </div>
         </div>
     );
