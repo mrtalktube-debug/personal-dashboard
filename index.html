@@ -80,7 +80,8 @@ const Ico = {
     Up: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
     Dn: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>,
     Drag: () => <svg className="w-4 h-4 text-gray-400 cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>,
-    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>,
+    Pepper: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12.39 2.42a2.13 2.13 0 0 1 2.99.04l.8.85c.8.86.78 2.22-.04 3.04L8.77 13.58a4.26 4.26 0 0 1-2.99 1.24c-1.18.02-2.33-.43-3.19-1.25l-.8-.85a2.13 2.13 0 0 1 .04-3.04L9.23 2.42c.82-.86 2.16-.88 3.16.0zM13.9 3.9l1.6 1.7M6.7 11.1l-3.4 3.6c-1.6 1.7-1.6 4.5.1 6.1 1.7 1.6 4.4 1.6 6.1-.1l3.4-3.6M16 18l3 3"/></svg>
 };
 
 function WeatherBar({ lang }) {
@@ -623,7 +624,7 @@ function PepperWidget({ lang }) {
     const deals = [{ t: 'Sony WH-1000XM5', p: '€259', o: '€349', d: '25%', h: true }, { t: 'MacBook Air M2', p: '€899', o: '€1199', d: '25%', h: true }];
     return (
         <div className="widget h-[350px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest italic">{T[lang].deal}</h3></div></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Pepper/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper</h3></div></div>
             <div className="p-4 flex gap-4 overflow-x-auto flex-1 items-center bg-white hide-scroll">
                 {deals.map((d, i) => (
                     <div key={i} className="min-w-[180px] h-[260px] border rounded p-3 bg-white hover:border-red-400 transition flex flex-col shadow-sm">
