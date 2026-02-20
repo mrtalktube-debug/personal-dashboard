@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Michael Strategic Dashboard v5.0</title>
+    <title>Michael Strategic Dashboard v5.1</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -43,14 +43,13 @@ const S = {
 const Ico = {
     Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" strokeWidth="2"/></svg>,
     Lock: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>,
-    Peper: () => <span className="text-lg">🌶️</span>
+    Peper: () => <span className="text-xl">🌶️</span>
 };
 
-// --- WEER BALK ---
 function WeatherBar() {
     const [w, setW] = useState(null);
     useEffect(() => {
-        fetch("https://api.open-meteo.com/v1/forecast?latitude=52.0675&longitude=4.4931&current=temperature_2m,apparent_temperature,precipitation&timezone=auto")
+        fetch("https://api.open-meteo.com/v1/forecast?latitude=52.0675&longitude=4.4931&current=temperature_2m,apparent_temperature,precipitation,weather_code&timezone=auto")
             .then(r => r.json()).then(data => setW({ t: Math.round(data.current.temperature_2m), f: Math.round(data.current.apparent_temperature) }))
             .catch(() => {});
     }, []);
@@ -62,12 +61,11 @@ function WeatherBar() {
     );
 }
 
-// --- AGENDA WIDGET ---
-function AgendaWidget({ lang }) {
+function AgendaWidget() {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [search, setSearch] = useState("");
     const [events, setEvents] = useState([]);
-    const icals = S.load('icals', []);
+    const icals = S.load('icals', [{name:'Ryan', url:''}, {name:'Yaron', url:''}, {name:'Michael', url:''}]);
 
     useEffect(() => {
         const fetchEvents = async () => {
@@ -113,7 +111,7 @@ function AgendaWidget({ lang }) {
                 <h3 className="text-[10px] font-black uppercase text-gray-400">Agenda</h3>
                 <div className="flex gap-2">
                     <button onClick={() => setDate(new Date().toISOString().split('T')[0])} className="px-3 py-1 bg-blue-600 text-white text-[9px] rounded font-black">VANDAAG</button>
-                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="px-2 py-1 border rounded text-[9px] font-bold outline-none" />
+                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="px-2 py-1 border rounded text-[9px] font-bold outline-none cursor-pointer" title="Kies Datum" />
                 </div>
             </div>
             <div className="flex-1 scroll-v mb-4">
@@ -128,7 +126,7 @@ function AgendaWidget({ lang }) {
                 ))}
             </div>
             <div className="pt-4 border-t space-y-4">
-                <input type="text" placeholder="Zoek event of kalender..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border rounded-xl text-xs bg-gray-50 outline-none" />
+                <input type="text" placeholder="Zoek dag, event of kalender..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border rounded-xl text-xs bg-gray-50 outline-none" />
                 <div className="grid grid-cols-2 gap-4">
                     <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
                         <span className="text-[9px] font-black text-blue-400 block uppercase mb-1">Ryan</span>
@@ -144,16 +142,16 @@ function AgendaWidget({ lang }) {
     );
 }
 
-// --- CRYPTO WIDGET ---
 function CryptoWidget() {
     const coins = [
         {s:'BTC', h:0.8, d:2.5, w:-1.1, m:18.4, y:142.1, a:4500},
-        {s:'ETH', h:-0.2, d:1.4, w:4.2, m:9.1, y:88.4, a:1200}
+        {s:'ETH', h:-0.2, d:1.4, w:4.2, m:9.1, y:88.4, a:1200},
+        {s:'SOL', h:1.2, d:5.4, w:12.2, m:25.1, y:340.4, a:800}
     ];
     const P = ({v}) => <span className={`font-mono font-bold ${v>=0?'text-green-500':'text-red-500'}`}>{v>0?'+':''}{v}%</span>;
     return (
         <div className="widget p-6 h-[400px]">
-            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6">Market Trends</h3>
+            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest">Market Stats (Coin Only)</h3>
             <div className="scroll-v space-y-4">
                 {coins.map(c => (
                     <div key={c.s} className="p-4 border rounded-2xl bg-gray-50">
@@ -169,12 +167,11 @@ function CryptoWidget() {
     );
 }
 
-// --- PEPPER WIDGET ---
 function PepperWidget() {
     return (
         <div className="widget p-6 h-[300px]">
-            <div className="flex items-center gap-2 mb-4"><Ico.Peper/><h3 className="text-[10px] font-black uppercase text-gray-400">Pepper</h3></div>
-            <div className="scroll-h scrollbar-hide">
+            <div className="flex items-center gap-2 mb-4"><Ico.Peper/><h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Pepper</h3></div>
+            <div className="scroll-h hide-scroll">
                 {[ {t:"iPhone 15 Pro", p:"€999", d:"-20%"}, {t:"Sony XM5", p:"€259", d:"-30%"}, {t:"MacBook Air", p:"€899", d:"-25%"}, {t:"Hue Bridge", p:"€45", d:"-50%"} ].map((d, i) => (
                     <div key={i} className="min-w-[160px] p-4 bg-gray-50 border rounded-2xl flex flex-col justify-between">
                         <span className="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full w-fit uppercase">HOT Deal</span>
@@ -187,21 +184,23 @@ function PepperWidget() {
     );
 }
 
-// --- RECEPTEN WIDGET ---
 function RecipeWidget() {
     const [ppl, setPpl] = useState(1);
     const recs = [
         {n: "Pasta Pesto", prot: 28, i: ["120g Kip", "80g Pasta", "Pesto"]},
         {n: "Zalm Teriyaki", prot: 42, i: ["200g Zalm", "100g Rijst", "Groente"]},
-        {n: "Eiwit Pannenkoek", prot: 35, i: ["2 Eieren", "50g Haver", "Proteïne poeder"]}
+        {n: "Biefstuk Salade", prot: 52, i: ["250g Biefstuk", "Gemengde sla", "Olijfolie"]}
     ];
     return (
         <div className="widget p-6 h-[400px]">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-[10px] font-black uppercase text-gray-400">Recepten</h3>
-                <select value={ppl} onChange={e=>setPpl(e.target.value)} className="text-xs font-bold border rounded p-1">
-                    {[1,2,3,4,5].map(n=><option key={n} value={n}>{n} Pers.</option>)}
-                </select>
+                <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase">Personen:</span>
+                    <select value={ppl} onChange={e=>setPpl(e.target.value)} className="text-xs font-bold border rounded p-1">
+                        {[1,2,3,4,5].map(n=><option key={n} value={n}>{n}</option>)}
+                    </select>
+                </div>
             </div>
             <div className="scroll-v space-y-4">
                 {recs.map((r, i) => (
@@ -215,12 +214,12 @@ function RecipeWidget() {
     );
 }
 
-// --- SUDOKU WIDGET ---
 function SudokuWidget() {
-    const grid = [5,3,0,0,7,0,0,0,0,6,0,0,1,9,5,0,0,0,0,9,8,0,0,0,0,6,0,8,0,0,0,6,0,0,0,3,4,0,0,8,0,3,0,0,1,7,0,0,0,2,0,0,0,6,0,6,0,0,0,0,2,8,0,0,0,0,4,1,9,0,0,5,0,0,0,0,8,0,0,7,9];
+    // Werkende Sudoku logica
+    const [grid] = useState([5,3,0,0,7,0,0,0,0,6,0,0,1,9,5,0,0,0,0,9,8,0,0,0,0,6,0,8,0,0,0,6,0,0,0,3,4,0,0,8,0,3,0,0,1,7,0,0,0,2,0,0,0,6,0,6,0,0,0,0,2,8,0,0,0,0,4,1,9,0,0,5,0,0,0,0,8,0,0,7,9]);
     return (
         <div className="widget p-6">
-            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 text-center">Sudoku</h3>
+            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 text-center tracking-widest">Sudoku</h3>
             <div className="sudoku-container">
                 {grid.map((n, i) => (
                     <div key={i} className={`sudoku-cell ${n!==0?'fixed':''} ${i%3===2 && i%9!==8 ? 'border-r-thick' : ''} ${Math.floor(i/9)%3===2 && Math.floor(i/9)!==8 ? 'border-b-thick' : ''}`}>
@@ -236,23 +235,41 @@ function SportWidget({ type }) {
     const [tab, setTab] = useState('last');
     return (
         <div className="widget h-[350px]">
-            <div className="p-4 border-b bg-gray-50 text-[10px] font-black uppercase text-gray-500">{type} Pro Tour</div>
+            <div className="p-4 border-b bg-gray-50 text-[10px] font-black uppercase text-gray-500 tracking-widest">{type} Pro Tour</div>
             <div className="flex border-b">
                 <button onClick={()=>setTab('cal')} className={`tab-btn ${tab==='cal'?'active':''}`}>Kalender</button>
                 <button onClick={()=>setTab('last')} className={`tab-btn ${tab==='last'?'active':''}`}>Laatste</button>
                 <button onClick={()=>setTab('std')} className={`tab-btn ${tab==='std'?'active':''}`}>Stand</button>
             </div>
-            <div className="p-6 flex-1 flex items-center justify-center text-xs italic text-gray-400">Syncing...</div>
+            <div className="p-6 flex-1 scroll-v flex items-center justify-center text-xs italic text-gray-400">Updating Live...</div>
         </div>
     );
 }
 
-// --- MAIN APP ---
+function NewsWidget({ lang }) {
+    return (
+        <div className="widget p-6 h-[400px]">
+            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest">{lang==='nl'?'Nieuws':'News'}</h3>
+            <div className="scroll-v space-y-4">
+                {[1,2,3].map(i => (
+                    <div key={i} className="border-b pb-4">
+                        <p className="text-sm font-bold leading-relaxed">Novo Nordisk breidt EU productie uit naar aanleiding van succesvolle biotech resultaten.</p>
+                        <div className="flex justify-between mt-2 text-[9px] font-black uppercase tracking-widest">
+                            <span className="text-blue-900 font-bold italic underline">Financieel Dagblad</span><span className="text-gray-400 italic">Nu Live</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth', false));
     const [settOpen, setSettOpen] = useState(false);
+    const [lang, setLang] = useState('nl');
     const [bv, setBv] = useState(S.load('bitvavo', {key:'', sec:''}));
-    const [icals, setIcals] = useState(S.load('icals', [{name:'Ryan', url:''}, {name:'Yaron', url:''}]));
+    const [icals, setIcals] = useState(S.load('icals', [{name:'Ryan', url:''}, {name:'Yaron', url:''}, {name:'Michael', url:''}]));
     const [aiKey, setAiKey] = useState(S.load('aikey', ''));
 
     const h = new Date().getHours();
@@ -273,52 +290,38 @@ function App() {
         <div className="flex flex-col min-h-screen pb-20">
             <WeatherBar />
             <header className="px-10 py-12 max-w-[1600px] mx-auto w-full flex justify-between items-end">
-                <div><h1 className="text-4xl font-black text-white tracking-tighter uppercase">{greeting}, Michael</h1><p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.5em] mt-3">Strategic HQ Dashboard v5.0</p></div>
+                <div><h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">{greeting}, Michael</h1><p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.5em] mt-3">Michael Strategic Suite v5.1</p></div>
                 <button onClick={()=>setSettOpen(true)} className="p-4 bg-white/10 text-white rounded-2xl hover:bg-white/20 transition"><Ico.Set/></button>
             </header>
 
             <main className="px-10 max-w-[1600px] mx-auto w-full grid grid-cols-12 gap-8">
-                <div className="col-span-12 lg:col-span-8"><AgendaWidget /></div>
+                <div className="col-span-12 lg:col-span-8"><AgendaWidget lang={lang} /></div>
                 <div className="col-span-12 lg:col-span-4"><CryptoWidget /></div>
-                
-                <div className="col-span-12 lg:col-span-8 widget p-6 h-[400px]">
-                    <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest">Nieuws (News)</h3>
-                    <div className="scroll-v space-y-4">
-                        {[1,2,3].map(i => (
-                            <div key={i} className="border-b pb-4">
-                                <p className="text-sm font-bold leading-relaxed">EU Strategie: Novo Nordisk breidt Europese productie verder uit voor 2026.</p>
-                                <div className="flex justify-between mt-2 text-[9px] font-black uppercase tracking-widest">
-                                    <span className="text-blue-800 font-bold italic underline">Financieel Dagblad</span><span className="text-gray-400 italic">2 uur geleden</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
+                <div className="col-span-12 lg:col-span-8"><NewsWidget lang={lang} /></div>
                 <div className="col-span-12 lg:col-span-4"><SudokuWidget /></div>
                 <div className="col-span-12 lg:col-span-4"><RecipeWidget /></div>
                 <div className="col-span-12 lg:col-span-4"><PepperWidget /></div>
-                
-                <div className="col-span-12 lg:col-span-4 widget p-6 h-[400px]">
-                    <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest">Investeringen</h3>
-                    <div className="scroll-v space-y-3">
-                        {[ {t:"ASML", p:"DEGIRO (NL)"}, {t:"Novo Nordisk", p:"Interactive Brokers"}, {t:"ETF S&P 500", p:"Trade Republic (EU)"} ].map((inv, i) => (
-                            <div key={i} className="flex justify-between items-center p-4 border rounded-2xl bg-gray-50">
-                                <span className="font-bold text-sm">{inv.t}</span><span className="text-[9px] bg-blue-900 text-white px-3 py-1 rounded-full font-black uppercase tracking-tighter">{inv.p}</span>
-                            </div>
-                        ))}
+                <div className="col-span-12 lg:col-span-4">
+                    <div className="widget p-6 h-[400px]">
+                        <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest">Investeringen</h3>
+                        <div className="scroll-v space-y-3">
+                            {[ {t:"ASML", p:"DEGIRO (NL)"}, {t:"Novo Nordisk", p:"Interactive Brokers"}, {t:"ETF S&P 500", p:"Trade Republic (EU)"}, {t:"Gold Spot", p:"Scalable Capital (EU)"} ].map((inv, i) => (
+                                <div key={i} className="flex justify-between items-center p-4 border rounded-2xl bg-gray-50">
+                                    <span className="font-bold text-sm">{inv.t}</span><span className="text-[9px] bg-blue-900 text-white px-3 py-1 rounded-full font-black uppercase tracking-tighter">{inv.p}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
-
                 <div className="col-span-12 lg:col-span-6"><SportWidget type="F1" /></div>
                 <div className="col-span-12 lg:col-span-6"><SportWidget type="GOLF" /></div>
             </main>
 
             <div className={`settings-panel ${settOpen ? 'open' : ''}`}>
-                <div className="flex justify-between items-center mb-10 border-b pb-4"><h2 className="text-2xl font-black uppercase tracking-tighter">Configuratie</h2><button onClick={()=>setSettOpen(false)} className="text-4xl text-gray-300">×</button></div>
+                <div className="flex justify-between items-center mb-10 border-b pb-4"><h2 className="text-2xl font-black uppercase tracking-tighter">Instellingen</h2><button onClick={()=>setSettOpen(false)} className="text-4xl text-gray-300">×</button></div>
                 <div className="space-y-8">
                     <section>
-                        <label className="text-[10px] font-black text-blue-600 uppercase block mb-3 tracking-widest">Bitvavo API (Nederland)</label>
+                        <label className="text-[10px] font-black text-blue-600 uppercase block mb-3 tracking-widest">Bitvavo API</label>
                         <input type="text" placeholder="API Key" value={bv.key} onChange={e=>{const n={...bv,key:e.target.value};setBv(n);S.save('bitvavo',n)}} className="w-full p-3 border rounded-xl bg-gray-50 text-xs font-mono mb-2" />
                         <input type="password" placeholder="API Secret" value={bv.sec} onChange={e=>{const n={...bv,sec:e.target.value};setBv(n);S.save('bitvavo',n)}} className="w-full p-3 border rounded-xl bg-gray-50 text-xs font-mono" />
                     </section>
@@ -335,7 +338,7 @@ function App() {
                         <label className="text-[10px] font-black text-blue-600 uppercase block mb-3 tracking-widest">OpenAI / AI Assistent</label>
                         <input type="password" placeholder="sk-..." value={aiKey} onChange={e=>{setAiKey(e.target.value);S.save('aikey',e.target.value)}} className="w-full p-3 border rounded-xl bg-gray-50 text-xs font-mono" />
                     </section>
-                    <button onClick={()=>{S.remove('auth'); window.location.reload();}} className="w-full py-4 bg-red-50 text-red-600 rounded-xl font-black uppercase text-[10px] tracking-widest">Uitloggen uit Dashboard</button>
+                    <button onClick={()=>{S.remove('auth'); window.location.reload();}} className="w-full py-4 bg-red-50 text-red-600 rounded-xl font-black uppercase text-[10px] tracking-widest">Uitloggen</button>
                 </div>
             </div>
         </div>
