@@ -542,16 +542,29 @@ function RadarWidget({ lang }) {
 
     const getInvData = (name) => {
         const hash = name.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
+        
+        let desc = "Wereldwijde marktleider in hun sector met sterke groeicijfers.\n💡 Aanbevolen vanwege stabiel dividend en constante innovatie.";
+        const nlName = name.toLowerCase();
+        if(nlName.includes('asml')) desc = "Nederlandse chipmachinefabrikant, cruciaal voor tech wereldwijd.\n💡 Aanbevolen wegens absolute monopoliepositie en AI-groei.";
+        else if(nlName.includes('novo')) desc = "Deense farmaceut, absolute marktleider in diabetes/obesitas.\n💡 Aanbevolen door de aanhoudend enorme vraag naar Wegovy/Ozempic.";
+        else if(nlName.includes('vanguard') || nlName.includes('s&p')) desc = "Brede index tracker die de 500 grootste Amerikaanse bedrijven volgt.\n💡 Aanbevolen als uiterst stabiele basis voor lange termijn vermogensopbouw.";
+
+        const platforms = [
+            ['DEGIRO', 'Trade Republic', 'Saxo Bank'],
+            ['BUX', 'eToro', 'DEGIRO'],
+            ['Trade Republic', 'IBKR', 'Saxo Bank']
+        ];
+
         return {
             type: hash % 2 === 0 ? 'Aandeel' : 'ETF',
-            plats: hash % 3 === 0 ? ['DEGIRO', 'Saxo'] : ['Trade Republic', 'IBKR'],
+            desc: desc,
+            plats: platforms[hash % 3],
             tr: {
                 h: ((hash%5) - 2) + 0.1,
                 d: ((hash%15) - 5) + 0.5,
                 w: ((hash%30) - 10) + 1.2,
                 m: ((hash%60) - 20) + 4.1,
-                y: ((hash%200) - 50) + 25.0,
-                a: hash * 2 + 50
+                y: ((hash%200) - 50) + 25.0
             }
         }
     };
@@ -586,7 +599,7 @@ function RadarWidget({ lang }) {
                     </div>
                 </div>
             )}
-            <div className="p-4 space-y-2 overflow-y-auto flex-1 bg-white hide-scroll">
+            <div className="p-4 space-y-3 overflow-y-auto flex-1 bg-white hide-scroll">
                 {assets.map((a, i) => {
                     const data = getInvData(a);
                     const isPos = data.tr.d >= 0;
@@ -594,27 +607,33 @@ function RadarWidget({ lang }) {
                     const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
 
                     return (
-                        <div key={a} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, a)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, a)} className={`relative p-2.5 border rounded flex flex-col shadow-sm transition overflow-hidden ${bgClass} ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+                        <div key={a} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, a)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, a)} className={`relative p-3 border rounded-lg flex flex-col shadow-sm transition overflow-hidden ${bgClass} ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                             <div className="flex justify-between items-start mb-1.5">
-                                <div>
-                                    <span className="font-black text-sm block text-gray-900 leading-none">{a}</span>
-                                    <span className="text-[8px] font-bold text-[#c586c0] uppercase mt-1 block">{data.type}</span>
+                                <div className="flex-1 pr-2">
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="font-black text-sm text-gray-900 leading-none">{a}</span>
+                                        <span className="text-[8px] font-bold text-[#c586c0] uppercase">{data.type}</span>
+                                    </div>
                                 </div>
                                 {manage ? (
                                     <button onClick={()=>removeAsset(a)} className="text-red-400 font-bold hover:text-red-600 text-lg leading-none">&times;</button>
                                 ) : (
-                                    <div className="flex gap-1">
+                                    <div className="flex gap-1 flex-wrap justify-end">
                                         {data.plats.map(p => <span key={p} className="bg-white/60 border border-black/10 text-gray-800 px-1.5 py-0.5 rounded text-[7px] font-bold uppercase">{p}</span>)}
                                     </div>
                                 )}
                             </div>
-                            <div className="flex justify-between items-center pt-2 mt-1 border-t border-black/5 text-[8px] font-black uppercase tracking-tighter">
+                            
+                            <p className="text-[10px] text-gray-600 leading-snug whitespace-pre-line mb-3 mt-1">
+                                {data.desc}
+                            </p>
+
+                            <div className="flex justify-between items-center pt-2 mt-auto border-t border-black/5 text-[9px] font-black uppercase tracking-tighter">
                                 <div>1U: <P v={data.tr.h}/></div>
                                 <div>1D: <P v={data.tr.d}/></div>
                                 <div>1W: <P v={data.tr.w}/></div>
                                 <div>1M: <P v={data.tr.m}/></div>
                                 <div>1J: <P v={data.tr.y}/></div>
-                                <div>ALL: <P v={data.tr.a}/></div>
                             </div>
                         </div>
                     );
@@ -931,7 +950,6 @@ function App() {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lang, setLang] = useState(S.load('lang', 'nl'));
     
-    // Auto-migrate layout from f1/golf to sports
     const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'sports', 'sudoku', 'lang'];
     const [layout, setLayout] = useState(() => {
         let l = S.load('layout_v7', null);
