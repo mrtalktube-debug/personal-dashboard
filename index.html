@@ -39,10 +39,8 @@
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
-// ----- CONFIGURATIE -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
-// ------------------------
 
 const S = {
     load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
@@ -885,13 +883,14 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v7', n); };
 
     const saveAll = async () => { 
+        // 1. Sla lokaal op
         S.save('bitvavo_keys', bvKeys); 
         S.save('api_keys_dyn', apis); 
         S.save('icals_dyn', icals); 
         S.save('ai_chat_url', aiUrl); 
         S.save('layout_v7', layout);
         
-        // Push naar Vercel KV cloud
+        // 2. Bundel data
         const cloudSettings = {
             bitvavo_keys: bvKeys,
             api_keys_dyn: apis,
@@ -903,13 +902,27 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
             inv_assets: S.load('inv_assets', ['ASML Holding', 'Novo Nordisk', 'Vanguard S&P 500']),
             wcity: S.load('wcity', 'Zoetermeer')
         };
+
+        // 3. Stuur naar cloud
         try {
-            await fetch('/api/settings', {
+            const res = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings })
             });
-        } catch(e) { console.error("Cloud opslag mislukt", e); }
+            
+            if (res.ok) {
+                alert("✅ Succesvol opgeslagen in de cloud! Je kunt het nu op elk apparaat laden.");
+            } else {
+                const errData = await res.json();
+                alert(`❌ Cloud Fout: ${errData.error}. Check of je database goed gekoppeld is in Vercel.`);
+                return; // Stop met herladen zodat je de error kunt lezen
+            }
+        } catch(e) { 
+            console.error("Cloud opslag mislukt", e); 
+            alert("❌ Netwerkfout bij het opslaan naar de cloud.");
+            return; // Stop met herladen
+        }
         
         onClose(); 
         window.location.reload(); 
@@ -980,50 +993,66 @@ function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lang, setLang] = useState(S.load('lang', 'nl'));
-    const [isSyncing, setIsSyncing] = useState(S.load('auth_status', false)); // Sync direct als je al bent ingelogd
+    const [isSyncing, setIsSyncing] = useState(true); // Altijd checken bij laden
     
     const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'sports', 'sudoku', 'lang'];
     const [layout, setLayout] = useState(S.load('layout_v7', defaultLayout));
     
+    // Bij allereerste keer inladen controleren we ALTIJD de cloud (als je al ingelogd was op mobiel bijv.)
     useEffect(() => {
-        if (!isAuth && window.google) {
-            window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredentialResponse });
-            window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" });
-        }
-    }, [isAuth]);
-
-    // Check Cloud on Load (Automatische sync)
-    useEffect(() => {
-        const syncOnLoad = async () => {
+        const checkCloud = async () => {
             if (isAuth) {
                 try {
                     const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}`);
-                    if (res.ok) {
+                    if(res.ok) {
                         const cloudData = await res.json();
                         if (cloudData && Object.keys(cloudData).length > 0) {
                             Object.keys(cloudData).forEach(k => S.save(k, cloudData[k]));
                             setLayout(cloudData.layout_v7 || defaultLayout);
-                            setLang(cloudData.lang || 'nl');
                         }
                     }
-                } catch(e) { console.error("Cloud check gefaald:", e); }
-                setIsSyncing(false); 
+                } catch(e) { console.error("Achtergrond sync mislukt", e); }
             }
+            setIsSyncing(false);
         };
-        syncOnLoad();
+        
+        if (isAuth) {
+            checkCloud();
+        } else {
+            setIsSyncing(false);
+        }
     }, [isAuth]);
+
+    useEffect(() => {
+        if (!isAuth && !isSyncing && window.google) {
+            window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredentialResponse });
+            window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" });
+        }
+    }, [isAuth, isSyncing]);
 
     const handleCredentialResponse = async (response) => {
         try {
             const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
             if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { 
                 setIsSyncing(true);
+                // Probeer cloud data op te halen zodra je op login klikt
+                try {
+                    const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}`);
+                    if(res.ok) {
+                        const cloudData = await res.json();
+                        if (cloudData && Object.keys(cloudData).length > 0) {
+                            Object.keys(cloudData).forEach(k => S.save(k, cloudData[k]));
+                            setLayout(cloudData.layout_v7 || defaultLayout);
+                        }
+                    }
+                } catch(e) { console.error("Cloud sync mislukt, we gebruiken lokale opslag.", e); }
+                
+                setIsSyncing(false);
                 setIsAuth(true); 
                 S.save('auth_status', true); 
-                // useEffect(syncOnLoad) will nu automatisch starten
             } 
             else { alert("Toegang geweigerd! Dit account heeft geen permissie."); }
-        } catch(e) { console.error("Login failed"); }
+        } catch(e) { console.error("Login failed"); setIsSyncing(false); }
     };
 
     const handleLogout = () => { setIsAuth(false); S.remove('auth_status'); window.location.reload(); };
@@ -1034,7 +1063,7 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Systeem synchroniseren met cloud...' : 'Personal Dashboard ver. 4.0'}</p>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud...' : 'Personal Dashboard ver. 4.0'}</p>
                     {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
