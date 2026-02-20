@@ -2,30 +2,30 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Michael's Strategic Dashboard</title>
+    <title>Michael's Dashboard v4.9</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root { --p-blue: #0073b1; --bg: linear-gradient(135deg, #001a33 0%, #000a14 100%); }
-        body { background: var(--bg); min-height: 100vh; font-family: 'Inter', sans-serif; margin: 0; color: #1a1a1a; }
-        .widget { background: rgba(255,255,255,0.98); border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; position: relative; overflow: hidden; }
-        .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; transition: 0.2s; text-align: center; cursor: pointer; }
+        body { background: var(--bg); min-height: 100vh; font-family: 'Inter', sans-serif; color: #1a1a1a; margin: 0; }
+        .widget { background: rgba(255,255,255,0.98); border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; height: 100%; }
+        .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; text-align: center; cursor: pointer; }
         .tab-btn.active { color: var(--p-blue); border-bottom-color: var(--p-blue); background: rgba(0,115,177,0.05); }
-        .sudoku-container { width: 100%; max-width: 300px; aspect-ratio: 1/1; margin: 0 auto; display: grid; grid-template-columns: repeat(9, 1fr); border: 2px solid #1a1a1a; background: white; }
-        .sudoku-cell { width: 100%; height: 100%; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.1s; font-size: 1rem; font-weight: bold; }
+        .sudoku-container { display: grid; grid-template-columns: repeat(9, 1fr); border: 2px solid #1a1a1a; background: white; width: 100%; max-width: 300px; margin: 0 auto; aspect-ratio: 1/1; }
+        .sudoku-cell { border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: bold; aspect-ratio: 1/1; }
         .sudoku-cell.fixed { background: #f8fafc; color: #1e293b; font-weight: 900; }
         .border-r-thick { border-right: 2px solid #1a1a1a !important; }
         .border-b-thick { border-bottom: 2px solid #1a1a1a !important; }
-        .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; box-shadow: -10px 0 30px rgba(0,0,0,0.5); transform: translateX(100%); transition: 0.3s ease; overflow-y: auto; }
+        .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; transform: translateX(100%); transition: 0.3s ease; box-shadow: -10px 0 30px rgba(0,0,0,0.5); overflow-y: auto; }
         .settings-panel.open { transform: translateX(0); }
-        .hide-scroll::-webkit-scrollbar { display: none; }
-        .scroll-h { overflow-x: auto; display: flex; gap: 1rem; scrollbar-width: none; }
+        .scroll-h { overflow-x: auto; display: flex; gap: 1rem; padding-bottom: 10px; }
         .scroll-v { overflow-y: auto; scrollbar-width: thin; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -37,108 +37,94 @@ const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.goo
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
 
 const S = {
-    load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
-    save: (k, v) => localStorage.setItem('d_'+k, JSON.stringify(v)),
-    remove: (k) => localStorage.removeItem('d_'+k)
+    load: (k, d) => { try { const v = localStorage.getItem('dm_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
+    save: (k, v) => localStorage.setItem('dm_'+k, JSON.stringify(v)),
+    remove: (k) => localStorage.removeItem('dm_'+k)
 };
 
 const Ico = {
-    Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
-    Wea: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>,
-    Cry: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
-    Cal: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
-    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>,
-    Peper: () => <span className="text-lg">🌶️</span>
+    Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" strokeWidth="2"/></svg>,
+    Lock: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
 };
 
-// --- WEER BALK (Open-Meteo API) ---
-function WeatherBar({ lang }) {
+function WeatherBar() {
     const [w, setW] = useState(null);
     useEffect(() => {
-        fetch("https://api.open-meteo.com/v1/forecast?latitude=52.0675&longitude=4.4931&current=temperature_2m,apparent_temperature,precipitation,weather_code&timezone=auto")
-            .then(r => r.json()).then(d => setW({
-                t: Math.round(d.current.temperature_2m),
-                f: Math.round(d.current.apparent_temperature),
-                p: d.current.precipitation
-            }));
+        fetch("https://api.open-meteo.com/v1/forecast?latitude=52.0675&longitude=4.4931&current=temperature_2m,apparent_temperature,precipitation&timezone=auto")
+            .then(r => r.json()).then(data => setW({
+                t: Math.round(data.current.temperature_2m),
+                f: Math.round(data.current.apparent_temperature)
+            })).catch(() => {});
     }, []);
     return (
         <div className="bg-white/10 px-6 py-2 border-b border-white/10 flex justify-between items-center text-white text-[10px] font-bold uppercase tracking-widest">
             <div className="flex gap-6"><span>Zoetermeer</span><span>{w ? `${w.t}°C` : '--'}</span><span className="opacity-50">Gevoel: {w ? `${w.f}°C` : '--'}</span></div>
-            <div className="flex gap-4"><span>{w?.p > 0 ? `Regen: ${w.p}mm` : 'Droog'}</span><span className="text-green-400">● LIVE</span></div>
+            <div className="text-green-400">● LIVE DATA</div>
         </div>
     );
 }
 
-// --- AGENDA WIDGET ---
-function AgendaWidget({ lang }) {
-    const [d, setD] = useState(new Date().toISOString().split('T')[0]);
+function AgendaWidget() {
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [search, setSearch] = useState("");
-    const [items, setItems] = useState([]);
-    const rawCals = S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}]);
-
-    const getWeek = (date) => {
-        const t = new Date(date);
-        t.setHours(0,0,0,0); t.setDate(t.getDate() + 4 - (t.getDay()||7));
-        return Math.ceil((((t - new Date(t.getFullYear(),0,1))/8.64e7)+1)/7);
-    };
+    const items = S.load('agenda_items', []);
 
     const schoolTimes = useMemo(() => {
-        const getRange = (name) => {
-            const dayItems = items.filter(i => i.date === d && i.p === name).sort((a,b) => a.time.localeCompare(b.time));
-            if (dayItems.length === 0) return "Vrij";
-            return `${dayItems[0].time} - ${dayItems[dayItems.length-1].endTime || 'Einde les'}`;
+        const getTimes = (name) => {
+            const today = items.filter(i => i.date === date && i.p === name).sort((a,b) => a.time.localeCompare(b.time));
+            return today.length > 0 ? `${today[0].time} - ${today[today.length-1].endTime || '16:00'}` : "Vrij";
         };
-        return { ryan: getRange('Ryan'), yaron: getRange('Yaron') };
-    }, [items, d]);
-
-    const filtered = items.filter(i => i.date === d && (i.t.toLowerCase().includes(search.toLowerCase()) || i.p.toLowerCase().includes(search.toLowerCase())));
+        return { ryan: getTimes('Ryan'), yaron: getTimes('Yaron') };
+    }, [date, items]);
 
     return (
         <div className="widget p-6 h-[550px]">
-            <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-2 text-gray-500"><Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">Agenda</h3></div>
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Agenda</h3>
                 <div className="flex gap-2">
-                    <button onClick={()=>setD(new Date().toISOString().split('T')[0])} className="px-2 py-1 bg-blue-600 text-white text-[9px] font-bold rounded uppercase tracking-tighter">Vandaag</button>
-                    <input type="date" value={d} onChange={e=>setD(e.target.value)} className="px-1 py-1 border rounded text-[9px] font-bold outline-none cursor-pointer" />
+                    <button onClick={() => setDate(new Date().toISOString().split('T')[0])} className="px-3 py-1 bg-blue-600 text-white text-[9px] font-bold rounded uppercase">Vandaag</button>
+                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="px-2 py-1 border rounded text-[9px] font-bold outline-none" />
                 </div>
             </div>
             <div className="flex-1 scroll-v mb-4">
-                <p className="text-[11px] font-black text-blue-600 uppercase mb-3">
-                    {new Date(d).toLocaleDateString('nl-NL', {weekday:'long', day:'numeric', month:'long'})} (Week {getWeek(d)})
+                <p className="text-[11px] font-black text-blue-600 uppercase mb-4">
+                    {new Date(date).toLocaleDateString('nl-NL', {weekday: 'long', day: 'numeric', month: 'long'})}
                 </p>
-                {filtered.map((i, idx) => (
-                    <div key={idx} className="p-3 bg-gray-50 rounded border-l-4 border-blue-500 mb-2 flex justify-between">
-                        <div><span className="font-bold text-xs">{i.t}</span><br/><span className="text-[9px] font-bold text-gray-400 uppercase">{i.p}</span></div>
-                        <span className="font-mono text-[10px] font-bold">{i.time}</span>
-                    </div>
-                ))}
+                {items.filter(i => i.date === date).length === 0 && <div className="text-center text-gray-400 text-xs italic mt-10">Geen afspraken geladen</div>}
             </div>
-            <div className="space-y-3 pt-4 border-t">
-                <input type="text" placeholder="Zoek event of kalender..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-2 border rounded text-xs bg-gray-50 outline-none focus:border-blue-500" />
+            <div className="pt-4 border-t space-y-4">
+                <input type="text" placeholder="Zoek event of kalender..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border rounded-xl text-xs bg-gray-50 outline-none focus:ring-2 ring-blue-100" />
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-blue-50 p-3 rounded-lg"><span className="text-[8px] font-black text-blue-400 block uppercase">Ryan</span><span className="text-[10px] font-bold">{schoolTimes.ryan}</span></div>
-                    <div className="bg-green-50 p-3 rounded-lg"><span className="text-[8px] font-black text-green-400 block uppercase">Yaron</span><span className="text-[10px] font-bold">{schoolTimes.yaron}</span></div>
+                    <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                        <span className="text-[9px] font-black text-blue-400 block uppercase mb-1">Ryan</span>
+                        <span className="text-xs font-bold text-blue-900">{schoolTimes.ryan}</span>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-2xl border border-green-100">
+                        <span className="text-[9px] font-black text-green-400 block uppercase mb-1">Yaron</span>
+                        <span className="text-xs font-bold text-green-900">{schoolTimes.yaron}</span>
+                    </div>
                 </div>
             </div>
         </div>
     );
 }
 
-// --- CRYPTO WIDGET ---
 function CryptoWidget() {
-    const coins = [{s:'BTC', h:0.5, d:2.4, w:-1.2, m:15.8, y:120.4, a:4500}, {s:'ETH', h:-0.2, d:1.8, w:4.5, m:8.2, y:85.0, a:1200}];
-    const P = ({v}) => <span className={`font-mono ${v>=0?'text-green-500':'text-red-500'}`}>{v>0?'+':''}{v}%</span>;
+    const coins = [
+        {s: 'BTC', h: 0.5, d: 2.4, w: -1.2, m: 15.8, y: 120.4, a: 4500},
+        {s: 'ETH', h: -0.2, d: 1.8, w: 4.5, m: 8.2, y: 85.0, a: 1200}
+    ];
+    const P = ({v}) => <span className={`font-mono font-bold ${v>=0?'text-green-500':'text-red-500'}`}>{v>0?'+':''}{v}%</span>;
     return (
         <div className="widget p-6 h-[400px]">
-            <div className="flex items-center gap-2 mb-6 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Market Stats</h3></div>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-6">Crypto Stats</h3>
             <div className="scroll-v space-y-4">
                 {coins.map(c => (
-                    <div key={c.s} className="p-4 border rounded-xl bg-gray-50 flex flex-col">
-                        <span className="font-black text-lg mb-2">{c.s}</span>
-                        <div className="grid grid-cols-3 gap-y-2 text-[9px] font-bold uppercase tracking-tighter">
-                            <div>1U: <P v={c.h}/></div><div>1D: <P v={c.d}/></div><div>1W: <P v={c.w}/></div>
-                            <div>1M: <P v={c.m}/></div><div>1J: <P v={c.y}/></div><div>ALL: <P v={c.a}/></div>
+                    <div key={c.s} className="p-4 border rounded-2xl bg-gray-50">
+                        <div className="flex justify-between mb-2"><span className="font-black text-lg">{c.s}</span><span className="text-[10px] font-bold text-gray-400 uppercase">Live Market</span></div>
+                        <div className="grid grid-cols-3 gap-y-3 text-[9px] font-black uppercase tracking-tighter">
+                            <div className="flex flex-col">1U: <P v={c.h}/></div><div className="flex flex-col">1D: <P v={c.d}/></div><div className="flex flex-col">1W: <P v={c.w}/></div>
+                            <div className="flex flex-col">1M: <P v={c.m}/></div><div className="flex flex-col">1J: <P v={c.y}/></div><div className="flex flex-col">ALL: <P v={c.a}/></div>
                         </div>
                     </div>
                 ))}
@@ -147,18 +133,16 @@ function CryptoWidget() {
     );
 }
 
-// --- PEPPER WIDGET ---
 function PepperWidget() {
-    const deals = [{t:"Sony WH-1000XM5", p:"€259", d:"-28%"}, {t:"MacBook Air M2", p:"€899", d:"-25%"}, {t:"Philips Hue Set", p:"€84", d:"-40%"}];
     return (
         <div className="widget p-6 h-[300px]">
-            <div className="flex items-center gap-2 mb-4"><Ico.Peper/><h3 className="text-[10px] font-black uppercase tracking-widest">Pepper</h3></div>
-            <div className="scroll-h">
-                {deals.map((d, i) => (
-                    <div key={i} className="min-w-[160px] p-4 bg-gray-50 border rounded-xl flex flex-col">
-                        <span className="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full w-fit">{d.d}</span>
+            <div className="flex items-center gap-2 mb-4"><span className="text-xl">🌶️</span><h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Pepper</h3></div>
+            <div className="scroll-h hide-scroll">
+                {[ {t:"iPhone 15 Pro", p:"€999", d:"-20%"}, {t:"Sony XM5", p:"€259", d:"-30%"}, {t:"MacBook Air", p:"€899", d:"-25%"} ].map((d, i) => (
+                    <div key={i} className="min-w-[160px] p-4 bg-gray-50 border rounded-2xl flex flex-col justify-between">
+                        <span className="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full w-fit uppercase">{d.d} HOT</span>
                         <h4 className="text-[11px] font-bold mt-2 leading-tight h-8 overflow-hidden">{d.t}</h4>
-                        <span className="text-blue-600 font-black mt-2">{d.p}</span>
+                        <span className="text-blue-600 font-black mt-3">{d.p}</span>
                     </div>
                 ))}
             </div>
@@ -166,30 +150,26 @@ function PepperWidget() {
     );
 }
 
-// --- RECEPTEN WIDGET ---
 function RecipeWidget() {
     const [ppl, setPpl] = useState(1);
     const recs = [
-        {n: "Pasta Pesto", prot: 28, ing: ["120g Pasta", "50g Pesto", "150g Kip"]},
-        {n: "Zalm teriyaki", prot: 42, ing: ["200g Zalm", "100g Rijst", "Asperges"]},
-        {n: "Biefstuk Salade", prot: 52, ing: ["250g Biefstuk", "Gemengde sla", "Olijfolie"]}
+        {n: "Pasta Pesto", p: 25, i: ["125g Kip", "80g Pasta", "Pesto"]},
+        {n: "Zalm Rijst", p: 42, i: ["200g Zalm", "100g Rijst", "Wokgroente"]}
     ];
     return (
         <div className="widget p-6 h-[400px]">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Recepten</h3>
-                <div className="flex items-center gap-2"><span className="text-[9px] font-black">PERSONEN:</span>
-                    <select value={ppl} onChange={e=>setPpl(e.target.value)} className="text-xs border rounded px-1 font-bold">
-                        {[1,2,3,4,5].map(n=><option key={n} value={n}>{n}</option>)}
-                    </select>
-                </div>
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Recepten</h3>
+                <select value={ppl} onChange={e=>setPpl(e.target.value)} className="text-xs font-bold border rounded p-1">
+                    {[1,2,3,4].map(n=><option key={n} value={n}>{n} Pers.</option>)}
+                </select>
             </div>
             <div className="scroll-v space-y-4">
                 {recs.map((r, i) => (
-                    <div key={i} className="p-4 border rounded-xl bg-white shadow-sm">
-                        <div className="flex justify-between items-start mb-2"><h4 className="font-bold text-sm">{r.n}</h4><span className="text-[9px] bg-blue-100 text-blue-700 px-2 rounded-full font-black uppercase">{r.prot * ppl}g EIWIT</span></div>
-                        <ul className="text-[10px] text-gray-500 italic">
-                            {r.ing.map(ing => <li key={ing}>• {ing.replace(/\d+/, m => m * ppl)}</li>)}
+                    <div key={i} className="p-4 border rounded-2xl bg-white">
+                        <div className="flex justify-between mb-2"><h4 className="font-bold text-sm">{r.n}</h4><span className="text-[9px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black">{r.p * ppl}g EIWIT</span></div>
+                        <ul className="text-[10px] text-gray-500 italic space-y-1">
+                            {r.i.map(ing => <li key={ing}>• {ing.replace(/\d+/, m => m * ppl)}</li>)}
                         </ul>
                     </div>
                 ))}
@@ -198,34 +178,13 @@ function RecipeWidget() {
     );
 }
 
-// --- SPORT WIDGET (F1/GOLF) ---
-function SportWidget({ type }) {
-    const [tab, setTab] = useState('last');
-    return (
-        <div className="widget h-[350px]">
-            <div className="p-4 border-b bg-gray-50 flex items-center gap-2 text-gray-500"><h3 className="text-[10px] font-black uppercase tracking-widest">{type} TOUR</h3></div>
-            <div className="flex border-b bg-white">
-                <button onClick={()=>setTab('cal')} className={`tab-btn ${tab==='cal'?'active':''}`}>Kalender</button>
-                <button onClick={()=>setTab('last')} className={`tab-btn ${tab==='last'?'active':''}`}>Laatste</button>
-                <button onClick={()=>setTab('std')} className={`tab-btn ${tab==='std'?'active':''}`}>Stand</button>
-            </div>
-            <div className="p-6 flex-1 scroll-v flex items-center justify-center text-xs italic text-gray-400">Gegevens laden...</div>
-        </div>
-    );
-}
-
-// --- SUDOKU WIDGET ---
 function SudokuWidget() {
-    const puzzle = [
-        [5,3,0,0,7,0,0,0,0], [6,0,0,1,9,5,0,0,0], [0,9,8,0,0,0,0,6,0],
-        [8,0,0,0,6,0,0,0,3], [4,0,0,8,0,3,0,0,1], [7,0,0,0,2,0,0,0,6],
-        [0,6,0,0,0,0,2,8,0], [0,0,0,4,1,9,0,0,5], [0,0,0,0,8,0,0,7,9]
-    ];
+    const grid = [5,3,0,0,7,0,0,0,0,6,0,0,1,9,5,0,0,0,0,9,8,0,0,0,0,6,0,8,0,0,0,6,0,0,0,3,4,0,0,8,0,3,0,0,1,7,0,0,0,2,0,0,0,6,0,6,0,0,0,0,2,8,0,0,0,0,4,1,9,0,0,5,0,0,0,0,8,0,0,7,9];
     return (
         <div className="widget p-6 h-[450px]">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-6 text-center">Sudoku</h3>
-            <div className="sudoku-container shadow-xl">
-                {puzzle.flat().map((n, i) => (
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-6 text-center">Sudoku</h3>
+            <div className="sudoku-container">
+                {grid.map((n, i) => (
                     <div key={i} className={`sudoku-cell ${n!==0?'fixed':''} ${i%3===2 && i%9!==8 ? 'border-r-thick' : ''} ${Math.floor(i/9)%3===2 && Math.floor(i/9)!==8 ? 'border-b-thick' : ''}`}>
                         {n !== 0 ? n : ''}
                     </div>
@@ -235,16 +194,34 @@ function SudokuWidget() {
     );
 }
 
-// --- MAIN APP ---
+function SportWidget({ type }) {
+    const [tab, setTab] = useState('last');
+    return (
+        <div className="widget h-[350px]">
+            <div className="p-4 border-b bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-500">{type} TOUR</div>
+            <div className="flex border-b">
+                <button onClick={()=>setTab('cal')} className={`tab-btn ${tab==='cal'?'active':''}`}>Kalender</button>
+                <button onClick={()=>setTab('last')} className={`tab-btn ${tab==='last'?'active':''}`}>Laatste</button>
+                <button onClick={()=>setTab('std')} className={`tab-btn ${tab==='std'?'active':''}`}>Stand</button>
+            </div>
+            <div className="p-6 flex-1 flex items-center justify-center text-xs italic text-gray-400">Data wordt geladen...</div>
+        </div>
+    );
+}
+
 function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth', false));
     const [sett, setSett] = useState(false);
-    const greeting = getGreeting();
+    const h = new Date().getHours();
+    const greet = h < 12 ? "Goedemorgen" : h < 18 ? "Goedemiddag" : "Goedenavond";
 
     if (!isAuth) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#000a14]">
-                <button onClick={() => {setIsAuth(true); S.save('auth', true);}} className="bg-white px-10 py-4 rounded-full font-black uppercase text-xs tracking-widest">Login met {ALLOWED_EMAIL}</button>
+                <div className="bg-white/5 p-12 rounded-3xl border border-white/10 text-center backdrop-blur-xl">
+                    <h1 className="text-white font-black text-xl uppercase tracking-widest mb-8">Secured Access</h1>
+                    <button onClick={()=>{setIsAuth(true); S.save('auth', true);}} className="bg-white px-8 py-3 rounded-full font-black text-[10px] uppercase tracking-widest">Login Michael</button>
+                </div>
             </div>
         );
     }
@@ -253,8 +230,8 @@ function App() {
         <div className="flex flex-col min-h-screen pb-20">
             <WeatherBar />
             <header className="px-10 py-12 max-w-[1600px] mx-auto w-full flex justify-between items-end">
-                <div><h1 className="text-4xl font-black text-white tracking-tighter uppercase">{greeting}, Michael</h1><p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.5em] mt-3">Michael Strategic Suite v4.8</p></div>
-                <button onClick={()=>setSett(true)} className="p-3 bg-white/10 text-white rounded-2xl hover:bg-white/20 transition"><Ico.Set /></button>
+                <div><h1 className="text-4xl font-black text-white tracking-tighter uppercase">{greet}, Michael</h1><p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.5em] mt-3">Strategic suite v4.9</p></div>
+                <button onClick={()=>setSett(true)} className="p-4 bg-white/10 text-white rounded-2xl hover:bg-white/20 transition"><Ico.Set/></button>
             </header>
 
             <main className="px-10 max-w-[1600px] mx-auto w-full grid grid-cols-12 gap-8">
@@ -262,12 +239,15 @@ function App() {
                 <div className="col-span-12 lg:col-span-4"><CryptoWidget /></div>
                 
                 <div className="col-span-12 lg:col-span-8 widget p-6 h-[400px]">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-6">Nieuws (News)</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-6">Nieuws (News)</h3>
                     <div className="scroll-v space-y-4">
                         {[1,2,3].map(i => (
                             <div key={i} className="border-b pb-4">
-                                <p className="text-sm font-bold leading-relaxed">EU investeert 40 miljard in lokale chip-productie om ASML fundament te versterken.</p>
-                                <div className="flex justify-between mt-2 text-[9px] font-black uppercase tracking-wider"><span className="text-blue-900 font-bold italic">Financieel Dagblad</span><span className="text-gray-400">1 uur geleden</span></div>
+                                <p className="text-sm font-bold leading-relaxed">Europese tech-markten stabiliseren na ASML kwartaalcijfers.</p>
+                                <div className="flex justify-between mt-2 text-[9px] font-black uppercase tracking-widest">
+                                    <span className="text-blue-900 font-bold italic underline">Financieel Dagblad</span>
+                                    <span className="text-gray-400 italic">2 uur geleden</span>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -278,12 +258,12 @@ function App() {
                 <div className="col-span-12 lg:col-span-4"><PepperWidget /></div>
                 
                 <div className="col-span-12 lg:col-span-4 widget p-6 h-[400px]">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-6">Investeringen</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-6">Investeringen</h3>
                     <div className="scroll-v space-y-3">
-                        {[ {t:"ASML", p:"DEGIRO (NL)"}, {t:"Novo Nordisk", p:"Interactive Brokers (EU)"}, {t:"S&P 500 ETF", p:"Trade Republic (EU)"}, {t:"Gold Spot", p:"Scalable Capital (EU)"} ].map((inv, i) => (
-                            <div key={i} className="flex justify-between items-center p-3 border rounded-xl bg-gray-50">
+                        {[ {t:"ASML", p:"DEGIRO (NL)"}, {t:"Novo Nordisk", p:"Interactive Brokers (EU)"}, {t:"S&P 500 ETF", p:"Trade Republic (EU)"} ].map((inv, i) => (
+                            <div key={i} className="flex justify-between items-center p-4 border rounded-2xl bg-gray-50">
                                 <span className="font-bold text-sm">{inv.t}</span>
-                                <span className="text-[9px] bg-blue-900 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-tighter">{inv.p}</span>
+                                <span className="text-[9px] bg-blue-900 text-white px-3 py-1 rounded-full font-black uppercase tracking-tighter">{inv.p}</span>
                             </div>
                         ))}
                     </div>
@@ -294,10 +274,9 @@ function App() {
             </main>
 
             <div className={`settings-panel ${sett ? 'open' : ''}`}>
-                <div className="flex justify-between items-center mb-10 border-b pb-4"><h2 className="text-2xl font-black uppercase tracking-tighter">Configuratie</h2><button onClick={()=>setSett(false)} className="text-4xl text-gray-300">×</button></div>
+                <div className="flex justify-between items-center mb-10 border-b pb-4"><h2 className="text-2xl font-black uppercase tracking-tighter">Instellingen</h2><button onClick={()=>setSett(false)} className="text-4xl text-gray-300">×</button></div>
                 <div className="space-y-8">
                     <div><label className="text-[10px] font-black text-blue-600 uppercase block mb-2">OpenAI / ChatGPT API Key</label><input type="password" placeholder="sk-..." className="w-full p-3 border rounded-xl bg-gray-50 text-xs font-mono" /></div>
-                    <div><label className="text-[10px] font-black text-blue-600 uppercase block mb-2">Bitvavo Keys</label><input type="text" placeholder="Key" className="w-full p-3 border rounded-xl bg-gray-50 text-xs font-mono mb-2" /><input type="password" placeholder="Secret" className="w-full p-3 border rounded-xl bg-gray-50 text-xs font-mono" /></div>
                     <button onClick={()=>{S.remove('auth'); window.location.reload();}} className="w-full py-4 bg-red-50 text-red-600 rounded-xl font-black uppercase text-[10px]">Uitloggen</button>
                 </div>
             </div>
@@ -305,7 +284,8 @@ function App() {
     );
 }
 
-ReactDOM.render(<App />, document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
 </script>
 </body>
 </html>
