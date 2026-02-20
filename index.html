@@ -39,10 +39,8 @@
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
-// ----- CONFIGURATIE -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
-// ------------------------
 
 const S = {
     load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
@@ -310,7 +308,7 @@ function CryptoWidget({ lang }) {
                                             <span className="font-black text-2xl block text-gray-900 leading-none">{c.sym}</span>
                                             <span className="text-sm text-gray-600 font-medium mt-2 block">{displayUnits} units</span>
                                         </div>
-                                        <div className="w-1/3 flex flex-col items-center justify-center gap-1.5 bg-white/60 px-2 py-2 rounded-lg">
+                                        <div className="w-1/3 flex flex-col items-center justify-center gap-1.5 px-2 py-2">
                                             <svg viewBox="0 0 40 20" className="w-10 h-5 overflow-visible">
                                                 <polyline points={sparklinePts} fill="none" stroke={isPos ? '#16a34a' : '#dc2626'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                                             </svg>
@@ -326,7 +324,6 @@ function CryptoWidget({ lang }) {
                                         <div>1W: <P v={c.tr.w}/></div>
                                         <div>1M: <P v={c.tr.m}/></div>
                                         <div>1J: <P v={c.tr.y}/></div>
-                                        <div>ALL: <P v={c.tr.a}/></div>
                                     </div>
                                 </div>
                             );
@@ -708,6 +705,28 @@ function SportsWidget({ lang }) {
         </button>
     );
 
+    const EventLogo = ({ name, type }) => {
+        let cleanName = name.replace('GP ', '').replace('The ', '');
+        let parts = cleanName.split(' ');
+        let initials = parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].substring(0,2);
+        initials = initials.toUpperCase();
+        
+        if (type === 'f1') {
+            return (
+                <div className="w-8 h-8 rounded bg-[#15151e] border border-gray-700 flex flex-col items-center justify-center shrink-0 relative overflow-hidden shadow-sm">
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-[#e10600]"></div>
+                    <span className="font-black text-[10px] text-white tracking-widest mt-1">{initials}</span>
+                </div>
+            );
+        } else {
+            return (
+                <div className="w-8 h-8 rounded-full bg-white border-2 border-[#046A38] flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
+                    <span className="font-black text-[10px] text-[#046A38] tracking-tighter">{initials}</span>
+                </div>
+            );
+        }
+    };
+
     return (
         <div className="widget h-[450px]">
             <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
@@ -725,7 +744,18 @@ function SportsWidget({ lang }) {
                 <div>
                     <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-1"><Ico.F1/><span className="text-[10px] font-black uppercase text-[#0073b1]">F1</span></div>
                     <div className="space-y-1">
-                        {tab === 'cal' && fF1c.slice(0, eF1C ? 10 : 3).map(r => <div key={r.r} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-0.5">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
+                        {tab === 'cal' && fF1c.slice(0, eF1C ? 10 : 3).map(r => (
+                            <div key={r.r} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border">
+                                <div className="flex items-center gap-3">
+                                    <EventLogo name={r.r} type="f1" />
+                                    <div className="flex flex-col">
+                                        <span className="font-bold">{r.r}</span>
+                                        <span className="text-[9px] font-black text-gray-400 mt-0.5">{r.d}</span>
+                                    </div>
+                                </div>
+                                <span className="font-mono text-blue-600 font-bold">{r.t}</span>
+                            </div>
+                        ))}
                         {tab === 'cal' && fF1c.length > 3 && <MoreBtn e={eF1C} setE={setEF1C} t1="Toon 10 events" e1="Show 10 events" />}
                         
                         {tab === 'std' && fF1s.slice(0, eF1S ? 10 : 3).map((s,i) => <div key={s.n} className="flex justify-between items-center text-xs p-2 border-b"><div className="flex gap-3 items-center"><span className="font-black w-4">{s.p===1?'🥇':s.p===2?'🥈':s.p===3?'🥉':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2 py-0.5 rounded font-mono font-bold text-[9px]">{s.pt}</span></div>)}
@@ -760,7 +790,18 @@ function SportsWidget({ lang }) {
                         </div>
                     </div>
                     <div className="space-y-1">
-                        {tab === 'cal' && fGc.slice(0, eGC ? 10 : 3).map(r => <div key={r.r} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-0.5">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
+                        {tab === 'cal' && fGc.slice(0, eGC ? 10 : 3).map(r => (
+                            <div key={r.r} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border">
+                                <div className="flex items-center gap-3">
+                                    <EventLogo name={r.r} type="golf" />
+                                    <div className="flex flex-col">
+                                        <span className="font-bold">{r.r}</span>
+                                        <span className="text-[9px] font-black text-gray-400 mt-0.5">{r.d}</span>
+                                    </div>
+                                </div>
+                                <span className="font-mono text-blue-600 font-bold">{r.t}</span>
+                            </div>
+                        ))}
                         {tab === 'cal' && fGc.length > 3 && <MoreBtn e={eGC} setE={setEGC} t1="Toon 10 events" e1="Show 10 events" />}
                         
                         {tab === 'std' && fGs.slice(0, eGS ? 10 : 3).map((s,i) => <div key={s.n} className="flex justify-between items-center text-xs p-2 border-b"><div className="flex gap-3 items-center"><span className="font-black w-4">{s.p===1?'🥇':s.p===2?'🥈':s.p===3?'🥉':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2 py-0.5 rounded font-mono font-bold text-[9px]">{s.pt}</span></div>)}
