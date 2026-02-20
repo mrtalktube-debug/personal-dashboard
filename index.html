@@ -39,10 +39,8 @@
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
-// ----- CONFIGURATIE -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
-// ------------------------
 
 const S = {
     load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
@@ -167,8 +165,9 @@ function AIWidget({ lang }) {
 
 function CryptoWidget({ lang }) {
     const [valuta, setValuta] = useState('EUR'); 
+    const [exRate, setExRate] = useState(1);
     const [portfolio, setPortfolio] = useState([]);
-    const [total, setTotal] = useState(0);
+    const [totalEur, setTotalEur] = useState(0);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState('');
 
@@ -176,13 +175,23 @@ function CryptoWidget({ lang }) {
         const hash = sym.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
         return {
             h: ((hash%5) - 2) + 0.4,
-            d: ((hash%15) - 5) + 0.2, // 1D Trend
+            d: ((hash%15) - 5) + 0.2,
             w: ((hash%30) - 10) + 1.1,
             m: ((hash%60) - 20) + 5.5,
             y: ((hash%200) - 50) + 40.0,
             a: hash * 5 + 120
         };
     };
+
+    useEffect(() => {
+        if(valuta === 'USD') {
+            fetch('https://open.er-api.com/v6/latest/EUR')
+                .then(r=>r.json()).then(d => setExRate(d.rates.USD))
+                .catch(() => setExRate(1.08)); 
+        } else {
+            setExRate(1);
+        }
+    }, [valuta]);
 
     useEffect(() => {
         const fetchBitvavo = async () => {
@@ -210,22 +219,29 @@ function CryptoWidget({ lang }) {
                     return { sym: b.symbol, amount, price, val, tr: getMockTrends(b.symbol) };
                 }).sort((a,b) => b.val - a.val);
 
-                setPortfolio(combined); setTotal(calcTotal); setErr('');
+                setPortfolio(combined); setTotalEur(calcTotal); setErr('');
             } catch (error) { setErr(error.message); }
             setLoading(false);
         };
         fetchBitvavo();
     }, [lang]);
     
-    const sym = valuta==='EUR'?'€':valuta==='USD'?'$':'₿';
-    const displayTotal = valuta==='BTC' ? (total/90000).toFixed(4) : total; 
+    const sym = valuta === 'EUR' ? '€' : '$';
+    const displayTotal = totalEur * exRate;
     
-    const totalTrend = portfolio.reduce((acc, c) => acc + (c.tr.d * (c.val / (total || 1))), 0);
+    const totalTrend = portfolio.reduce((acc, c) => acc + (c.tr.d * (c.val / (totalEur || 1))), 0);
     const totalColor = totalTrend >= 0 ? 'text-green-600' : 'text-red-600';
 
     return (
         <div className="widget h-[450px] flex flex-col">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center shrink-0"><div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div>
+                <div className="flex gap-1 bg-gray-200 p-1 rounded">
+                    {['EUR', 'USD'].map(v => (
+                        <button key={v} onClick={()=>setValuta(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${valuta===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>
+                    ))}
+                </div>
+            </div>
             <div className="p-5 flex-1 flex flex-col bg-white overflow-hidden">
                 <div className="mb-4 shrink-0 flex justify-between items-start">
                     <div>
@@ -239,26 +255,42 @@ function CryptoWidget({ lang }) {
                 {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Syncing with Bitvavo...</div> : 
                  err ? <div className="flex-1 text-[10px] text-red-500 font-bold p-4 bg-red-50 rounded border border-red-100">{err}</div> :
                  (
-                    <div className="space-y-2 overflow-y-auto flex-1 hide-scroll pr-1 pb-2">
+                    <div className="space-y-3 overflow-y-auto flex-1 hide-scroll pr-1 pb-2">
                         {portfolio.map((c, i) => {
                             const isPos = c.tr.d >= 0;
                             const bgClass = isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
                             const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
+                            
+                            const displayVal = c.val * exRate;
+                            const displayPrice = c.price * exRate;
+                            const displayUnits = c.amount > 100 ? c.amount.toLocaleString('nl-NL', {maximumFractionDigits: 2}) : c.amount.toLocaleString('nl-NL', {maximumFractionDigits: 6});
+                            
+                            const sparklinePts = isPos ? "0,20 8,10 16,15 24,5 32,8 40,0" : "0,0 8,10 16,5 24,15 32,12 40,20";
+
                             return (
-                                <div key={i} className={`relative p-2 border rounded flex flex-col shadow-sm transition overflow-hidden ${bgClass}`}>
-                                    <div className="flex justify-between items-start mb-1">
-                                        <div>
-                                            <span className="font-black text-xs block text-gray-900">{c.sym}</span>
-                                            <span className="text-[8px] text-gray-600 font-medium">{c.amount} units</span>
+                                <div key={i} className={`relative p-2.5 border rounded flex flex-col shadow-sm transition overflow-hidden ${bgClass}`}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <div className="w-1/3">
+                                            <span className="font-black text-sm block text-gray-900 leading-none">{c.sym}</span>
+                                            <span className="text-[8px] text-gray-600 font-medium mt-1 block">{displayUnits} units</span>
                                         </div>
-                                        <div className="text-right">
-                                            <span className="font-bold text-xs block text-gray-900">{sym}{c.val.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
-                                            <span className="text-[8px] text-gray-500 font-mono">1 {c.sym} = {sym}{c.price.toLocaleString('nl-NL')}</span>
+                                        <div className="w-1/3 flex items-center justify-center gap-1.5 bg-white/50 px-2 py-1 rounded">
+                                            <svg viewBox="0 0 40 20" className="w-6 h-3 overflow-visible">
+                                                <polyline points={sparklinePts} fill="none" stroke={isPos ? '#16a34a' : '#dc2626'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                            </svg>
+                                            <span className={`text-[9px] font-black ${isPos ? 'text-green-600' : 'text-red-600'}`}>{isPos?'+':''}{c.tr.d.toFixed(1)}%</span>
+                                        </div>
+                                        <div className="w-1/3 text-right">
+                                            <span className="font-bold text-sm block text-gray-900 leading-none">{sym}{displayVal.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
+                                            <span className="text-[8px] text-gray-500 font-mono mt-1 block">1 = {sym}{displayPrice.toLocaleString('nl-NL', {maximumFractionDigits: displayPrice < 1 ? 4 : 2})}</span>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-y-1 pt-1.5 mt-1 border-t border-black/5 text-[8px] font-black uppercase tracking-tighter">
-                                        <div>1U: <P v={c.tr.h}/></div><div>1D: <P v={c.tr.d}/></div><div>1W: <P v={c.tr.w}/></div>
-                                        <div>1M: <P v={c.tr.m}/></div><div>1J: <P v={c.tr.y}/></div><div>ALL: <P v={c.tr.a}/></div>
+                                    <div className="flex justify-between items-center pt-2 mt-1 border-t border-black/5 text-[8px] font-black uppercase tracking-tighter">
+                                        <div>1U: <P v={c.tr.h}/></div>
+                                        <div>1W: <P v={c.tr.w}/></div>
+                                        <div>1M: <P v={c.tr.m}/></div>
+                                        <div>1J: <P v={c.tr.y}/></div>
+                                        <div>ALL: <P v={c.tr.a}/></div>
                                     </div>
                                 </div>
                             );
@@ -524,23 +556,27 @@ function RadarWidget({ lang }) {
                     const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
 
                     return (
-                        <div key={a} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, a)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, a)} className={`relative p-2 border rounded flex flex-col shadow-sm transition overflow-hidden ${bgClass} ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
-                            <div className="flex justify-between items-start mb-1">
+                        <div key={a} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, a)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, a)} className={`relative p-2.5 border rounded flex flex-col shadow-sm transition overflow-hidden ${bgClass} ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+                            <div className="flex justify-between items-start mb-1.5">
                                 <div>
-                                    <span className="font-black text-xs block text-gray-900">{a}</span>
-                                    <span className="text-[8px] font-bold text-gray-600 uppercase">{data.type}</span>
+                                    <span className="font-black text-sm block text-gray-900 leading-none">{a}</span>
+                                    <span className="text-[8px] font-bold text-[#c586c0] uppercase mt-1 block">{data.type}</span>
                                 </div>
                                 {manage ? (
                                     <button onClick={()=>removeAsset(a)} className="text-red-400 font-bold hover:text-red-600 text-lg leading-none">&times;</button>
                                 ) : (
                                     <div className="flex gap-1">
-                                        {data.plats.map(p => <span key={p} className="bg-white/50 border border-black/10 text-gray-800 px-1.5 py-0.5 rounded text-[7px] font-bold uppercase">{p}</span>)}
+                                        {data.plats.map(p => <span key={p} className="bg-white/60 border border-black/10 text-gray-800 px-1.5 py-0.5 rounded text-[7px] font-bold uppercase">{p}</span>)}
                                     </div>
                                 )}
                             </div>
-                            <div className="grid grid-cols-3 gap-y-1 pt-1.5 mt-1 border-t border-black/5 text-[8px] font-black uppercase tracking-tighter">
-                                <div>1U: <P v={data.tr.h}/></div><div>1D: <P v={data.tr.d}/></div><div>1W: <P v={data.tr.w}/></div>
-                                <div>1M: <P v={data.tr.m}/></div><div>1J: <P v={data.tr.y}/></div><div>ALL: <P v={data.tr.a}/></div>
+                            <div className="flex justify-between items-center pt-2 mt-1 border-t border-black/5 text-[8px] font-black uppercase tracking-tighter">
+                                <div>1U: <P v={data.tr.h}/></div>
+                                <div>1D: <P v={data.tr.d}/></div>
+                                <div>1W: <P v={data.tr.w}/></div>
+                                <div>1M: <P v={data.tr.m}/></div>
+                                <div>1J: <P v={data.tr.y}/></div>
+                                <div>ALL: <P v={data.tr.a}/></div>
                             </div>
                         </div>
                     );
