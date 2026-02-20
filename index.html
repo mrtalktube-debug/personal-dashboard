@@ -878,10 +878,9 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'OpenAI', val: ''}]));
     const [icals, setIcals] = useState(S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]));
     const [aiUrl, setAiUrl] = useState(S.load('ai_chat_url', ''));
-    const [dragIdx, setDragIdx] = useState(null);
 
-    const handleDragStart = (e, idx) => { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; };
-    const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v7', n); setDragIdx(null); };
+    const handleDragStart = (e, idx) => { e.dataTransfer.setData("idx", idx); };
+    const handleDrop = (e, idx) => { e.preventDefault(); const dragIdx = parseInt(e.dataTransfer.getData("idx")); if (dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v7', n); };
     const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v7', n); };
 
     const saveAll = async () => { 
@@ -891,7 +890,6 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
         S.save('ai_chat_url', aiUrl); 
         S.save('layout_v7', layout);
         
-        // Push naar Vercel KV cloud
         const cloudSettings = {
             bitvavo_keys: bvKeys,
             api_keys_dyn: apis,
@@ -980,21 +978,10 @@ function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lang, setLang] = useState(S.load('lang', 'nl'));
-    const [isSyncing, setIsSyncing] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(S.load('auth_status', false)); // Sync direct als je al bent ingelogd
     
     const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'sports', 'sudoku', 'lang'];
-    const [layout, setLayout] = useState(() => {
-        let l = S.load('layout_v7', null);
-        if (!l) {
-            l = S.load('layout_v6', defaultLayout);
-            if (l.includes('f1') || l.includes('golf')) {
-                l = l.filter(w => w !== 'f1' && w !== 'golf');
-                l.splice(7, 0, 'sports'); 
-            }
-            S.save('layout_v7', l);
-        }
-        return l;
-    });
+    const [layout, setLayout] = useState(S.load('layout_v7', defaultLayout));
     
     useEffect(() => {
         if (!isAuth && window.google) {
@@ -1003,29 +990,38 @@ function App() {
         }
     }, [isAuth]);
 
+    // Check Cloud on Load
+    useEffect(() => {
+        const syncOnLoad = async () => {
+            if (isAuth) {
+                try {
+                    const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}`);
+                    if (res.ok) {
+                        const cloudData = await res.json();
+                        if (cloudData && Object.keys(cloudData).length > 0) {
+                            Object.keys(cloudData).forEach(k => S.save(k, cloudData[k]));
+                            setLayout(cloudData.layout_v7 || defaultLayout);
+                            setLang(cloudData.lang || 'nl');
+                        }
+                    }
+                } catch(e) { console.error("Cloud check gefaald:", e); }
+                setIsSyncing(false); // Stop loading screen and render dashboard
+            }
+        };
+        syncOnLoad();
+    }, [isAuth]);
+
     const handleCredentialResponse = async (response) => {
         try {
             const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
             if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { 
                 setIsSyncing(true);
-                // Probeer cloud data op te halen voordat we verder gaan
-                try {
-                    const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}`);
-                    if(res.ok) {
-                        const cloudData = await res.json();
-                        if (cloudData && Object.keys(cloudData).length > 0) {
-                            Object.keys(cloudData).forEach(k => S.save(k, cloudData[k]));
-                            setLayout(cloudData.layout_v7 || defaultLayout);
-                        }
-                    }
-                } catch(e) { console.error("Cloud sync mislukt, we gebruiken lokale opslag.", e); }
-                
-                setIsSyncing(false);
                 setIsAuth(true); 
                 S.save('auth_status', true); 
+                // useEffect(syncOnLoad) will now trigger automatically!
             } 
             else { alert("Toegang geweigerd! Dit account heeft geen permissie."); }
-        } catch(e) { console.error("Login failed"); setIsSyncing(false); }
+        } catch(e) { console.error("Login failed"); }
     };
 
     const handleLogout = () => { setIsAuth(false); S.remove('auth_status'); window.location.reload(); };
