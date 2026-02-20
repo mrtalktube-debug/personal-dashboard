@@ -81,7 +81,8 @@ const Ico = {
     Up: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
     Dn: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>,
     Drag: () => <svg className="w-4 h-4 text-gray-400 cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>,
-    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>,
+    Pepper: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
 };
 
 function WeatherBar({ lang }) {
@@ -210,7 +211,7 @@ function CryptoWidget({ lang }) {
         const hash = sym.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
         return {
             h: ((hash%5) - 2) + 0.4,
-            d: ((hash%15) - 5) + 0.2,
+            d: ((hash%15) - 5) + 0.2, 
             w: ((hash%30) - 10) + 1.1,
             m: ((hash%60) - 20) + 5.5,
             y: ((hash%200) - 50) + 40.0,
@@ -309,7 +310,7 @@ function CryptoWidget({ lang }) {
                                             <span className="font-black text-2xl block text-gray-900 leading-none">{c.sym}</span>
                                             <span className="text-sm text-gray-600 font-medium mt-2 block">{displayUnits} units</span>
                                         </div>
-                                        <div className="w-1/3 flex flex-col items-center justify-center gap-1.5 px-2 py-2">
+                                        <div className="w-1/3 flex flex-col items-center justify-center gap-1.5 bg-white/60 px-2 py-2 rounded-lg">
                                             <svg viewBox="0 0 40 20" className="w-10 h-5 overflow-visible">
                                                 <polyline points={sparklinePts} fill="none" stroke={isPos ? '#16a34a' : '#dc2626'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                                             </svg>
@@ -325,6 +326,7 @@ function CryptoWidget({ lang }) {
                                         <div>1W: <P v={c.tr.w}/></div>
                                         <div>1M: <P v={c.tr.m}/></div>
                                         <div>1J: <P v={c.tr.y}/></div>
+                                        <div>ALL: <P v={c.tr.a}/></div>
                                     </div>
                                 </div>
                             );
@@ -624,7 +626,7 @@ function PepperWidget({ lang }) {
     const deals = [{ t: 'Sony WH-1000XM5', p: '€259', o: '€349', d: '25%', h: true }, { t: 'MacBook Air M2', p: '€899', o: '€1199', d: '25%', h: true }];
     return (
         <div className="widget h-[350px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper</h3></div></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest italic">{T[lang].deal}</h3></div></div>
             <div className="p-4 flex gap-4 overflow-x-auto flex-1 items-center bg-white hide-scroll">
                 {deals.map((d, i) => (
                     <div key={i} className="min-w-[180px] h-[260px] border rounded p-3 bg-white hover:border-red-400 transition flex flex-col shadow-sm">
@@ -661,22 +663,30 @@ function SportsWidget({ lang }) {
     const [search, setSearch] = useState('');
     const [golfTour, setGolfTour] = useState('PGA');
 
+    const [eF1C, setEF1C] = useState(false);
+    const [eF1S, setEF1S] = useState(false);
+    const [eF1L, setEF1L] = useState(false);
+    
+    const [eGC, setEGC] = useState(false);
+    const [eGS, setEGS] = useState(false);
+    const [eGL, setEGL] = useState(false);
+
     const f1Data = { 
-        c: [ { r: "GP Bahrein", d: "02 Mar", t: "16:00" }, { r: "GP Saudi Arabia", d: "09 Mar", t: "18:00" }, { r: "GP Australia", d: "24 Mar", t: "05:00" } ], 
-        s: [ { p: 1, n: "Verstappen", fl: "🇳🇱", pt: 25 }, { p: 2, n: "Norris", fl: "🇬🇧", pt: 18 }, { p: 3, n: "Leclerc", fl: "🇲🇨", pt: 15 }, { p: 4, n: "Sainz", fl: "🇪🇸", pt: 12 } ], 
-        lst: { title: 'GP Abu Dhabi', p1: 'Verstappen', p2: 'Leclerc', p3: 'Russell' } 
+        c: [ { r: "GP Bahrein", d: "02 Mar", t: "16:00" }, { r: "GP Saudi Arabia", d: "09 Mar", t: "18:00" }, { r: "GP Australia", d: "24 Mar", t: "05:00" }, { r: "GP Japan", d: "07 Apr", t: "07:00" }, { r: "GP China", d: "21 Apr", t: "09:00" }, { r: "GP Miami", d: "05 May", t: "22:00" }, { r: "GP Emilia Romagna", d: "19 May", t: "15:00" }, { r: "GP Monaco", d: "26 May", t: "15:00" }, { r: "GP Canada", d: "09 Jun", t: "20:00" }, { r: "GP Spain", d: "23 Jun", t: "15:00" } ], 
+        s: [ { p: 1, n: "Verstappen", fl: "🇳🇱", pt: 25 }, { p: 2, n: "Norris", fl: "🇬🇧", pt: 18 }, { p: 3, n: "Leclerc", fl: "🇲🇨", pt: 15 }, { p: 4, n: "Sainz", fl: "🇪🇸", pt: 12 }, { p: 5, n: "Russell", fl: "🇬🇧", pt: 10 }, { p: 6, n: "Hamilton", fl: "🇬🇧", pt: 8 }, { p: 7, n: "Piastri", fl: "🇦🇺", pt: 6 }, { p: 8, n: "Alonso", fl: "🇪🇸", pt: 4 }, { p: 9, n: "Perez", fl: "🇲🇽", pt: 2 }, { p: 10, n: "Stroll", fl: "🇨🇦", pt: 1 } ], 
+        lst: { title: 'GP Abu Dhabi', res: [ { p: 1, n: 'Verstappen', time: '1:27:02' }, { p: 2, n: 'Leclerc', time: '+17.9s' }, { p: 3, n: 'Russell', time: '+20.3s' }, { p: 4, n: 'Norris', time: '+22.7s' }, { p: 5, n: 'Piastri', time: '+31.4s' }, { p: 6, n: 'Sainz', time: '+33.1s' }, { p: 7, n: 'Hamilton', time: '+35.8s' }, { p: 8, n: 'Alonso', time: '+38.5s' }, { p: 9, n: 'Perez', time: '+40.1s' }, { p: 10, n: 'Stroll', time: '+45.0s' } ] } 
     };
     
     const golfPga = { 
-        c: [ { r: "The Players", d: "14 Mar", t: "14:00 NL" }, { r: "The Masters", d: "10 Apr", t: "15:00 NL" } ], 
-        s: [ { p: 1, n: "Scheffler", fl: "🇺🇸", pt: "-12" }, { p: 2, n: "Kim", fl: "🇰🇷", pt: "-10" }, { p: 3, n: "McIlroy", fl: "🇬🇧", pt: "-9" } ], 
-        lst: { title: 'Arnold Palmer Inv.', p1: 'Scheffler (-15)', p2: 'Clark (-14)', p3: 'Lowry (-13)' } 
+        c: [ { r: "The Players", d: "14 Mar", t: "14:00 NL" }, { r: "The Masters", d: "10 Apr", t: "15:00 NL" }, { r: "RBC Heritage", d: "18 Apr", t: "14:00 NL" }, { r: "PGA Champ", d: "16 May", t: "14:00 NL" }, { r: "US Open", d: "13 Jun", t: "15:00 NL" }, { r: "Travelers Champ", d: "20 Jun", t: "14:00 NL" }, { r: "Scottish Open", d: "11 Jul", t: "09:00 NL" }, { r: "The Open", d: "18 Jul", t: "09:00 NL" }, { r: "FedEx St. Jude", d: "15 Aug", t: "14:00 NL" }, { r: "BMW Champ", d: "22 Aug", t: "14:00 NL" } ], 
+        s: [ { p: 1, n: "Scheffler", fl: "🇺🇸", pt: "3200" }, { p: 2, n: "Kim", fl: "🇰🇷", pt: "2100" }, { p: 3, n: "McIlroy", fl: "🇬🇧", pt: "1950" }, { p: 4, n: "Schauffele", fl: "🇺🇸", pt: "1800" }, { p: 5, n: "Rahm", fl: "🇺🇸", pt: "1700" }, { p: 6, n: "Clark", fl: "🇺🇸", pt: "1500" }, { p: 7, n: "Hovland", fl: "🇳🇴", pt: "1400" }, { p: 8, n: "Cantlay", fl: "🇺🇸", pt: "1350" }, { p: 9, n: "Aberg", fl: "🇳🇴", pt: "1300" }, { p: 10, n: "Harman", fl: "🇺🇸", pt: "1200" } ], 
+        lst: { title: 'Arnold Palmer Inv.', res: [ { p: 1, n: 'Scheffler', time: '-15' }, { p: 2, n: 'Clark', time: '-14' }, { p: 3, n: 'Lowry', time: '-13' }, { p: 4, n: 'Zalatoris', time: '-12' }, { p: 5, n: 'Theegala', time: '-11' }, { p: 6, n: 'Burns', time: '-10' }, { p: 7, n: 'McIlroy', time: '-9' }, { p: 8, n: 'Kim', time: '-8' }, { p: 9, n: 'Schauffele', time: '-7' }, { p: 10, n: 'Hovland', time: '-6' } ] } 
     };
     
     const golfDp = { 
-        c: [ { r: "Singapore Open", d: "21 Mar", t: "08:00 NL" }, { r: "Indian Open", d: "28 Mar", t: "09:00 NL" } ], 
-        s: [ { p: 1, n: "McIlroy", fl: "🇬🇧", pt: "2500" }, { p: 2, n: "Kim", fl: "🇰🇷", pt: "2100" }, { p: 3, n: "Fleetwood", fl: "🇬🇧", pt: "1950" } ], 
-        lst: { title: 'Dubai Desert Classic', p1: 'McIlroy (-14)', p2: 'Meronk (-13)', p3: 'Kim (-12)' } 
+        c: [ { r: "Singapore Open", d: "21 Mar", t: "08:00 NL" }, { r: "Indian Open", d: "28 Mar", t: "09:00 NL" }, { r: "Korea Champ", d: "18 Apr", t: "08:00 NL" }, { r: "ISPS Handa", d: "25 Apr", t: "07:00 NL" }, { r: "China Open", d: "02 May", t: "06:00 NL" }, { r: "Soudal Open", d: "23 May", t: "10:00 NL" }, { r: "European Open", d: "30 May", t: "09:00 NL" }, { r: "KLM Open", d: "06 Jun", t: "09:00 NL" }, { r: "BMW Int", d: "20 Jun", t: "10:00 NL" }, { r: "Italian Open", d: "04 Jul", t: "09:00 NL" } ], 
+        s: [ { p: 1, n: "McIlroy", fl: "🇬🇧", pt: "2500" }, { p: 2, n: "Kim", fl: "🇰🇷", pt: "2100" }, { p: 3, n: "Fleetwood", fl: "🇬🇧", pt: "1950" }, { p: 4, n: "Fox", fl: "🇬🇧", pt: "1800" }, { p: 5, n: "Meronk", fl: "🇵🇱", pt: "1600" }, { p: 6, n: "MacIntyre", fl: "🇬🇧", pt: "1500" }, { p: 7, n: "Olesen", fl: "🇬🇧", pt: "1400" }, { p: 8, n: "Hojgaard", fl: "🇩🇰", pt: "1350" }, { p: 9, n: "Campillo", fl: "🇪🇸", pt: "1300" }, { p: 10, n: "Perez", fl: "🇫🇷", pt: "1200" } ], 
+        lst: { title: 'Dubai Desert Classic', res: [ { p: 1, n: 'McIlroy', time: '-14' }, { p: 2, n: 'Meronk', time: '-13' }, { p: 3, n: 'Kim', time: '-12' }, { p: 4, n: 'Scott', time: '-11' }, { p: 5, n: 'Fox', time: '-10' }, { p: 6, n: 'Fleetwood', time: '-9' }, { p: 7, n: 'MacIntyre', time: '-8' }, { p: 8, n: 'Olesen', time: '-7' }, { p: 9, n: 'Hojgaard', time: '-6' }, { p: 10, n: 'Perez', time: '-5' } ] } 
     };
 
     const gData = golfTour === 'PGA' ? golfPga : golfDp;
@@ -684,11 +694,19 @@ function SportsWidget({ lang }) {
 
     const fF1c = f1Data.c.filter(x => !search || match(x.r));
     const fF1s = f1Data.s.filter(x => !search || match(x.n));
-    const fF1lst = !search || match(f1Data.lst.title) || match(f1Data.lst.p1) || match(f1Data.lst.p2) || match(f1Data.lst.p3);
+    const fF1lstRes = f1Data.lst.res.filter(x => !search || match(x.n));
+    const f1LstMatch = fF1lstRes.length > 0 || match(f1Data.lst.title); 
 
     const fGc = gData.c.filter(x => !search || match(x.r));
     const fGs = gData.s.filter(x => !search || match(x.n));
-    const fGlst = !search || match(gData.lst.title) || match(gData.lst.p1) || match(gData.lst.p2) || match(gData.lst.p3);
+    const fGlstRes = gData.lst.res.filter(x => !search || match(x.n));
+    const gLstMatch = fGlstRes.length > 0 || match(gData.lst.title);
+
+    const MoreBtn = ({ e, setE, t1, e1 }) => (
+        <button onClick={() => setE(!e)} className="w-full mt-2 bg-gray-50 hover:bg-gray-100 border text-gray-500 text-[9px] font-bold py-1.5 rounded uppercase transition shadow-sm">
+            {e ? (lang==='nl'?'Minder tonen':'Show less') : (lang==='nl'?t1:e1)}
+        </button>
+    );
 
     return (
         <div className="widget h-[450px]">
@@ -703,35 +721,71 @@ function SportsWidget({ lang }) {
             </div>
             <div className="p-4 flex-1 overflow-y-auto space-y-6 bg-white hide-scroll">
                 
-                {((tab === 'cal' && fF1c.length>0) || (tab === 'std' && fF1s.length>0) || (tab === 'lst' && fF1lst)) && (
+                {((tab === 'cal' && fF1c.length>0) || (tab === 'std' && fF1s.length>0) || (tab === 'lst' && f1LstMatch)) && (
                 <div>
-                    <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-1"><Ico.F1/><span className="text-[10px] font-black uppercase text-[#0073b1]">F1 TOUR</span></div>
-                    <div className="space-y-2">
-                        {tab === 'cal' && fF1c.map(r => <div key={r.r} className="flex justify-between text-xs p-2.5 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-1">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
-                        {tab === 'std' && fF1s.map((s,i) => <div key={s.n} className="flex justify-between items-center text-xs p-2 border-b"><div className="flex gap-3 items-center"><span className="font-black w-4">{s.p===1?'🥇':s.p===2?'🥈':s.p===3?'🥉':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2 py-0.5 rounded font-mono font-bold text-[9px]">{s.pt}</span></div>)}
-                        {tab === 'lst' && fF1lst && <div className="flex flex-col gap-2"><div className="bg-blue-50 text-blue-800 font-bold text-center py-1.5 rounded uppercase text-[9px]">{f1Data.lst.title}</div><div className="p-2.5 border rounded border-yellow-300 bg-yellow-50 flex justify-between"><span className="text-lg leading-none">🥇</span><span className="font-bold text-sm">{f1Data.lst.p1}</span></div></div>}
+                    <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-1"><Ico.F1/><span className="text-[10px] font-black uppercase text-[#0073b1]">F1</span></div>
+                    <div className="space-y-1">
+                        {tab === 'cal' && fF1c.slice(0, eF1C ? 10 : 3).map(r => <div key={r.r} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-0.5">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
+                        {tab === 'cal' && fF1c.length > 3 && <MoreBtn e={eF1C} setE={setEF1C} t1="Toon 10 events" e1="Show 10 events" />}
+                        
+                        {tab === 'std' && fF1s.slice(0, eF1S ? 10 : 3).map((s,i) => <div key={s.n} className="flex justify-between items-center text-xs p-2 border-b"><div className="flex gap-3 items-center"><span className="font-black w-4">{s.p===1?'🥇':s.p===2?'🥈':s.p===3?'🥉':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2 py-0.5 rounded font-mono font-bold text-[9px]">{s.pt}</span></div>)}
+                        {tab === 'std' && fF1s.length > 3 && <MoreBtn e={eF1S} setE={setEF1S} t1="Volledige stand" e1="Full standings" />}
+
+                        {tab === 'lst' && f1LstMatch && (
+                            <div className="flex flex-col gap-1">
+                                <div className="bg-blue-50 text-blue-800 font-bold text-center py-1.5 rounded uppercase text-[9px] mb-1">{f1Data.lst.title}</div>
+                                {fF1lstRes.slice(0, eF1L ? 10 : 3).map((r, i) => (
+                                    <div key={r.n} className={`flex justify-between items-center text-xs p-2 border-b ${r.p===1?'bg-yellow-50 border-yellow-300 rounded':''}`}>
+                                        <div className="flex gap-3 items-center">
+                                            <span className="font-black w-4">{r.p===1?'🥇':r.p===2?'🥈':r.p===3?'🥉':r.p}</span>
+                                            <span className="font-bold">{r.n.toUpperCase()}</span>
+                                        </div>
+                                        <span className="text-gray-500 font-mono text-[9px]">{r.time}</span>
+                                    </div>
+                                ))}
+                                {fF1lstRes.length > 3 && <MoreBtn e={eF1L} setE={setEF1L} t1="Volledige uitslag" e1="Full results" />}
+                            </div>
+                        )}
                     </div>
                 </div>
                 )}
 
-                {((tab === 'cal' && fGc.length>0) || (tab === 'std' && fGs.length>0) || (tab === 'lst' && fGlst)) && (
+                {((tab === 'cal' && fGc.length>0) || (tab === 'std' && fGs.length>0) || (tab === 'lst' && gLstMatch)) && (
                 <div>
                     <div className="flex items-center justify-between mb-2 border-b border-gray-100 pb-1">
-                        <div className="flex items-center gap-2"><Ico.Glf/><span className="text-[10px] font-black uppercase text-[#0073b1]">GOLF TOUR</span></div>
+                        <div className="flex items-center gap-2"><Ico.Glf/><span className="text-[10px] font-black uppercase text-[#0073b1]">GOLF</span></div>
                         <div className="flex gap-1 bg-gray-100 p-0.5 rounded">
                             <button onClick={()=>setGolfTour('PGA')} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${golfTour==='PGA'?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>PGA</button>
                             <button onClick={()=>setGolfTour('DP')} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${golfTour==='DP'?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>DP</button>
                         </div>
                     </div>
-                    <div className="space-y-2">
-                        {tab === 'cal' && fGc.map(r => <div key={r.r} className="flex justify-between text-xs p-2.5 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-1">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
-                        {tab === 'std' && fGs.map((s,i) => <div key={s.n} className="flex justify-between items-center text-xs p-2 border-b"><div className="flex gap-3 items-center"><span className="font-black w-4">{s.p===1?'🥇':s.p===2?'🥈':s.p===3?'🥉':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2 py-0.5 rounded font-mono font-bold text-[9px]">{s.pt}</span></div>)}
-                        {tab === 'lst' && fGlst && <div className="flex flex-col gap-2"><div className="bg-green-50 text-green-800 font-bold text-center py-1.5 rounded uppercase text-[9px]">{gData.lst.title}</div><div className="p-2.5 border rounded border-green-300 bg-green-50 flex justify-between"><span className="text-lg leading-none">🥇</span><span className="font-bold text-sm">{gData.lst.p1}</span></div></div>}
+                    <div className="space-y-1">
+                        {tab === 'cal' && fGc.slice(0, eGC ? 10 : 3).map(r => <div key={r.r} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-0.5">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
+                        {tab === 'cal' && fGc.length > 3 && <MoreBtn e={eGC} setE={setEGC} t1="Toon 10 events" e1="Show 10 events" />}
+                        
+                        {tab === 'std' && fGs.slice(0, eGS ? 10 : 3).map((s,i) => <div key={s.n} className="flex justify-between items-center text-xs p-2 border-b"><div className="flex gap-3 items-center"><span className="font-black w-4">{s.p===1?'🥇':s.p===2?'🥈':s.p===3?'🥉':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2 py-0.5 rounded font-mono font-bold text-[9px]">{s.pt}</span></div>)}
+                        {tab === 'std' && fGs.length > 3 && <MoreBtn e={eGS} setE={setEGS} t1="Volledige stand" e1="Full standings" />}
+
+                        {tab === 'lst' && gLstMatch && (
+                            <div className="flex flex-col gap-1">
+                                <div className="bg-green-50 text-green-800 font-bold text-center py-1.5 rounded uppercase text-[9px] mb-1">{gData.lst.title}</div>
+                                {fGlstRes.slice(0, eGL ? 10 : 3).map((r, i) => (
+                                    <div key={r.n} className={`flex justify-between items-center text-xs p-2 border-b ${r.p===1?'bg-green-100 border-green-300 rounded':''}`}>
+                                        <div className="flex gap-3 items-center">
+                                            <span className="font-black w-4">{r.p===1?'🥇':r.p===2?'🥈':r.p===3?'🥉':r.p}</span>
+                                            <span className="font-bold">{r.n.toUpperCase()}</span>
+                                        </div>
+                                        <span className="text-gray-500 font-mono text-[9px]">{r.time}</span>
+                                    </div>
+                                ))}
+                                {fGlstRes.length > 3 && <MoreBtn e={eGL} setE={setEGL} t1="Volledige uitslag" e1="Full results" />}
+                            </div>
+                        )}
                     </div>
                 </div>
                 )}
                 
-                {search && fF1c.length===0 && fF1s.length===0 && !fF1lst && fGc.length===0 && fGs.length===0 && !fGlst && (
+                {search && fF1c.length===0 && fF1s.length===0 && !f1LstMatch && fGc.length===0 && fGs.length===0 && !gLstMatch && (
                     <div className="text-center text-gray-400 text-[10px] font-bold py-10 uppercase">Geen resultaten voor '{search}'</div>
                 )}
             </div>
