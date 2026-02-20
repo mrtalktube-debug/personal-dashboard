@@ -39,8 +39,10 @@
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
+// ----- CONFIGURATIE -----
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
+// ------------------------
 
 const S = {
     load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
@@ -647,7 +649,7 @@ function PepperWidget({ lang }) {
     const deals = [{ t: 'Sony WH-1000XM5', p: '€259', o: '€349', d: '25%', h: true }, { t: 'MacBook Air M2', p: '€899', o: '€1199', d: '25%', h: true }];
     return (
         <div className="widget h-[350px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Pepper/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper</h3></div></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper</h3></div></div>
             <div className="p-4 flex gap-4 overflow-x-auto flex-1 items-center bg-white hide-scroll">
                 {deals.map((d, i) => (
                     <div key={i} className="min-w-[180px] h-[260px] border rounded p-3 bg-white hover:border-red-400 transition flex flex-col shadow-sm">
@@ -882,7 +884,36 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v7', n); setDragIdx(null); };
     const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v7', n); };
 
-    const saveAll = () => { S.save('bitvavo_keys', bvKeys); S.save('api_keys_dyn', apis); S.save('icals_dyn', icals); S.save('ai_chat_url', aiUrl); onClose(); window.location.reload(); };
+    const saveAll = async () => { 
+        S.save('bitvavo_keys', bvKeys); 
+        S.save('api_keys_dyn', apis); 
+        S.save('icals_dyn', icals); 
+        S.save('ai_chat_url', aiUrl); 
+        S.save('layout_v7', layout);
+        
+        // Push naar Vercel KV cloud
+        const cloudSettings = {
+            bitvavo_keys: bvKeys,
+            api_keys_dyn: apis,
+            icals_dyn: icals,
+            ai_chat_url: aiUrl,
+            layout_v7: layout,
+            newscats: S.load('newscats', ['Nieuws', 'Tech', 'Beurs']),
+            news_blocked: S.load('news_blocked', []),
+            inv_assets: S.load('inv_assets', ['ASML Holding', 'Novo Nordisk', 'Vanguard S&P 500']),
+            wcity: S.load('wcity', 'Zoetermeer')
+        };
+        try {
+            await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings })
+            });
+        } catch(e) { console.error("Cloud opslag mislukt", e); }
+        
+        onClose(); 
+        window.location.reload(); 
+    };
 
     return (
         <div className={`settings-panel p-6 md:p-8 ${isOpen ? 'open' : ''}`}>
@@ -940,7 +971,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                     </div>
                 </section>
             </div>
-            <button onClick={saveAll} className="mt-10 w-full bg-[#1a1a1a] text-white py-4 text-[10px] font-black uppercase rounded shadow-lg hover:bg-black transition">Opslaan & Herladen</button>
+            <button onClick={saveAll} className="mt-10 w-full bg-[#1a1a1a] text-white py-4 text-[10px] font-black uppercase rounded shadow-lg hover:bg-black transition">Opslaan & Herladen (Cloud Sync)</button>
         </div>
     );
 }
@@ -949,6 +980,7 @@ function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lang, setLang] = useState(S.load('lang', 'nl'));
+    const [isSyncing, setIsSyncing] = useState(false);
     
     const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'sports', 'sudoku', 'lang'];
     const [layout, setLayout] = useState(() => {
@@ -971,24 +1003,41 @@ function App() {
         }
     }, [isAuth]);
 
-    const handleCredentialResponse = (response) => {
+    const handleCredentialResponse = async (response) => {
         try {
             const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-            if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { setIsAuth(true); S.save('auth_status', true); } 
+            if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { 
+                setIsSyncing(true);
+                // Probeer cloud data op te halen voordat we verder gaan
+                try {
+                    const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}`);
+                    if(res.ok) {
+                        const cloudData = await res.json();
+                        if (cloudData && Object.keys(cloudData).length > 0) {
+                            Object.keys(cloudData).forEach(k => S.save(k, cloudData[k]));
+                            setLayout(cloudData.layout_v7 || defaultLayout);
+                        }
+                    }
+                } catch(e) { console.error("Cloud sync mislukt, we gebruiken lokale opslag.", e); }
+                
+                setIsSyncing(false);
+                setIsAuth(true); 
+                S.save('auth_status', true); 
+            } 
             else { alert("Toegang geweigerd! Dit account heeft geen permissie."); }
-        } catch(e) { console.error("Login failed"); }
+        } catch(e) { console.error("Login failed"); setIsSyncing(false); }
     };
 
     const handleLogout = () => { setIsAuth(false); S.remove('auth_status'); window.location.reload(); };
 
-    if (!isAuth) {
+    if (!isAuth || isSyncing) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-[#000a14] text-white">
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">Personal Dashboard ver. 4.0</p>
-                    <div id="google-btn"></div>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Systeem synchroniseren met cloud...' : 'Personal Dashboard ver. 4.0'}</p>
+                    {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
         );
