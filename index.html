@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Michael Strategic Dashboard v6.0</title>
+    <title>Michael Strategic Dashboard v6.2</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -24,7 +24,7 @@
         .settings-panel.open { transform: translateX(0); }
         .scroll-h { overflow-x: auto; display: flex; gap: 1rem; padding-bottom: 10px; scrollbar-width: none; }
         .scroll-v { overflow-y: auto; scrollbar-width: thin; }
-        .bron-link { color: #00008b; font-weight: 800; }
+        .bron-link { color: #00008b !important; font-weight: 800; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 4px; }
     </style>
@@ -36,15 +36,14 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
 const S = {
-    load: (k, d) => { try { const v = localStorage.getItem('v6_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
-    save: (k, v) => localStorage.setItem('v6_'+k, JSON.stringify(v)),
-    remove: (k) => localStorage.removeItem('v6_'+k)
+    load: (k, d) => { try { const v = localStorage.getItem('v62_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
+    save: (k, v) => localStorage.setItem('v62_'+k, JSON.stringify(v)),
+    remove: (k) => localStorage.removeItem('v62_'+k)
 };
 
 const Ico = {
     Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" strokeWidth="2"/></svg>,
-    Lock: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>,
-    Peper: () => <span className="text-xl">🌶️</span>
+    Lock: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
 };
 
 function WeatherBar() {
@@ -69,8 +68,8 @@ function AgendaWidget({ lang }) {
     const icals = S.load('icals', [{name:'Ryan', url:''}, {name:'Yaron', url:''}, {name:'Michael', url:''}]);
 
     useEffect(() => {
-        const fetchEvents = async () => {
-            let all = [];
+        const fetchAll = async () => {
+            let allEvs = [];
             for (let c of icals) {
                 if (!c.url) continue;
                 try {
@@ -84,38 +83,32 @@ function AgendaWidget({ lang }) {
                             const m = l.match(/:(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/);
                             if(m) { cur.d = `${m[1]}-${m[2]}-${m[3]}`; cur.time = m[4] ? `${m[4]}:${m[5]}` : '00:00'; }
                         }
-                        if(l.startsWith('END:VEVENT')) { if(cur.t) all.push({...cur, p: c.name}); cur = {}; }
+                        if(l.startsWith('END:VEVENT')) { if(cur.t) allEvs.push({...cur, p: c.name}); cur = {}; }
                     });
                 } catch(e) {}
             }
-            setEvents(all);
+            setEvents(allEvs);
         };
-        fetchEvents();
-    }, [JSON.stringify(icals)]);
-
-    const schoolTimes = useMemo(() => {
-        const getRange = (name) => {
-            const today = events.filter(e => e.d === date && e.p === name).sort((a,b) => a.time.localeCompare(b.time));
-            return today.length > 0 ? `${today[0].time} - ${today[today.length-1].time}` : "Vrij";
-        };
-        return { ryan: getRange('Ryan'), yaron: getRange('Yaron') };
-    }, [date, events]);
+        fetchAll();
+    }, []);
 
     const weekNum = useMemo(() => {
         const d = new Date(date); d.setHours(0,0,0,0); d.setDate(d.getDate()+4-(d.getDay()||7));
         return Math.ceil((((d-new Date(d.getFullYear(),0,1))/8.64e7)+1)/7);
     }, [date]);
 
+    const getSchoolDay = (name) => {
+        const today = events.filter(e => e.d === date && e.p === name).sort((a,b) => a.time.localeCompare(b.time));
+        return today.length > 0 ? `${today[0].time} - ${today[today.length-1].time}` : "Vrij";
+    };
+
     return (
         <div className="widget p-6 h-[600px]">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Agenda</h3>
                 <div className="flex gap-2">
-                    <button onClick={() => setDate(new Date().toISOString().split('T')[0])} className="px-3 py-1 bg-blue-600 text-white text-[9px] rounded font-black uppercase">Vandaag</button>
-                    <div className="relative">
-                        <input type="date" id="dp" className="absolute opacity-0 w-0 h-0" onChange={e => setDate(e.target.value)} />
-                        <button onClick={() => document.getElementById('dp').showPicker()} className="px-3 py-1 bg-gray-200 text-gray-700 text-[9px] rounded font-black uppercase">Kies Datum</button>
-                    </div>
+                    <button onClick={() => setDate(new Date().toISOString().split('T')[0])} className="px-3 py-1 bg-blue-600 text-white text-[9px] rounded font-black uppercase tracking-tighter">Vandaag</button>
+                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="px-1 py-1 border rounded text-[9px] font-bold outline-none cursor-pointer bg-gray-100" />
                 </div>
             </div>
             <div className="flex-1 scroll-v mb-4">
@@ -123,22 +116,22 @@ function AgendaWidget({ lang }) {
                     {new Date(date).toLocaleDateString('nl-NL', {weekday:'long', day:'numeric', month:'long'})} - Week {weekNum}
                 </p>
                 {events.filter(e => e.d === date).map((e, i) => (
-                    <div key={i} className="p-3 bg-gray-50 rounded-xl border-l-4 border-blue-500 mb-2 flex justify-between">
-                        <span className="text-xs font-bold">{e.t} <span className="text-[9px] text-gray-400 ml-1">({e.p})</span></span>
-                        <span className="text-[10px] font-mono font-bold">{e.time}</span>
+                    <div key={i} className="p-3 bg-gray-50 rounded-xl border-l-4 border-blue-500 mb-2 flex justify-between items-center">
+                        <span className="text-xs font-bold">{e.t} <span className="text-[9px] text-gray-400">({e.p})</span></span>
+                        <span className="text-[10px] font-mono font-bold text-blue-600">{e.time}</span>
                     </div>
                 ))}
             </div>
             <div className="pt-4 border-t space-y-4">
-                <input type="text" placeholder="Zoek event, gebeurtenis of ics..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border rounded-xl text-xs bg-gray-50 outline-none focus:ring-2 ring-blue-50" />
+                <input type="text" placeholder="Zoek event, dag of ics..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border rounded-xl text-xs bg-gray-50 outline-none focus:ring-2 ring-blue-50" />
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                    <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 shadow-sm">
                         <span className="text-[9px] font-black text-blue-400 block uppercase mb-1">Ryan</span>
-                        <span className="text-xs font-bold text-blue-900">{schoolTimes.ryan}</span>
+                        <span className="text-xs font-bold text-blue-900">{getSchoolDay('Ryan')}</span>
                     </div>
-                    <div className="bg-green-50 p-4 rounded-2xl border border-green-100">
+                    <div className="bg-green-50 p-4 rounded-2xl border border-green-100 shadow-sm">
                         <span className="text-[9px] font-black text-green-400 block uppercase mb-1">Yaron</span>
-                        <span className="text-xs font-bold text-green-900">{schoolTimes.yaron}</span>
+                        <span className="text-xs font-bold text-green-900">{getSchoolDay('Yaron')}</span>
                     </div>
                 </div>
             </div>
@@ -149,18 +142,17 @@ function AgendaWidget({ lang }) {
 function CryptoWidget() {
     const coins = [
         {s:'BTC', h:0.8, d:2.5, w:-1.1, m:18.4, y:142.1, a:4500},
-        {s:'ETH', h:-0.2, d:1.4, w:4.2, m:9.1, y:88.4, a:1200},
-        {s:'SOL', h:1.5, d:4.2, w:15.1, m:32.4, y:450.2, a:900}
+        {s:'ETH', h:-0.2, d:1.4, w:4.2, m:9.1, y:88.4, a:1200}
     ];
     const P = ({v}) => <span className={`font-mono font-bold ${v>=0?'text-green-500':'text-red-500'}`}>{v>0?'+':''}{v}%</span>;
     return (
         <div className="widget p-6 h-[400px]">
-            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest">Crypto Market Stats</h3>
+            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest">Crypto Markt (Stats)</h3>
             <div className="scroll-v space-y-4">
                 {coins.map(c => (
                     <div key={c.s} className="p-4 border rounded-2xl bg-gray-50">
                         <span className="font-black text-lg block mb-3 underline decoration-blue-500 underline-offset-4">{c.s}</span>
-                        <div className="grid grid-cols-3 gap-y-3 text-[9px] font-black uppercase">
+                        <div className="grid grid-cols-3 gap-y-3 text-[9px] font-black uppercase tracking-tighter">
                             <div>1U: <P v={c.h}/></div><div>1D: <P v={c.d}/></div><div>1W: <P v={c.w}/></div>
                             <div>1M: <P v={c.m}/></div><div>1J: <P v={c.y}/></div><div>ALL: <P v={c.a}/></div>
                         </div>
@@ -174,13 +166,13 @@ function CryptoWidget() {
 function PepperWidget() {
     return (
         <div className="widget p-6 h-[300px]">
-            <div className="flex items-center gap-2 mb-4"><Ico.Peper/><h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Pepper</h3></div>
+            <div className="flex items-center gap-2 mb-4"><span>🌶️</span><h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Pepper</h3></div>
             <div className="scroll-h">
-                {[ {t:"iPhone 15 Pro", p:"€999", d:"-20%"}, {t:"Sony XM5", p:"€259", d:"-30%"}, {t:"MacBook Air M3", p:"€1099", d:"-15%"}, {t:"Hue Set", p:"€89", d:"-45%"} ].map((d, i) => (
-                    <div key={i} className="min-w-[160px] p-4 bg-gray-50 border rounded-2xl flex flex-col justify-between hover:border-red-400 transition">
-                        <span className="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full w-fit uppercase tracking-tighter">HOT Deal</span>
-                        <h4 className="text-[11px] font-bold mt-2 h-8 overflow-hidden">{d.t}</h4>
-                        <span className="text-blue-600 font-black mt-3">{d.p} <span className="text-red-500 ml-1">({d.d})</span></span>
+                {[ {t:"iPhone 15 Pro", p:"€999", d:"-20%"}, {t:"Sony XM5", p:"€259", d:"-30%"}, {t:"MacBook Air", p:"€899", d:"-25%"}, {t:"Hue Bridge", p:"€45", d:"-55%"} ].map((d, i) => (
+                    <div key={i} className="min-w-[160px] p-4 bg-gray-50 border rounded-2xl flex flex-col justify-between hover:border-red-400 transition cursor-pointer">
+                        <span className="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full w-fit uppercase">HOT</span>
+                        <h4 className="text-[11px] font-bold mt-2 leading-tight h-8 overflow-hidden">{d.t}</h4>
+                        <span className="text-blue-600 font-black mt-3">{d.p} <span className="text-red-500 text-[9px]">({d.d})</span></span>
                     </div>
                 ))}
             </div>
@@ -191,7 +183,7 @@ function PepperWidget() {
 function RecipeWidget() {
     const [ppl, setPpl] = useState(1);
     const recs = [
-        {n: "Pasta Pesto Pro", p: 32, i: ["125g Kip", "80g Pasta", "Pesto"]},
+        {n: "Pasta Pesto Pro", p: 32, i: ["120g Kip", "80g Pasta", "20g Pesto"]},
         {n: "Zalm Teriyaki", p: 42, i: ["200g Zalm", "100g Rijst", "150g Wokmix"]}
     ];
     return (
@@ -207,8 +199,8 @@ function RecipeWidget() {
             </div>
             <div className="scroll-v space-y-4">
                 {recs.map((r, i) => (
-                    <div key={i} className="p-4 border rounded-2xl bg-white">
-                        <div className="flex justify-between mb-2"><h4 className="font-bold text-sm text-slate-800">{r.n}</h4><span className="text-[9px] bg-blue-100 text-blue-700 px-2 rounded-full font-black uppercase tracking-tighter">{r.p * ppl}g Proteïne</span></div>
+                    <div key={i} className="p-4 border rounded-2xl bg-white shadow-sm">
+                        <div className="flex justify-between mb-2"><h4 className="font-bold text-sm text-slate-800">{r.n}</h4><span className="text-[9px] bg-blue-100 text-blue-700 px-2 rounded-full font-black uppercase">{r.p * ppl}g Proteïne</span></div>
                         <ul className="text-[10px] text-gray-500 italic space-y-1">{r.i.map(ing => <li key={ing}>• {ing.replace(/\d+/, m => m * ppl)}</li>)}</ul>
                     </div>
                 ))}
@@ -243,7 +235,7 @@ function SportWidget({ type }) {
                 <button onClick={()=>setTab('last')} className={`tab-btn ${tab==='last'?'active':''}`}>Laatste</button>
                 <button onClick={()=>setTab('std')} className={`tab-btn ${tab==='std'?'active':''}`}>Stand</button>
             </div>
-            <div className="p-6 flex-1 flex items-center justify-center text-xs italic text-gray-400">Data live syncing...</div>
+            <div className="p-6 flex-1 scroll-v flex items-center justify-center text-xs italic text-gray-400">Data live syncing...</div>
         </div>
     );
 }
@@ -280,9 +272,9 @@ function App() {
     if (!isAuth) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#000a14]">
-                <div className="bg-white/5 p-12 rounded-3xl border border-white/10 text-center backdrop-blur-xl">
-                    <Ico.Lock /><h1 className="text-white font-black text-xl uppercase mt-6 mb-8 tracking-widest">Michael Dashboard</h1>
-                    <button onClick={()=>{setIsAuth(true); S.save('auth', true);}} className="bg-white px-10 py-4 rounded-full font-black text-xs uppercase tracking-widest shadow-2xl">Dashboard Ontgrendelen</button>
+                <div className="bg-white/5 p-12 rounded-3xl border border-white/10 text-center backdrop-blur-xl text-white">
+                    <h1 className="text-xl uppercase font-black mb-8 tracking-widest leading-tight">Michael Strategic Dashboard<br/><span className="text-[10px] opacity-40">Beveiligde Toegang</span></h1>
+                    <button onClick={()=>{setIsAuth(true); S.save('auth', true);}} className="bg-white text-black px-10 py-3 rounded-full font-black text-xs uppercase tracking-widest shadow-2xl transition hover:scale-105">Login Michael</button>
                 </div>
             </div>
         );
@@ -292,9 +284,9 @@ function App() {
         <div className="flex flex-col min-h-screen pb-20">
             <WeatherBar />
             <header className="px-10 py-12 max-w-[1600px] mx-auto w-full flex justify-between items-end">
-                <div><h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">{greeting}, Michael</h1><p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.5em] mt-3">Strategic HQ Dashboard v6.0</p></div>
+                <div><h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">{greeting}, Michael</h1><p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.5em] mt-3">Michael Strategic Dashboard v6.2</p></div>
                 <div className="flex gap-4">
-                    <button onClick={() => setLang(lang==='nl'?'en':'nl')} className="p-4 bg-white/10 text-white rounded-2xl font-bold text-[10px] uppercase">{lang}</button>
+                    <button onClick={() => setLang(lang==='nl'?'en':'nl')} className="p-4 bg-white/10 text-white rounded-2xl font-bold text-[10px] uppercase shadow-lg hover:bg-white/20 transition">{lang}</button>
                     <button onClick={()=>setSettOpen(true)} className="p-4 bg-white/10 text-white rounded-2xl hover:bg-white/20 transition shadow-lg"><Ico.Set/></button>
                 </div>
             </header>
@@ -310,9 +302,9 @@ function App() {
                     <div className="widget p-6 h-[400px]">
                         <h3 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest">Investeringen</h3>
                         <div className="scroll-v space-y-3">
-                            {[ {t:"ASML", p:"DEGIRO (NL)"}, {t:"Novo Nordisk", p:"Interactive Brokers"}, {t:"S&P 500 ETF", p:"Trade Republic"} ].map((inv, i) => (
-                                <div key={i} className="flex justify-between items-center p-4 border rounded-2xl bg-gray-50">
-                                    <span className="font-bold text-sm">{inv.t}</span><span className="text-[9px] bg-blue-900 text-white px-3 py-1 rounded-full font-black uppercase tracking-tighter">{inv.p}</span>
+                            {[ {t:"ASML", p:"DEGIRO (NL)"}, {t:"Novo Nordisk", p:"Interactive Brokers"}, {t:"ETF S&P 500", p:"Trade Republic"} ].map((inv, i) => (
+                                <div key={i} className="flex justify-between items-center p-4 border rounded-2xl bg-gray-50 shadow-sm">
+                                    <span className="font-bold text-sm text-slate-800">{inv.t}</span><span className="text-[9px] bg-blue-900 text-white px-3 py-1 rounded-full font-black uppercase tracking-tighter">{inv.p}</span>
                                 </div>
                             ))}
                         </div>
@@ -323,7 +315,7 @@ function App() {
             </main>
 
             <div className={`settings-panel ${settOpen ? 'open' : ''}`}>
-                <div className="flex justify-between items-center mb-10 border-b pb-4"><h2 className="text-2xl font-black uppercase tracking-tighter">Configuratie</h2><button onClick={()=>setSettOpen(false)} className="text-4xl text-gray-300">×</button></div>
+                <div className="flex justify-between items-center mb-10 border-b pb-4"><h2 className="text-2xl font-black uppercase tracking-tighter">Instellingen</h2><button onClick={()=>setSettOpen(false)} className="text-4xl text-gray-300">×</button></div>
                 <div className="space-y-8">
                     <section>
                         <label className="text-[10px] font-black text-blue-600 uppercase block mb-3 tracking-widest">Bitvavo API (NL)</label>
@@ -343,7 +335,7 @@ function App() {
                         <label className="text-[10px] font-black text-blue-600 uppercase block mb-3 tracking-widest">OpenAI / AI Assistent</label>
                         <input type="password" placeholder="sk-..." value={aiKey} onChange={e=>{setAiKey(e.target.value);S.save('aikey',e.target.value)}} className="w-full p-3 border rounded-xl bg-gray-50 text-xs font-mono" />
                     </section>
-                    <button onClick={()=>{S.remove('auth'); window.location.reload();}} className="w-full py-4 bg-red-50 text-red-600 rounded-xl font-black uppercase text-[10px] tracking-widest">Uitloggen</button>
+                    <button onClick={()=>{S.remove('auth'); window.location.reload();}} className="w-full py-4 bg-red-50 text-red-600 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-red-100 transition">Uitloggen uit Dashboard</button>
                 </div>
             </div>
         </div>
