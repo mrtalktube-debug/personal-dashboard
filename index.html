@@ -53,8 +53,8 @@ const emitCmd = (type, payload) => window.dispatchEvent(new CustomEvent('dashCmd
 const fmtDate = (dStr) => { const p = dStr.split('-'); return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : dStr; };
 
 const T = {
-    nl: { port: 'Portfolio', ag: 'Agenda', nws: 'Nieuws & Updates', rad: 'Investeringen', deal: 'Pepper Deals', rec: 'Recepten', lang: 'Talen', day: 'DAG', wk: 'WEEK', src: 'BRON', blk: 'BLOCK', cal: 'Kalender', std: 'Standings', lst: 'Laatste', new: 'Nieuw Spel' },
-    en: { port: 'Portfolio', ag: 'Schedule', nws: 'News & Updates', rad: 'Investments', deal: 'Deals', rec: 'Recipes', lang: 'Languages', day: 'DAY', wk: 'WEEK', src: 'SOURCE', blk: 'BLOCK', cal: 'Calendar', std: 'Standings', lst: 'Latest', new: 'New Game' }
+    nl: { port: 'Portfolio', ag: 'Agenda', nws: 'Nieuws', rad: 'Investeringen', deal: 'Pepper Deals', rec: 'Recepten', lang: 'Talen', day: 'DAG', wk: 'WEEK', src: 'BRON', blk: 'BLOCK', cal: 'Kalender', std: 'Standings', lst: 'Laatste', new: 'Nieuw Spel' },
+    en: { port: 'Portfolio', ag: 'Schedule', nws: 'News', rad: 'Investments', deal: 'Deals', rec: 'Recipes', lang: 'Languages', day: 'DAY', wk: 'WEEK', src: 'SOURCE', blk: 'BLOCK', cal: 'Calendar', std: 'Standings', lst: 'Latest', new: 'New Game' }
 };
 
 const Ico = {
@@ -318,7 +318,10 @@ function NewsWidget({ lang }) {
                             {(newsData[cat] || []).map((item, i) => (
                                 <a href={item.link} target="_blank" key={i} className="block border-b pb-4 hover:bg-gray-50 transition p-1 rounded">
                                     <p className="text-xs font-bold leading-relaxed">{item.title}</p>
-                                    <div className="flex justify-between text-[9px] font-black text-gray-400 mt-2 uppercase"><span>{item.source}</span><span>{item.pubDate.split(' ')[1]}</span></div>
+                                    <div className="flex justify-between text-[9px] font-black mt-2 uppercase">
+                                        <span className="text-blue-900">{item.source}</span>
+                                        <span className="text-gray-400">{item.pubDate.split(' ')[1]}</span>
+                                    </div>
                                 </a>
                             ))}
                             {(!newsData[cat] || newsData[cat].length===0) && <div className="text-xs text-gray-400 text-center mt-10 animate-pulse">Laden...</div>}
