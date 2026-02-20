@@ -5,18 +5,21 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const KV_URL = process.env.KV_REST_API_URL;
-    const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+    // Ondersteunt nu zowel Vercel KV als Upstash Redis integraties
+    const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
     if (!KV_URL || !KV_TOKEN) {
-        return res.status(500).json({ error: 'KV database niet geconfigureerd in Vercel' });
+        return res.status(500).json({ error: 'Geen Database Keys gevonden in Vercel' });
     }
 
-    const key = `settings_${email}`;
+    // Haal de schuine streep weg aan het eind van de URL als die er staat
+    const baseUrl = KV_URL.replace(/\/$/, '');
+    const key = `dash_settings_${email}`;
 
     if (req.method === 'GET') {
         try {
-            const response = await fetch(`${KV_URL}/get/${key}`, {
+            const response = await fetch(`${baseUrl}/get/${key}`, {
                 headers: { Authorization: `Bearer ${KV_TOKEN}` }
             });
             const data = await response.json();
@@ -29,7 +32,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
         try {
             const settings = req.body.settings;
-            await fetch(`${KV_URL}/set/${key}`, {
+            await fetch(`${baseUrl}/set/${key}`, {
                 method: 'POST',
                 headers: { 
                     Authorization: `Bearer ${KV_TOKEN}`,
