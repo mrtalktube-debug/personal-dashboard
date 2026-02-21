@@ -801,7 +801,7 @@ function NewsWidget({ lang }) {
 }
 
 function RadarWidget({ lang }) {
-    const [assets, setAssets] = useState(S.load('inv_assets', ['ASML', 'Novo Nordisk', 'VUSA (S&P 500)']));
+    const [assets, setAssets] = useState(S.load('inv_assets', ['ASML', 'VUSA.AS', 'NOVOB.CO']));
     const [manage, setManage] = useState(false);
     const [newAsset, setNewAsset] = useState('');
     const [liveData, setLiveData] = useState({});
@@ -809,7 +809,6 @@ function RadarWidget({ lang }) {
 
     useEffect(() => {
         const fetchStockData = async () => {
-            setLoading(true);
             try {
                 const res = await fetch('/api/stocks', {
                     method: 'POST',
@@ -817,18 +816,26 @@ function RadarWidget({ lang }) {
                     body: JSON.stringify({ symbols: assets })
                 });
                 const data = await res.json();
-                const dataMap = {};
-                data.forEach(item => { if(!item.error) dataMap[item.name] = item; });
-                setLiveData(dataMap);
-            } catch (e) { console.error("Beursfout:", e); }
-            setLoading(false);
+                
+                if (Array.isArray(data)) {
+                    const dataMap = {};
+                    data.forEach(item => {
+                        if (item && item.name) dataMap[item.name] = item;
+                    });
+                    setLiveData(dataMap);
+                }
+            } catch (e) { 
+                console.error("Beursfout:", e); 
+            } finally {
+                setLoading(false);
+            }
         };
         fetchStockData();
-        const interval = setInterval(fetchStockData, 300000); // Elke 5 min verversen
+        const interval = setInterval(fetchStockData, 300000);
         return () => clearInterval(interval);
     }, [assets]);
 
-    const addAsset = () => { if(newAsset && !assets.includes(newAsset)) { const n = [...assets, newAsset]; setAssets(n); S.save('inv_assets', n); setNewAsset(''); } };
+    const addAsset = () => { if(newAsset && !assets.includes(newAsset)) { const n = [...assets, newAsset.toUpperCase().trim()]; setAssets(n); S.save('inv_assets', n); setNewAsset(''); } };
     const removeAsset = (a) => { const n = assets.filter(x => x !== a); setAssets(n); S.save('inv_assets', n); };
 
     return (
@@ -839,7 +846,7 @@ function RadarWidget({ lang }) {
             </div>
             {manage && (
                 <div className="p-3 bg-gray-100 border-b flex gap-2 shrink-0">
-                    <input value={newAsset} onChange={e=>setNewAsset(e.target.value)} className="flex-1 p-1.5 border rounded text-[10px]" placeholder="Bijv. TSLA of Shell" />
+                    <input value={newAsset} onChange={e=>setNewAsset(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addAsset()} className="flex-1 p-1.5 border rounded text-[10px]" placeholder="Ticker (bijv. TSLA)" />
                     <button onClick={addAsset} className="bg-blue-600 text-white px-3 rounded font-bold">+</button>
                 </div>
             )}
@@ -856,7 +863,7 @@ function RadarWidget({ lang }) {
                         <div key={a} className={`p-3 border rounded-lg shadow-sm transition ${isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                             <div className="flex justify-between items-start mb-1">
                                 <span className="font-black text-sm text-gray-900">{a}</span>
-                                {manage ? <button onClick={()=>removeAsset(a)} className="text-red-500 font-bold">&times;</button> : 
+                                {manage ? <button onClick={()=>removeAsset(a)} className="text-red-500 font-bold text-lg">&times;</button> : 
                                 <span className="text-[10px] font-mono font-bold">{data.currency} {data.price.toFixed(2)}</span>}
                             </div>
                             <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-tighter mt-2 border-t border-black/5 pt-2">
@@ -868,6 +875,9 @@ function RadarWidget({ lang }) {
                         </div>
                     );
                 })}
+                {!loading && assets.length > 0 && Object.keys(liveData).length === 0 && (
+                    <div className="text-center text-[10px] text-gray-400 mt-10">Geen data gevonden. Check tickers in Beheer.</div>
+                )}
             </div>
         </div>
     );
@@ -1332,6 +1342,7 @@ ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
+
 
 
 
