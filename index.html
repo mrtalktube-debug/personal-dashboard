@@ -228,6 +228,7 @@ function CryptoWidget({ lang }) {
                 setLoading(false); return;
             }
             try {
+                // 1. Basis saldi ophalen
                 const res = await fetch('/api/bitvavo', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ key: bvKeys.pub, secret: bvKeys.sec })
@@ -236,7 +237,7 @@ function CryptoWidget({ lang }) {
                 if(data.error) throw new Error(data.error);
 
                 let calcTotal = 0;
-                const combined = data.balances.map(b => {
+                let combined = data.balances.map(b => {
                     const amount = parseFloat(b.available) + parseFloat(b.inOrder);
                     if(b.symbol === 'EUR') { 
                         calcTotal += amount; 
@@ -246,11 +247,55 @@ function CryptoWidget({ lang }) {
                     const price = priceObj ? parseFloat(priceObj.price) : 0;
                     const val = amount * price;
                     calcTotal += val;
-                    const tr = data.trends && data.trends[b.symbol] ? data.trends[b.symbol] : {d: 0, w: 0, m: 0, y: 0};
-                    return { sym: b.symbol, amount, price, val, tr };
-                }).sort((a,b) => b.val - a.val);
+                    return { sym: b.symbol, amount, price, val, tr: {d: 0, w: 0, m: 0, y: 0} };
+                }).filter(b => b.val > 0).sort((a,b) => b.val - a.val);
 
-                setPortfolio(combined); setTotalEur(calcTotal); setErr('');
+                setPortfolio(combined); 
+                setTotalEur(calcTotal); 
+                setErr('');
+
+                // 2. Live 24H data ophalen (voor de 1D trend)
+                try {
+                    const t24Res = await fetch('https://api.bitvavo.com/v2/ticker/24h');
+                    const t24Data = await t24Res.json();
+                    
+                    combined = combined.map(coin => {
+                        if(coin.sym === 'EUR') return coin;
+                        const t = t24Data.find(x => x.market === `${coin.sym}-EUR`);
+                        if(t && parseFloat(t.open) > 0) {
+                            coin.tr.d = ((parseFloat(t.last) - parseFloat(t.open)) / parseFloat(t.open)) * 100;
+                        }
+                        return coin;
+                    });
+                    setPortfolio([...combined]);
+
+                    // 3. Historische kaarsen ophalen (voor de 1W, 1M, 1J trends)
+                    combined.forEach(async (coin) => {
+                        if(coin.sym === 'EUR') return;
+                        try {
+                            const cRes = await fetch(`https://api.bitvavo.com/v2/${coin.sym}-EUR/candles?interval=1d&limit=366`);
+                            const candles = await cRes.json();
+                            if(Array.isArray(candles) && candles.length > 0) {
+                                const curPrice = parseFloat(candles[0][4]);
+                                const getTr = (d) => candles.length > d ? ((curPrice - parseFloat(candles[d][4])) / parseFloat(candles[d][4])) * 100 : 0;
+                                
+                                setPortfolio(prev => {
+                                    const nw = [...prev];
+                                    const matchIdx = nw.findIndex(x => x.sym === coin.sym);
+                                    if(matchIdx > -1) {
+                                        nw[matchIdx].tr.w = getTr(7);
+                                        nw[matchIdx].tr.m = getTr(30);
+                                        nw[matchIdx].tr.y = getTr(365);
+                                    }
+                                    return nw;
+                                });
+                            }
+                        } catch(e) {}
+                    });
+                } catch (e) {
+                    console.error("Trends ophalen mislukt:", e);
+                }
+
             } catch (error) { setErr(error.message); }
             setLoading(false);
         };
@@ -331,8 +376,8 @@ function CryptoWidget({ lang }) {
         </div>
     );
 }
-
-function AgendaWidget({ lang }) {
+   
+    function AgendaWidget({ lang }) {
     const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
     const cals = rawCals.map(c=>c.name).filter(Boolean);
     const [view, setView] = useState('week'); 
@@ -341,6 +386,9 @@ function AgendaWidget({ lang }) {
     const [items, setItems] = useState([]);
     
     useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => c.toLowerCase().includes(e.detail.payload?.toLowerCase() || '')); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
+
+    // FIX 1: Zorg dat de vinkjes altijd aanstaan zodra data uit de cloud is ingeladen
+    useEffect(() => { setF(cals); }, [JSON.stringify(cals)]);
 
     useEffect(() => {
         const fetchCals = async () => {
@@ -356,7 +404,7 @@ function AgendaWidget({ lang }) {
                     for(let k = 0; k < lines.length; k++) {
                         let l = lines[k];
                         
-                        // FIX: iCal Line Folding (Plakt zinnen die op een nieuwe regel doorgaan weer aan elkaar)
+                        // FIX: iCal Line Folding (Magister breekt zinnen soms in tweeën)
                         while (k + 1 < lines.length && (lines[k+1].startsWith(' ') || lines[k+1].startsWith('\t'))) {
                             k++; 
                             l += lines[k].substring(1);
@@ -372,12 +420,26 @@ function AgendaWidget({ lang }) {
                             }
                         }
                         else if(l.startsWith('DTSTART')) { 
-                            // FIX: Negeer TZID en vind direct het 2026xxxxTxxxxxx format
-                            const m = l.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?/); 
-                            if(m) { 
-                                cur.date = `${m[1]}-${m[2]}-${m[3]}`; 
-                                cur.time = m[4] ? `${m[4]}:${m[5]}` : 'Hele dag'; 
-                            } 
+                            // FIX 2: Tijdzones en UTC (Z) correct omrekenen naar jouw lokale tijd
+                            const parts = l.split(':');
+                            if(parts.length > 1) {
+                                const val = parts[parts.length - 1].trim(); 
+                                const isUTC = val.endsWith('Z');
+                                const m = val.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?/); 
+                                if(m) { 
+                                    if (m[4] && isUTC) {
+                                        const utcDate = new Date(Date.UTC(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]), parseInt(m[4]), parseInt(m[5])));
+                                        const y = utcDate.getFullYear();
+                                        const mo = String(utcDate.getMonth() + 1).padStart(2, '0');
+                                        const da = String(utcDate.getDate()).padStart(2, '0');
+                                        cur.date = `${y}-${mo}-${da}`;
+                                        cur.time = utcDate.toLocaleTimeString('nl-NL', {hour: '2-digit', minute:'2-digit'});
+                                    } else {
+                                        cur.date = `${m[1]}-${m[2]}-${m[3]}`; 
+                                        cur.time = m[4] ? `${m[4]}:${m[5]}` : 'Hele dag'; 
+                                    }
+                                } 
+                            }
                         }
                         else if(l.startsWith('END:VEVENT') && cur.t && cur.date) {
                             allEvs.push({...cur, p: c.name});
@@ -400,7 +462,7 @@ function AgendaWidget({ lang }) {
     tEnd.setDate(tEnd.getDate() + 7); 
     const dEnd = tEnd.toISOString().split('T')[0];
     
-    // FIX: Sorteer éérst op datum, en daarna pas op tijd (waarbij Hele dag bovenaan de dag komt)
+    // FIX 3: Sorteer éérst op datum, en daarna pas op tijd
     const filteredItems = items
         .filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd)))
         .sort((a,b) => {
@@ -1144,3 +1206,4 @@ ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
+
