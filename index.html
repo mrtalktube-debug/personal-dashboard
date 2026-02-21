@@ -228,7 +228,6 @@ function CryptoWidget({ lang }) {
                 setLoading(false); return;
             }
             try {
-                // 1. Basis saldi ophalen
                 const res = await fetch('/api/bitvavo', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ key: bvKeys.pub, secret: bvKeys.sec })
@@ -241,20 +240,19 @@ function CryptoWidget({ lang }) {
                     const amount = parseFloat(b.available) + parseFloat(b.inOrder);
                     if(b.symbol === 'EUR') { 
                         calcTotal += amount; 
-                        return { sym: 'EUR', amount, price: 1, val: amount, tr: {d: 0, w: 0, m: 0, y: 0} }; 
+                        return { sym: 'EUR', amount, price: 1, val: amount, tr: {d: 0, w: 0, m: 0, y: 0, sparkline: ''} }; 
                     }
                     const priceObj = data.prices.find(p => p.market === `${b.symbol}-EUR`);
                     const price = priceObj ? parseFloat(priceObj.price) : 0;
                     const val = amount * price;
                     calcTotal += val;
-                    return { sym: b.symbol, amount, price, val, tr: {d: 0, w: 0, m: 0, y: 0} };
+                    return { sym: b.symbol, amount, price, val, tr: {d: 0, w: 0, m: 0, y: 0, sparkline: ''} };
                 }).filter(b => b.val > 0).sort((a,b) => b.val - a.val);
 
                 setPortfolio(combined); 
                 setTotalEur(calcTotal); 
                 setErr('');
 
-                // 2. Live 24H data ophalen (voor de 1D trend)
                 try {
                     const t24Res = await fetch('https://api.bitvavo.com/v2/ticker/24h');
                     const t24Data = await t24Res.json();
@@ -269,32 +267,44 @@ function CryptoWidget({ lang }) {
                     });
                     setPortfolio([...combined]);
 
-                    // 3. Historische kaarsen ophalen (voor de 1W, 1M, 1J trends)
                     combined.forEach(async (coin) => {
                         if(coin.sym === 'EUR') return;
                         try {
                             const cRes = await fetch(`https://api.bitvavo.com/v2/${coin.sym}-EUR/candles?interval=1d&limit=366`);
                             const candles = await cRes.json();
-                            if(Array.isArray(candles) && candles.length > 0) {
-                                const curPrice = parseFloat(candles[0][4]);
-                                const getTr = (d) => candles.length > d ? ((curPrice - parseFloat(candles[d][4])) / parseFloat(candles[d][4])) * 100 : 0;
-                                
-                                setPortfolio(prev => {
-                                    const nw = [...prev];
-                                    const matchIdx = nw.findIndex(x => x.sym === coin.sym);
-                                    if(matchIdx > -1) {
+                            
+                            // Haal 24 uurs-kaarsen op voor de echte grafieklijn
+                            const hRes = await fetch(`https://api.bitvavo.com/v2/${coin.sym}-EUR/candles?interval=1h&limit=24`);
+                            const hCandles = await hRes.json();
+
+                            setPortfolio(prev => {
+                                const nw = [...prev];
+                                const matchIdx = nw.findIndex(x => x.sym === coin.sym);
+                                if(matchIdx > -1) {
+                                    if(Array.isArray(candles) && candles.length > 0) {
+                                        const curPrice = parseFloat(candles[0][4]);
+                                        const getTr = (d) => candles.length > d ? ((curPrice - parseFloat(candles[d][4])) / parseFloat(candles[d][4])) * 100 : 0;
                                         nw[matchIdx].tr.w = getTr(7);
                                         nw[matchIdx].tr.m = getTr(30);
                                         nw[matchIdx].tr.y = getTr(365);
                                     }
-                                    return nw;
-                                });
-                            }
+                                    if(Array.isArray(hCandles) && hCandles.length > 0) {
+                                        const closes = hCandles.map(c => parseFloat(c[4])).reverse();
+                                        const min = Math.min(...closes);
+                                        const max = Math.max(...closes);
+                                        const range = max - min || 1;
+                                        nw[matchIdx].tr.sparkline = closes.map((v, idx) => {
+                                            const x = (idx / (closes.length - 1)) * 40;
+                                            const y = 20 - (((v - min) / range) * 20);
+                                            return `${x},${y}`;
+                                        }).join(' ');
+                                    }
+                                }
+                                return nw;
+                            });
                         } catch(e) {}
                     });
-                } catch (e) {
-                    console.error("Trends ophalen mislukt:", e);
-                }
+                } catch (e) { console.error("Trends ophalen mislukt:", e); }
 
             } catch (error) { setErr(error.message); }
             setLoading(false);
@@ -304,7 +314,6 @@ function CryptoWidget({ lang }) {
     
     const sym = valuta === 'EUR' ? '€' : '$';
     const displayTotal = totalEur * exRate;
-    
     const totalTrend = portfolio.reduce((acc, c) => acc + (c.tr.d * (c.val / (totalEur || 1))), 0);
     const totalColor = totalTrend >= 0 ? 'text-green-600' : 'text-red-600';
 
@@ -341,7 +350,7 @@ function CryptoWidget({ lang }) {
                             const displayPrice = c.price * exRate;
                             const displayUnits = c.amount > 100 ? c.amount.toLocaleString('nl-NL', {maximumFractionDigits: 2}) : c.amount.toLocaleString('nl-NL', {maximumFractionDigits: 6});
                             
-                            const sparklinePts = isPos ? "0,20 8,10 16,15 24,5 32,8 40,0" : "0,0 8,10 16,5 24,15 32,12 40,20";
+                            const defaultSpark = isPos ? "0,20 8,10 16,15 24,5 32,8 40,0" : "0,0 8,10 16,5 24,15 32,12 40,20";
 
                             return (
                                 <div key={i} className={`relative p-3 border rounded-lg flex flex-col shadow-sm transition overflow-hidden ${bgClass}`}>
@@ -352,7 +361,7 @@ function CryptoWidget({ lang }) {
                                         </div>
                                         <div className="w-1/3 flex flex-col items-center justify-center gap-1">
                                             <svg viewBox="0 0 40 20" className="w-10 h-4 overflow-visible">
-                                                <polyline points={sparklinePts} fill="none" stroke={isPos ? '#16a34a' : '#dc2626'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                <polyline points={c.tr.sparkline || defaultSpark} fill="none" stroke={isPos ? '#16a34a' : '#dc2626'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                                             </svg>
                                             <span className={`text-xs font-black ${isPos ? 'text-green-600' : 'text-red-600'}`}>{isPos?'+':''}{(c.tr.d || 0).toFixed(2)}%</span>
                                         </div>
@@ -362,7 +371,6 @@ function CryptoWidget({ lang }) {
                                         </div>
                                     </div>
                                     <div className="flex justify-between items-center pt-2 mt-1 border-t border-black/10 text-[9px] font-black uppercase tracking-tighter">
-                                        <div>1D: <P v={c.tr.d}/></div>
                                         <div>1W: <P v={c.tr.w}/></div>
                                         <div>1M: <P v={c.tr.m}/></div>
                                         <div>1J: <P v={c.tr.y}/></div>
@@ -387,7 +395,6 @@ function CryptoWidget({ lang }) {
     
     useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => c.toLowerCase().includes(e.detail.payload?.toLowerCase() || '')); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
 
-    // FIX 1: Zorg dat de vinkjes altijd aanstaan zodra data uit de cloud is ingeladen
     useEffect(() => { setF(cals); }, [JSON.stringify(cals)]);
 
     useEffect(() => {
@@ -396,43 +403,38 @@ function CryptoWidget({ lang }) {
             for(let c of rawCals) {
                 if(!c.val) continue;
                 try {
-                    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(c.val)}`);
+                    // Robuuste aanroep met cachebuster om lege schermen te voorkomen
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(c.val)}&nocache=${Date.now()}`;
+                    const res = await fetch(proxyUrl);
+                    if(!res.ok) throw new Error("Netwerk fout");
+                    
                     const txt = await res.text();
                     let cur = {}; 
                     const lines = txt.split(/\r?\n/);
                     
                     for(let k = 0; k < lines.length; k++) {
-                        let l = lines[k];
+                        let l = lines[k].replace(/\r$/, '');
                         
-                        // FIX: iCal Line Folding (Magister breekt zinnen soms in tweeën)
                         while (k + 1 < lines.length && (lines[k+1].startsWith(' ') || lines[k+1].startsWith('\t'))) {
                             k++; 
-                            l += lines[k].substring(1);
+                            l += lines[k].substring(1).replace(/\r$/, '');
                         }
                         
-                        if(l.startsWith('BEGIN:VEVENT')) {
-                            cur = {};
-                        }
+                        if(l.startsWith('BEGIN:VEVENT')) { cur = {}; }
                         else if(l.startsWith('SUMMARY')) { 
                             const idx = l.indexOf(':'); 
-                            if(idx !== -1) {
-                                cur.t = l.substring(idx + 1).replace(/\\,/g, ',').replace(/\\;/g, ';'); 
-                            }
+                            if(idx !== -1) cur.t = l.substring(idx + 1).replace(/\\,/g, ',').replace(/\\;/g, ';'); 
                         }
                         else if(l.startsWith('DTSTART')) { 
-                            // FIX 2: Tijdzones en UTC (Z) correct omrekenen naar jouw lokale tijd
                             const parts = l.split(':');
                             if(parts.length > 1) {
                                 const val = parts[parts.length - 1].trim(); 
                                 const isUTC = val.endsWith('Z');
-                                const m = val.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?/); 
+                                const m = val.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/); 
                                 if(m) { 
-                                    if (m[4] && isUTC) {
+                                    if (isUTC && m[4]) {
                                         const utcDate = new Date(Date.UTC(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]), parseInt(m[4]), parseInt(m[5])));
-                                        const y = utcDate.getFullYear();
-                                        const mo = String(utcDate.getMonth() + 1).padStart(2, '0');
-                                        const da = String(utcDate.getDate()).padStart(2, '0');
-                                        cur.date = `${y}-${mo}-${da}`;
+                                        cur.date = `${utcDate.getFullYear()}-${String(utcDate.getMonth()+1).padStart(2,'0')}-${String(utcDate.getDate()).padStart(2,'0')}`;
                                         cur.time = utcDate.toLocaleTimeString('nl-NL', {hour: '2-digit', minute:'2-digit'});
                                     } else {
                                         cur.date = `${m[1]}-${m[2]}-${m[3]}`; 
@@ -445,10 +447,10 @@ function CryptoWidget({ lang }) {
                             allEvs.push({...cur, p: c.name});
                         }
                     }
-                } catch(e) { console.error("iCal error", e); }
+                } catch(e) { console.error("iCal error voor: " + c.name, e); }
             }
             if(allEvs.length === 0) {
-                allEvs = [{ t: 'Geen afspraken of vul iCal link in bij instellingen.', p: cals[0] || 'Systeem', date: new Date().toISOString().split('T')[0], time: '00:00' }];
+                allEvs = [{ t: 'Geen afspraken of laden mislukt (Check links in settings).', p: cals[0] || 'Systeem', date: d, time: '00:00' }];
             }
             setItems(allEvs);
         };
@@ -462,13 +464,12 @@ function CryptoWidget({ lang }) {
     tEnd.setDate(tEnd.getDate() + 7); 
     const dEnd = tEnd.toISOString().split('T')[0];
     
-    // FIX 3: Sorteer éérst op datum, en daarna pas op tijd
     const filteredItems = items
         .filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd)))
         .sort((a,b) => {
-            if(a.date !== b.date) return a.date.localeCompare(b.date);
-            const tA = a.time === 'Hele dag' ? '00:00' : a.time;
-            const tB = b.time === 'Hele dag' ? '00:00' : b.time;
+            if(a.date !== b.date) return String(a.date).localeCompare(String(b.date));
+            const tA = (a.time === 'Hele dag' || !a.time) ? '00:00' : String(a.time);
+            const tB = (b.time === 'Hele dag' || !b.time) ? '00:00' : String(b.time);
             return tA.localeCompare(tB);
         });
 
@@ -493,7 +494,7 @@ function CryptoWidget({ lang }) {
         </div>
     );
 }
-
+    
 function NewsWidget({ lang }) {
     const [cols, setCols] = useState(S.load('newscats', ['Nieuws', 'Tech', 'Beurs'])); 
     const [manage, setManage] = useState(false);
@@ -1206,4 +1207,5 @@ ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
+
 
