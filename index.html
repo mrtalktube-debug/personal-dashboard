@@ -158,12 +158,10 @@ function DailyBriefing({ lang }) {
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
     
-    // Default text aangepast naar OpenRouter referentie
     const defaultHist = [{r: 'ai', t: lang==='nl'?'Hallo! Ik ben verbonden via OpenRouter. Kies een model en stel je vraag.':'Hello! I am connected via OpenRouter. Choose a model and ask a question.'}];
     const [hist, setHist] = useState(() => {
         try {
             const saved = S.load('ai_hist', null);
-            // Reset als er nog een oude 'Gemini' of 'ChatGPT' welkomsttekst instaat
             if (saved && Array.isArray(saved) && saved.length > 0 && saved[0] && typeof saved[0].t === 'string' && (saved[0].t.includes('Gemini') || saved[0].t.includes('Welkom'))) {
                 return defaultHist; 
             }
@@ -176,8 +174,12 @@ function AIWidget({ lang }) {
     const [showHist, setShowHist] = useState(false);
     const [exp, setExp] = useState(false);
     
-    // Model state, opgeslagen in S.load. Default is Llama 3.3 via OpenRouter
-    const [model, setModel] = useState(S.load('ai_model', 'meta-llama/llama-3.3-70b-instruct:free'));
+    // FIX: Als het kapotte Gemini model in het geheugen staat, forceer een reset naar Llama 3.3
+    const [model, setModel] = useState(() => {
+        const savedModel = S.load('ai_model', 'meta-llama/llama-3.3-70b-instruct:free');
+        if (savedModel.includes('gemini-2.0-pro-exp')) return 'meta-llama/llama-3.3-70b-instruct:free';
+        return savedModel;
+    });
     
     const speak = (txt) => { const u = new SpeechSynthesisUtterance(txt); u.lang = lang==='nl'?'nl-NL':'en-US'; window.speechSynthesis.speak(u); };
     
@@ -190,13 +192,11 @@ function AIWidget({ lang }) {
         if(input.includes('weer') || input.includes('weather')) { const city = input.split('naar')[1]?.trim() || input.split('to')[1]?.trim() || 'Amsterdam'; emitCmd('SET_CITY', city); setTimeout(() => { const r = [...n, {r: 'ai', t: lang==='nl'?`Weer aangepast naar ${city}.`:`Weather changed to ${city}.`}]; setHist(r); S.save('ai_hist', r); }, 500); return; }
         if(input.includes('agenda') || input.includes('schedule')) { emitCmd('SET_AGENDA', input.split('agenda')[1]?.trim() || input.split('schedule')[1]?.trim()); setTimeout(() => { const r = [...n, {r: 'ai', t: lang==='nl'?`Agenda gefilterd.`:`Schedule filtered.`}]; setHist(r); S.save('ai_hist', r); }, 500); return; }
         
-        // Zoek naar OpenRouter in de API keys
         const apiKeyObj = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('openrouter'));
         const openRouterKey = apiKeyObj ? apiKeyObj.val : '';
         
         if (openRouterKey) {
             try {
-                // Converteer historie naar OpenAI / OpenRouter format
                 const messages = [...hist.slice(-5), {r: 'usr', t: msg}].map(m => ({
                     role: m.r === 'usr' ? 'user' : 'assistant',
                     content: m.t
@@ -247,9 +247,9 @@ function AIWidget({ lang }) {
                 {exp ? (
                     <div className="flex gap-2 items-center">
                         <select value={model} onChange={e=>{setModel(e.target.value);S.save('ai_model',e.target.value)}} className="bg-blue-50 border border-blue-200 rounded px-2 py-1 text-[9px] font-bold text-blue-700 outline-none shadow-sm cursor-pointer max-w-[140px] truncate">
-                            <option value="deepseek/deepseek-r1:free">DeepSeek R1 (Free)</option>
                             <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 (Free)</option>
-                            <option value="google/gemini-2.0-pro-exp-02-05:free">Gemini Pro (Free)</option>
+                            <option value="deepseek/deepseek-r1:free">DeepSeek R1 (Free)</option>
+                            <option value="google/gemini-2.0-flash-lite-preview-02-05:free">Gemini Flash (Free)</option>
                         </select>
                         <button onClick={(e)=>{e.stopPropagation();setShowHist(!showHist)}} className="px-2 py-1 bg-gray-200 hover:bg-gray-300 transition rounded text-[9px] font-bold">Historie</button>
                         <button onClick={(e)=>{e.stopPropagation();setExp(false)}} className="text-gray-400 hover:text-red-500 transition font-bold ml-2 text-lg">&times;</button>
@@ -1527,3 +1527,4 @@ ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
+
