@@ -14,21 +14,34 @@ export default async function handler(req, res) {
     try {
         const results = await Promise.all(symbols.map(async (symbol) => {
             try {
-                let ticker = symbol.toUpperCase().trim();
-                // Slimme mapping
-                if (ticker === 'ASML') ticker = 'ASML'; 
-                if (ticker.includes('VUSA') || ticker.includes('S&P 500')) ticker = 'VUSA.AS';
-                if (ticker.includes('NOVO')) ticker = 'NOVOB.CO';
+                let name = symbol.toUpperCase().trim();
+                let tickersToTry = [name];
 
-                const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${apiKey}`);
-                const data = await response.json();
+                // Slimme mapping: voeg variaties toe voor populaire assets
+                if (name.includes('ASML')) tickersToTry = ['ASML', 'ASML.AS'];
+                if (name.includes('NOVO')) tickersToTry = ['NVO', 'NOVOB.CO'];
+                if (name.includes('VUSA') || name.includes('S&P')) tickersToTry = ['VUSA.AS', 'VUSA.L'];
+                if (name.includes('SHELL')) tickersToTry = ['SHELL.AS', 'SHEL'];
 
-                if (data && data.c && data.c !== 0) {
+                let data = null;
+                let foundTicker = '';
+
+                // Probeer de tickers één voor één tot we beet hebben
+                for (let t of tickersToTry) {
+                    const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${t}&token=${apiKey}`);
+                    const json = await response.json();
+                    if (json && json.c && json.c !== 0) {
+                        data = json;
+                        foundTicker = t;
+                        break;
+                    }
+                }
+
+                if (data) {
                     return {
-                        name: symbol,
-                        ticker: ticker,
+                        name: symbol, // Behoud de naam zoals de gebruiker hem invoerde
                         price: data.c,
-                        currency: ticker.includes('.AS') ? 'EUR' : ticker.includes('.CO') ? 'DKK' : 'USD',
+                        currency: foundTicker.includes('.AS') ? 'EUR' : foundTicker.includes('.CO') ? 'DKK' : 'USD',
                         tr: {
                             d: data.dp || 0,
                             w: (data.dp || 0) * 1.05, 
