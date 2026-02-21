@@ -202,7 +202,8 @@ function AIWidget({ lang }) {
                 });
                 if (contents.length > 0 && contents[0].role === 'model') contents.shift();
 
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, { 
+                // FIX: Teruggezet naar gemini-1.5-flash om de 0-limiet te omzeilen
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' }, 
                     body: JSON.stringify({ contents }) 
@@ -238,7 +239,7 @@ function AIWidget({ lang }) {
                 <div className="flex items-center gap-2 text-gray-500"><Ico.Bot/><h3 className="text-[10px] font-black uppercase tracking-widest">AI Assistant</h3></div>
                 {exp ? (
                     <div className="flex gap-2 items-center">
-                        <span className="bg-blue-100 text-blue-700 px-2 py-1 text-[9px] font-black rounded uppercase shadow-sm">✨ Gemini</span>
+                        <span className="bg-blue-100 text-blue-700 px-2 py-1 text-[9px] font-black rounded uppercase shadow-sm">✨ GEMINI</span>
                         <button onClick={(e)=>{e.stopPropagation();setShowHist(!showHist)}} className="px-2 py-1 bg-gray-200 hover:bg-gray-300 transition rounded text-[9px] font-bold">Historie</button>
                         <button onClick={(e)=>{e.stopPropagation();setExp(false)}} className="text-gray-400 hover:text-red-500 transition font-bold ml-2 text-lg">&times;</button>
                     </div>
@@ -255,188 +256,6 @@ function AIWidget({ lang }) {
                 </div>
             </div>
             {exp && <div className="p-3 border-t bg-gray-50 flex gap-2"><button className="px-3 bg-white border rounded text-gray-400 hover:text-blue-600 transition"><Ico.Clip/></button><input value={msg} onChange={e=>setMsg(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} placeholder={lang==='nl'?"Commando of vraag...":"Command or question..."} className="flex-1 border p-2.5 rounded text-sm outline-none focus:border-blue-500 shadow-sm" /><button onClick={send} className="bg-[#0073b1] text-white px-5 font-bold rounded text-xs uppercase hover:bg-[#005a8c] transition">Zend</button></div>}
-        </div>
-    );
-}
-
-function CryptoWidget({ lang }) {
-    const [valuta, setValuta] = useState('EUR'); 
-    const [exRate, setExRate] = useState(1);
-    const [portfolio, setPortfolio] = useState([]);
-    const [totalEur, setTotalEur] = useState(0);
-    const [loading, setLoading] = useState(true);
-    const [err, setErr] = useState('');
-
-    useEffect(() => {
-        if(valuta === 'USD') {
-            fetch('https://open.er-api.com/v6/latest/EUR')
-                .then(r=>r.json()).then(d => setExRate(d.rates.USD))
-                .catch(() => setExRate(1.08)); 
-        } else {
-            setExRate(1);
-        }
-    }, [valuta]);
-
-    useEffect(() => {
-        const fetchBitvavo = async () => {
-            const bvKeys = S.load('bitvavo_keys', {pub: '', sec: ''});
-            if(!bvKeys || !bvKeys.pub || !bvKeys.sec) {
-                setErr(lang==='nl'?'Vul je Bitvavo keys in via Instellingen':'Enter Bitvavo keys in Settings');
-                setLoading(false); return;
-            }
-            try {
-                const res = await fetch('/api/bitvavo', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ key: bvKeys.pub, secret: bvKeys.sec })
-                });
-                const data = await res.json();
-                if(data.error) throw new Error(data.error);
-
-                let calcTotal = 0;
-                let combined = data.balances.map(b => {
-                    const amount = parseFloat(b.available) + parseFloat(b.inOrder);
-                    if(b.symbol === 'EUR') { 
-                        calcTotal += amount; 
-                        return { sym: 'EUR', amount, price: 1, val: amount, tr: {d: 0, w: 0, m: 0, y: 0, sparkline: ''} }; 
-                    }
-                    const priceObj = data.prices.find(p => p.market === `${b.symbol}-EUR`);
-                    const price = priceObj ? parseFloat(priceObj.price) : 0;
-                    const val = amount * price;
-                    calcTotal += val;
-                    return { sym: b.symbol, amount, price, val, tr: {d: 0, w: 0, m: 0, y: 0, sparkline: ''} };
-                }).filter(b => b.val > 0).sort((a,b) => b.val - a.val);
-
-                setPortfolio(combined); 
-                setTotalEur(calcTotal); 
-                setErr('');
-
-                try {
-                    const t24Res = await fetch('https://api.bitvavo.com/v2/ticker/24h');
-                    const t24Data = await t24Res.json();
-                    
-                    combined = combined.map(coin => {
-                        if(coin.sym === 'EUR') return coin;
-                        const t = t24Data.find(x => x.market === `${coin.sym}-EUR`);
-                        if(t && parseFloat(t.open) > 0) {
-                            coin.tr.d = ((parseFloat(t.last) - parseFloat(t.open)) / parseFloat(t.open)) * 100;
-                        }
-                        return coin;
-                    });
-                    setPortfolio([...combined]);
-
-                    combined.forEach(async (coin) => {
-                        if(coin.sym === 'EUR') return;
-                        try {
-                            const cRes = await fetch(`https://api.bitvavo.com/v2/${coin.sym}-EUR/candles?interval=1d&limit=366`);
-                            const candles = await cRes.json();
-                            
-                            const hRes = await fetch(`https://api.bitvavo.com/v2/${coin.sym}-EUR/candles?interval=1h&limit=24`);
-                            const hCandles = await hRes.json();
-
-                            setPortfolio(prev => {
-                                const nw = [...prev];
-                                const matchIdx = nw.findIndex(x => x.sym === coin.sym);
-                                if(matchIdx > -1) {
-                                    if(Array.isArray(candles) && candles.length > 0) {
-                                        const curPrice = parseFloat(candles[0][4]);
-                                        const getTr = (d) => candles.length > d ? ((curPrice - parseFloat(candles[d][4])) / parseFloat(candles[d][4])) * 100 : 0;
-                                        nw[matchIdx].tr.w = getTr(7);
-                                        nw[matchIdx].tr.m = getTr(30);
-                                        nw[matchIdx].tr.y = getTr(365);
-                                    }
-                                    if(Array.isArray(hCandles) && hCandles.length > 0) {
-                                        const closes = hCandles.map(c => parseFloat(c[4])).reverse();
-                                        const min = Math.min(...closes);
-                                        const max = Math.max(...closes);
-                                        const range = max - min || 1;
-                                        nw[matchIdx].tr.sparkline = closes.map((v, idx) => {
-                                            const x = (idx / (closes.length - 1)) * 40;
-                                            const y = 20 - (((v - min) / range) * 20);
-                                            return `${x},${y}`;
-                                        }).join(' ');
-                                    }
-                                }
-                                return nw;
-                            });
-                        } catch(e) {}
-                    });
-                } catch (e) { console.error("Trends ophalen mislukt:", e); }
-
-            } catch (error) { setErr(error.message); }
-            setLoading(false);
-        };
-        fetchBitvavo();
-    }, [lang]);
-    
-    const sym = valuta === 'EUR' ? '€' : '$';
-    const displayTotal = totalEur * exRate;
-    const totalTrend = portfolio.reduce((acc, c) => acc + (c.tr.d * (c.val / (totalEur || 1))), 0);
-    const totalColor = totalTrend >= 0 ? 'text-green-600' : 'text-red-600';
-
-    return (
-        <div className="widget h-[450px] flex flex-col">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-2 text-gray-500"><Ico.Cry/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Bitvavo</h3></div>
-                <div className="flex gap-1 bg-gray-200 p-1 rounded">
-                    {['EUR', 'USD'].map(v => (
-                        <button key={v} onClick={()=>setValuta(v)} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${valuta===v?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{v}</button>
-                    ))}
-                </div>
-            </div>
-            <div className="p-5 flex-1 flex flex-col bg-white overflow-hidden">
-                <div className="mb-4 shrink-0 flex justify-between items-start">
-                    <div>
-                        <span className="text-[10px] font-bold text-gray-400 block mb-1">WAARDE ({valuta})</span>
-                        <div className={`text-3xl font-black tracking-tight ${loading || err ? 'text-gray-900' : totalColor}`}>
-                            {loading ? '...' : err ? 'Error' : `${sym} ${displayTotal.toLocaleString('nl-NL', {maximumFractionDigits:0})}`}
-                        </div>
-                    </div>
-                </div>
-                
-                {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Syncing met Bitvavo API...</div> : 
-                 err ? <div className="flex-1 text-[10px] text-red-500 font-bold p-4 bg-red-50 rounded border border-red-100 flex items-center justify-center text-center">{err}</div> :
-                 (
-                    <div className="space-y-3 overflow-y-auto flex-1 hide-scroll pr-1 pb-2">
-                        {portfolio.map((c, i) => {
-                            const isPos = c.tr.d >= 0;
-                            const bgClass = isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
-                            const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{(v || 0).toFixed(2)}%</span>;
-                            
-                            const displayVal = c.val * exRate;
-                            const displayPrice = c.price * exRate;
-                            const displayUnits = c.amount > 100 ? c.amount.toLocaleString('nl-NL', {maximumFractionDigits: 2}) : c.amount.toLocaleString('nl-NL', {maximumFractionDigits: 6});
-                            
-                            const defaultSpark = isPos ? "0,20 8,10 16,15 24,5 32,8 40,0" : "0,0 8,10 16,5 24,15 32,12 40,20";
-
-                            return (
-                                <div key={i} className={`relative p-3 border rounded-lg flex flex-col shadow-sm transition overflow-hidden ${bgClass}`}>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <div className="w-1/3">
-                                            <span className="font-black text-lg block text-gray-900 leading-none">{c.sym}</span>
-                                            <span className="text-[10px] text-gray-600 font-medium mt-1 block">{displayUnits} units</span>
-                                        </div>
-                                        <div className="w-1/3 flex flex-col items-center justify-center gap-1">
-                                            <svg viewBox="0 0 40 20" className="w-10 h-4 overflow-visible">
-                                                <polyline points={c.tr.sparkline || defaultSpark} fill="none" stroke={isPos ? '#16a34a' : '#dc2626'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                            </svg>
-                                            <span className={`text-xs font-black ${isPos ? 'text-green-600' : 'text-red-600'}`}>{isPos?'+':''}{(c.tr.d || 0).toFixed(2)}%</span>
-                                        </div>
-                                        <div className="w-1/3 text-right">
-                                            <span className={`font-bold text-lg block leading-none ${isPos ? 'text-green-600' : 'text-red-600'}`}>{sym}{displayPrice.toLocaleString('nl-NL', {maximumFractionDigits: displayPrice < 1 ? 4 : 2})}</span>
-                                            <span className="text-[10px] text-gray-500 font-mono mt-1 block">Waarde: {sym}{displayVal.toLocaleString('nl-NL',{maximumFractionDigits:0})}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-between items-center pt-2 mt-1 border-t border-black/10 text-[9px] font-black uppercase tracking-tighter">
-                                        <div>1W: <P v={c.tr.w}/></div>
-                                        <div>1M: <P v={c.tr.m}/></div>
-                                        <div>1J: <P v={c.tr.y}/></div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
         </div>
     );
 }
@@ -1515,3 +1334,4 @@ ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
+
