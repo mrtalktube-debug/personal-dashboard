@@ -158,12 +158,17 @@ function DailyBriefing({ lang }) {
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
     
-    // Zorgt ervoor dat oude 'Welkom' state van ChatGPT overschreven wordt door een schone Gemini start
     const defaultHist = [{r: 'ai', t: lang==='nl'?'Hallo! Ik ben Gemini. Hoe kan ik je helpen?':'Hello! I am Gemini. How can I help?'}];
     const [hist, setHist] = useState(() => {
-        const saved = S.load('ai_hist', null);
-        if (saved && saved.length > 0 && saved[0].t.includes('Welkom')) return defaultHist; 
-        return saved || defaultHist;
+        try {
+            const saved = S.load('ai_hist', null);
+            if (saved && Array.isArray(saved) && saved.length > 0 && saved[0] && typeof saved[0].t === 'string' && saved[0].t.includes('Welkom')) {
+                return defaultHist; 
+            }
+            return saved || defaultHist;
+        } catch(e) {
+            return defaultHist;
+        }
     });
     
     const [showHist, setShowHist] = useState(false);
@@ -199,7 +204,6 @@ function AIWidget({ lang }) {
                 });
                 if (contents.length > 0 && contents[0].role === 'model') contents.shift();
 
-                // NIEUW: Gebruikt nu gemini-2.0-flash
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' }, 
