@@ -1,47 +1,29 @@
+import { kv } from '@vercel/kv';
+
 export default async function handler(req, res) {
-    const email = req.query.email || req.body?.email;
-    if (email !== 'diabaas3@gmail.com') {
-        return res.status(403).json({ error: 'Unauthorized' });
-    }
+    // Zorg dat browsers de connectie niet blokkeren (CORS)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Pakt nu automatisch de juiste Vercel wachtwoorden, ongeacht welke database module je koos
-    const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
-    if (!KV_URL || !KV_TOKEN) {
-        return res.status(500).json({ error: 'KV database wachtwoorden ontbreken in Vercel' });
-    }
-
-    const key = `settings_${email}`;
-
-    if (req.method === 'GET') {
-        try {
-            const response = await fetch(`${KV_URL}/get/${key}`, {
-                headers: { Authorization: `Bearer ${KV_TOKEN}` }
-            });
-            const data = await response.json();
-            return res.status(200).json(data.result ? JSON.parse(data.result) : {});
-        } catch (error) {
-            return res.status(500).json({ error: 'Fout bij ophalen uit cloud' });
-        }
-    } 
-    
-    if (req.method === 'POST') {
-        try {
-            const settings = req.body.settings;
-            await fetch(`${KV_URL}/set/${key}`, {
-                method: 'POST',
-                headers: { 
-                    Authorization: `Bearer ${KV_TOKEN}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(JSON.stringify(settings))
-            });
+    try {
+        if (req.method === 'GET') {
+            const email = req.query.email;
+            if (!email) return res.status(400).json({ error: 'Email ontbreekt' });
+            
+            const data = await kv.get(`settings_${email}`);
+            return res.status(200).json(data || {});
+        } 
+        else if (req.method === 'POST') {
+            const { email, settings } = req.body;
+            if (!email || !settings) return res.status(400).json({ error: 'Data ontbreekt' });
+            
+            await kv.set(`settings_${email}`, settings);
             return res.status(200).json({ success: true });
-        } catch (error) {
-            return res.status(500).json({ error: 'Fout bij opslaan in cloud' });
         }
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
     }
-
-    res.status(405).json({ error: 'Method not allowed' });
 }
