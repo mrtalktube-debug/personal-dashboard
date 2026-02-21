@@ -388,7 +388,7 @@ function CryptoWidget({ lang }) {
     function AgendaWidget({ lang }) {
     const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
     const cals = rawCals.map(c=>c.name).filter(Boolean);
-    const [view, setView] = useState('dag'); // Standaard op dagweergave gezet
+    const [view, setView] = useState('dag'); 
     const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
     const [f, setF] = useState(cals);
     const [items, setItems] = useState([]);
@@ -402,74 +402,189 @@ function CryptoWidget({ lang }) {
         const fetchCals = async () => {
             setLoading(true);
             let allEvs = [];
-            for(let c of rawCals) {
-                if(!c.val) continue;
-                
-                // CRUCIALE FIX: Vervang webcal:// door https:// anders blokkeert de browser de link
-                let fetchUrl = c.val.replace('webcal://', 'https://');
-                
-                try {
-                    let txt = '';
-                    // Veilige proxy met cachebuster om lege schermen tegen te gaan
-                    const res1 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(fetchUrl)}&nocache=${Date.now()}`);
-                    if(res1.ok) {
-                        txt = await res1.text();
-                    } else {
-                        const res2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(fetchUrl)}`);
-                        if(res2.ok) txt = await res2.text();
-                    }
-                    
-                    if(!txt || !txt.includes('BEGIN:VCALENDAR')) throw new Error("Geen geldige kalender");
 
-                    let cur = {}; 
+            // Helper: parse iCal datum string naar { date, time, dateObj }
+            const parseICalDate = (line) => {
+                const parts = line.split(':');
+                if (parts.length < 2) return null;
+                
+                const params = parts[0]; 
+                const val = parts[parts.length - 1].trim();
+                const isUTC = val.endsWith('Z');
+                
+                const m = val.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?Z?)?/);
+                if (!m) return null;
+
+                const year = parseInt(m[1]);
+                const month = parseInt(m[2]) - 1;
+                const day = parseInt(m[3]);
+                const hour = m[4] ? parseInt(m[4]) : 0;
+                const min = m[5] ? parseInt(m[5]) : 0;
+                const sec = m[6] ? parseInt(m[6]) : 0;
+                const isAllDay = !m[4];
+
+                let dateObj;
+
+                if (isUTC) {
+                    dateObj = new Date(Date.UTC(year, month, day, hour, min, sec));
+                } else if (params.includes('TZID=')) {
+                    dateObj = new Date(year, month, day, hour, min, sec);
+                } else {
+                    dateObj = new Date(year, month, day, hour, min, sec);
+                }
+
+                const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`;
+                const timeStr = isAllDay ? 'Hele dag' : dateObj.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+
+                return { date: dateStr, time: timeStr, dateObj };
+            };
+
+            // Helper: expandeer RRULE (terugkerende afspraken) voor de komende 60 dagen
+            const expandRRule = (rruleLine, startDateObj, eventData) => {
+                const expanded = [];
+                const params = {};
+                rruleLine.replace('RRULE:', '').split(';').forEach(p => {
+                    const [k, v] = p.split('=');
+                    params[k] = v;
+                });
+
+                const freq = params.FREQ;
+                const count = params.COUNT ? parseInt(params.COUNT) : 200;
+                const untilMatch = params.UNTIL ? params.UNTIL.match(/(\d{4})(\d{2})(\d{2})/) : null;
+                const until = untilMatch ? new Date(parseInt(untilMatch[1]), parseInt(untilMatch[2])-1, parseInt(untilMatch[3]), 23, 59, 59) : null;
+                const interval = params.INTERVAL ? parseInt(params.INTERVAL) : 1;
+
+                const now = new Date();
+                const rangeStart = new Date(now);
+                rangeStart.setDate(rangeStart.getDate() - 7); 
+                const rangeEnd = new Date(now);
+                rangeEnd.setDate(rangeEnd.getDate() + 60); 
+
+                let current = new Date(startDateObj);
+                let generated = 0;
+
+                for (let i = 0; i < 500 && generated < count; i++) {
+                    if (until && current > until) break;
+                    if (current > rangeEnd) break;
+
+                    if (current >= rangeStart) {
+                        const dateStr = `${current.getFullYear()}-${String(current.getMonth()+1).padStart(2,'0')}-${String(current.getDate()).padStart(2,'0')}`;
+                        const timeStr = eventData.time;
+                        expanded.push({ ...eventData, date: dateStr, time: timeStr });
+                    }
+
+                    generated++;
+
+                    if (freq === 'DAILY') {
+                        current.setDate(current.getDate() + interval);
+                    } else if (freq === 'WEEKLY') {
+                        current.setDate(current.getDate() + (7 * interval));
+                    } else if (freq === 'MONTHLY') {
+                        current.setMonth(current.getMonth() + interval);
+                    } else if (freq === 'YEARLY') {
+                        current.setFullYear(current.getFullYear() + interval);
+                    } else {
+                        break; 
+                    }
+                }
+
+                return expanded;
+            };
+
+            for (let c of rawCals) {
+                if (!c.val) continue;
+
+                try {
+                    // Haal de kalender op via je EIGEN onbreekbare backend
+                    const res = await fetch('/api/ical', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: c.val })
+                    });
+
+                    let txt = '';
+                    if (res.ok) {
+                        const contentType = res.headers.get('content-type') || '';
+                        if (contentType.includes('application/json')) {
+                            const errData = await res.json();
+                            throw new Error(errData.error || 'Onbekende fout');
+                        }
+                        txt = await res.text();
+                    } else {
+                        const errData = await res.json().catch(() => ({ error: res.statusText }));
+                        throw new Error(errData.error || `HTTP ${res.status}`);
+                    }
+
+                    if (!txt || !txt.includes('BEGIN:VCALENDAR')) {
+                        throw new Error("Geen geldige kalender data");
+                    }
+
+                    let cur = {};
+                    let rrule = null;
                     const lines = txt.split(/\r?\n/);
-                    
-                    for(let k = 0; k < lines.length; k++) {
+
+                    for (let k = 0; k < lines.length; k++) {
                         let l = lines[k];
-                        
+
                         while (k + 1 < lines.length && (lines[k+1].startsWith(' ') || lines[k+1].startsWith('\t'))) {
-                            k++; 
+                            k++;
                             l += lines[k].substring(1);
                         }
-                        
-                        if(l.startsWith('BEGIN:VEVENT')) { cur = {}; }
-                        else if(l.startsWith('SUMMARY')) { 
-                            const idx = l.indexOf(':'); 
-                            if(idx !== -1) cur.t = l.substring(idx + 1).replace(/\\,/g, ',').replace(/\\;/g, ';'); 
+
+                        if (l.startsWith('BEGIN:VEVENT')) {
+                            cur = {};
+                            rrule = null;
                         }
-                        else if(l.startsWith('DTSTART')) { 
-                            const parts = l.split(':');
-                            if(parts.length > 1) {
-                                const val = parts[parts.length - 1].trim(); 
-                                const isUTC = val.endsWith('Z');
-                                const m = val.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/); 
-                                if(m) { 
-                                    if (m[4] && isUTC) {
-                                        const utcDate = new Date(Date.UTC(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]), parseInt(m[4]), parseInt(m[5])));
-                                        cur.date = `${utcDate.getFullYear()}-${String(utcDate.getMonth()+1).padStart(2,'0')}-${String(utcDate.getDate()).padStart(2,'0')}`;
-                                        cur.time = utcDate.toLocaleTimeString('nl-NL', {hour: '2-digit', minute:'2-digit'});
-                                    } else {
-                                        cur.date = `${m[1]}-${m[2]}-${m[3]}`; 
-                                        cur.time = m[4] ? `${m[4]}:${m[5]}` : 'Hele dag'; 
-                                    }
-                                } 
+                        else if (l.startsWith('SUMMARY')) {
+                            const idx = l.indexOf(':');
+                            if (idx !== -1) {
+                                cur.t = l.substring(idx + 1)
+                                    .replace(/\\,/g, ',')
+                                    .replace(/\\;/g, ';')
+                                    .replace(/\\n/g, ' ')
+                                    .replace(/\\/g, '');
                             }
                         }
-                        else if(l.startsWith('END:VEVENT') && cur.t && cur.date) {
-                            allEvs.push({...cur, p: c.name});
+                        else if (l.startsWith('DTSTART')) {
+                            const parsed = parseICalDate(l);
+                            if (parsed) {
+                                cur.date = parsed.date;
+                                cur.time = parsed.time;
+                                cur.dateObj = parsed.dateObj;
+                            }
+                        }
+                        else if (l.startsWith('RRULE:')) {
+                            rrule = l;
+                        }
+                        else if (l.startsWith('END:VEVENT') && cur.t && cur.date) {
+                            if (rrule && cur.dateObj) {
+                                const expanded = expandRRule(rrule, cur.dateObj, { t: cur.t, p: c.name, time: cur.time });
+                                allEvs.push(...expanded);
+                            } else {
+                                allEvs.push({ t: cur.t, p: c.name, date: cur.date, time: cur.time });
+                            }
                         }
                     }
-                } catch(e) { 
-                    console.error("iCal error voor: " + c.name, e); 
-                    allEvs.push({ t: `Laden mislukt voor ${c.name}`, p: c.name, date: d, time: '00:00' });
+
+                } catch (e) {
+                    console.error("iCal error voor: " + c.name, e);
+                    allEvs.push({
+                        t: `⚠ ${c.name}: ${e.message}`,
+                        p: c.name,
+                        date: d,
+                        time: '00:00'
+                    });
                 }
             }
-            if(allEvs.length === 0) {
+
+            if (allEvs.length === 0) {
                 allEvs = [{ t: 'Geen afspraken', p: cals[0] || 'Systeem', date: d, time: '00:00' }];
             }
+
             setItems(allEvs);
             setLoading(false);
         };
+
         fetchCals();
     }, [JSON.stringify(rawCals)]);
 
@@ -1243,6 +1358,7 @@ ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
+
 
 
 
