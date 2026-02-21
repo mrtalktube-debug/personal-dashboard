@@ -801,12 +801,12 @@ function NewsWidget({ lang }) {
 }
 
 function RadarWidget({ lang }) {
-    const [assets, setAssets] = useState(S.load('inv_assets', ['ASML', 'NVDA', 'MSFT', 'GOOGL', 'AMZN']));
+    const [assets, setAssets] = useState(S.load('inv_assets', ['ASML', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'META', 'AAPL', 'NVO']));
     const [manage, setManage] = useState(false);
     const [newAsset, setNewAsset] = useState('');
     const [liveData, setLiveData] = useState({});
     const [loading, setLoading] = useState(true);
-    const [tab, setTab] = useState('recs'); // 'watch' = watchlist, 'recs' = aanbevelingen
+    const [tab, setTab] = useState('recs'); 
     const [recs, setRecs] = useState([]);
     const [recsLoading, setRecsLoading] = useState(true);
 
@@ -851,7 +851,7 @@ function RadarWidget({ lang }) {
             finally { setRecsLoading(false); }
         };
         fetchRecs();
-        const interval = setInterval(fetchRecs, 600000); // elke 10 min
+        const interval = setInterval(fetchRecs, 600000);
         return () => clearInterval(interval);
     }, []);
 
@@ -914,7 +914,7 @@ function RadarWidget({ lang }) {
                                 {recs.length} aandelen geanalyseerd · gesorteerd op analyst score
                             </div>
                             {recs.map((r, i) => (
-                                <div key={r.name} className={`p-3 border rounded-lg shadow-sm transition ${r.tr.d >= 0 ? 'bg-green-50/50 border-green-100' : 'bg-red-50/50 border-red-100'}`}>
+                                <div key={r.name} onClick={() => window.open(`https://finance.yahoo.com/quote/${r.ticker}`, '_blank')} className={`p-3 border rounded-lg shadow-sm transition cursor-pointer hover:shadow-md ${r.tr.d >= 0 ? 'bg-green-50/50 border-green-100 hover:border-green-300' : 'bg-red-50/50 border-red-100 hover:border-red-300'}`}>
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="flex items-center gap-2">
                                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${getScoreColor(r.score)}`}>
@@ -934,7 +934,6 @@ function RadarWidget({ lang }) {
                                             {r.consensus}
                                         </span>
                                         <div className="flex items-center gap-1">
-                                            {/* Mini bar chart van analyst verdeling */}
                                             <div className="flex h-2.5 w-20 rounded overflow-hidden">
                                                 {r.detail.strongBuy > 0 && <div className="bg-green-700" style={{width: `${(r.detail.strongBuy/r.analysts)*100}%`}}></div>}
                                                 {r.detail.buy > 0 && <div className="bg-green-400" style={{width: `${(r.detail.buy/r.analysts)*100}%`}}></div>}
@@ -960,16 +959,16 @@ function RadarWidget({ lang }) {
                         if (!data) return (
                             <div key={a} className="p-3 border rounded-lg bg-gray-50 flex justify-between items-center">
                                 <span className="font-bold text-sm text-gray-400">{a}</span>
-                                {manage ? <button onClick={()=>removeAsset(a)} className="text-red-500 font-bold text-lg">&times;</button> : 
+                                {manage ? <button onClick={(e)=>{e.stopPropagation(); removeAsset(a)}} className="text-red-500 font-bold text-lg">&times;</button> : 
                                 <span className="text-[9px] text-gray-400">Niet gevonden</span>}
                             </div>
                         );
                         const isPos = data.tr.d >= 0;
                         return (
-                            <div key={a} className={`p-3 border rounded-lg shadow-sm transition ${isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                            <div key={a} onClick={() => !manage && window.open(`https://finance.yahoo.com/quote/${data.ticker}`, '_blank')} className={`p-3 border rounded-lg shadow-sm transition ${!manage ? 'cursor-pointer hover:shadow-md' : ''} ${isPos ? 'bg-green-50 border-green-200 hover:border-green-300' : 'bg-red-50 border-red-200 hover:border-red-300'}`}>
                                 <div className="flex justify-between items-start mb-1">
                                     <span className="font-black text-sm text-gray-900">{a}</span>
-                                    {manage ? <button onClick={()=>removeAsset(a)} className="text-red-500 font-bold text-lg">&times;</button> : 
+                                    {manage ? <button onClick={(e)=>{e.stopPropagation(); removeAsset(a)}} className="text-red-500 font-bold text-lg">&times;</button> : 
                                     <span className="text-[10px] font-mono font-bold">{data.currency} {data.price.toFixed(2)}</span>}
                                 </div>
                                 <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-tighter mt-2 border-t border-black/5 pt-2">
@@ -1446,6 +1445,7 @@ ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
+
 
 
 
