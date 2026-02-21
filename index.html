@@ -810,7 +810,6 @@ function RadarWidget({ lang }) {
     const [recs, setRecs] = useState([]);
     const [recsLoading, setRecsLoading] = useState(true);
 
-    // Haal watchlist data op
     useEffect(() => {
         const fetchStockData = async () => {
             try {
@@ -833,7 +832,6 @@ function RadarWidget({ lang }) {
         return () => clearInterval(interval);
     }, [assets]);
 
-    // Haal aanbevelingen op
     useEffect(() => {
         const fetchRecs = async () => {
             setRecsLoading(true);
@@ -876,6 +874,14 @@ function RadarWidget({ lang }) {
         return 'text-red-700 bg-red-50 border-red-200';
     };
 
+    // FIX: Slimme Yahoo URL Generator
+    const getYahooUrl = (ticker, name) => {
+        let t = ticker || name;
+        if (t === 'ASML') t = 'ASML.AS';
+        if (t === 'NVO') t = 'NOVOB.CO';
+        return `https://finance.yahoo.com/quote/${t}`;
+    };
+
     return (
         <div className="widget h-[450px] flex flex-col">
             <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
@@ -887,7 +893,6 @@ function RadarWidget({ lang }) {
                 </div>
             </div>
 
-            {/* Tabs */}
             <div className="flex border-b bg-white shrink-0">
                 <button onClick={()=>{setTab('recs');setManage(false)}} className={`tab-btn ${tab==='recs'?'active':''}`}>📊 TOP PICKS</button>
                 <button onClick={()=>setTab('watch')} className={`tab-btn ${tab==='watch'?'active':''}`}>👁 WATCHLIST</button>
@@ -901,8 +906,6 @@ function RadarWidget({ lang }) {
             )}
 
             <div className="p-4 space-y-2 overflow-y-auto flex-1 bg-white hide-scroll">
-
-                {/* === AANBEVELINGEN TAB === */}
                 {tab === 'recs' && (
                     recsLoading ? (
                         <div className="text-center text-xs text-blue-500 animate-pulse mt-10">Analyst aanbevelingen laden...</div>
@@ -914,7 +917,7 @@ function RadarWidget({ lang }) {
                                 {recs.length} aandelen geanalyseerd · gesorteerd op analyst score
                             </div>
                             {recs.map((r, i) => (
-                                <div key={r.name} onClick={() => window.open(`https://finance.yahoo.com/quote/${r.ticker}`, '_blank')} className={`p-3 border rounded-lg shadow-sm transition cursor-pointer hover:shadow-md ${r.tr.d >= 0 ? 'bg-green-50/50 border-green-100 hover:border-green-300' : 'bg-red-50/50 border-red-100 hover:border-red-300'}`}>
+                                <div key={r.name} onClick={() => window.open(getYahooUrl(r.ticker, r.name), '_blank')} className={`p-3 border rounded-lg shadow-sm transition cursor-pointer hover:shadow-md ${r.tr.d >= 0 ? 'bg-green-50/50 border-green-100 hover:border-green-300' : 'bg-red-50/50 border-red-100 hover:border-red-300'}`}>
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="flex items-center gap-2">
                                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${getScoreColor(r.score)}`}>
@@ -950,7 +953,6 @@ function RadarWidget({ lang }) {
                     )
                 )}
 
-                {/* === WATCHLIST TAB === */}
                 {tab === 'watch' && (
                     loading && Object.keys(liveData).length === 0 ? (
                         <div className="text-center text-xs text-blue-500 animate-pulse mt-10">Koersen laden...</div>
@@ -965,7 +967,7 @@ function RadarWidget({ lang }) {
                         );
                         const isPos = data.tr.d >= 0;
                         return (
-                            <div key={a} onClick={() => !manage && window.open(`https://finance.yahoo.com/quote/${data.ticker}`, '_blank')} className={`p-3 border rounded-lg shadow-sm transition ${!manage ? 'cursor-pointer hover:shadow-md' : ''} ${isPos ? 'bg-green-50 border-green-200 hover:border-green-300' : 'bg-red-50 border-red-200 hover:border-red-300'}`}>
+                            <div key={a} onClick={() => !manage && window.open(getYahooUrl(data.ticker, data.name), '_blank')} className={`p-3 border rounded-lg shadow-sm transition ${!manage ? 'cursor-pointer hover:shadow-md' : ''} ${isPos ? 'bg-green-50 border-green-200 hover:border-green-300' : 'bg-red-50 border-red-200 hover:border-red-300'}`}>
                                 <div className="flex justify-between items-start mb-1">
                                     <span className="font-black text-sm text-gray-900">{a}</span>
                                     {manage ? <button onClick={(e)=>{e.stopPropagation(); removeAsset(a)}} className="text-red-500 font-bold text-lg">&times;</button> : 
@@ -1445,6 +1447,7 @@ ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
+
 
 
 
