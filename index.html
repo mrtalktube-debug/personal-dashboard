@@ -801,101 +801,65 @@ function NewsWidget({ lang }) {
 }
 
 function RadarWidget({ lang }) {
-    const [assets, setAssets] = useState(S.load('inv_assets', ['ASML Holding', 'Novo Nordisk', 'Vanguard S&P 500']));
+    const [assets, setAssets] = useState(S.load('inv_assets', ['ASML', 'Novo Nordisk', 'VUSA (S&P 500)']));
     const [manage, setManage] = useState(false);
     const [newAsset, setNewAsset] = useState('');
-    const [dragItem, setDragItem] = useState(null);
+    const [liveData, setLiveData] = useState({});
+    const [loading, setLoading] = useState(true);
 
-    const getInvData = (name) => {
-        const hash = name.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
-        
-        let desc = "Wereldwijde marktleider in hun sector met sterke groeicijfers.\n💡 Aanbevolen vanwege stabiel dividend en constante innovatie.";
-        const nlName = name.toLowerCase();
-        if(nlName.includes('asml')) desc = "Nederlandse chipmachinefabrikant, cruciaal voor tech wereldwijd.\n💡 Aanbevolen wegens absolute monopoliepositie en AI-groei.";
-        else if(nlName.includes('novo')) desc = "Deense farmaceut, absolute marktleider in diabetes/obesitas.\n💡 Aanbevolen door de aanhoudend enorme vraag naar Wegovy/Ozempic.";
-        else if(nlName.includes('vanguard') || nlName.includes('s&p')) desc = "Brede index tracker die de 500 grootste Amerikaanse bedrijven volgt.\n💡 Aanbevolen als uiterst stabiele basis voor lange termijn vermogensopbouw.";
-
-        const platforms = [
-            ['DEGIRO', 'Trade Republic', 'Saxo Bank'],
-            ['BUX', 'eToro', 'DEGIRO'],
-            ['Trade Republic', 'IBKR', 'Saxo Bank']
-        ];
-
-        return {
-            type: hash % 2 === 0 ? 'Aandeel' : 'ETF',
-            desc: desc,
-            plats: platforms[hash % 3],
-            tr: {
-                h: ((hash%5) - 2) + 0.1,
-                d: ((hash%15) - 5) + 0.5,
-                w: ((hash%30) - 10) + 1.2,
-                m: ((hash%60) - 20) + 4.1,
-                y: ((hash%200) - 50) + 25.0
-            }
-        }
-    };
+    useEffect(() => {
+        const fetchStockData = async () => {
+            setLoading(true);
+            try {
+                const res = await fetch('/api/stocks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbols: assets })
+                });
+                const data = await res.json();
+                const dataMap = {};
+                data.forEach(item => { if(!item.error) dataMap[item.name] = item; });
+                setLiveData(dataMap);
+            } catch (e) { console.error("Beursfout:", e); }
+            setLoading(false);
+        };
+        fetchStockData();
+        const interval = setInterval(fetchStockData, 300000); // Elke 5 min verversen
+        return () => clearInterval(interval);
+    }, [assets]);
 
     const addAsset = () => { if(newAsset && !assets.includes(newAsset)) { const n = [...assets, newAsset]; setAssets(n); S.save('inv_assets', n); setNewAsset(''); } };
     const removeAsset = (a) => { const n = assets.filter(x => x !== a); setAssets(n); S.save('inv_assets', n); };
 
-    const handleDragStart = (e, item) => { setDragItem(item); };
-    const handleDrop = (e, item) => {
-        if (!dragItem || dragItem === item) return;
-        const newAssets = [...assets];
-        const dragIdx = newAssets.indexOf(dragItem);
-        const dropIdx = newAssets.indexOf(item);
-        newAssets.splice(dragIdx, 1);
-        newAssets.splice(dropIdx, 0, dragItem);
-        setAssets(newAssets);
-        S.save('inv_assets', newAssets);
-        setDragItem(null);
-    };
-
     return (
         <div className="widget h-[350px] flex flex-col">
             <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-2 text-gray-500"><Ico.Rad/><h3 className="text-[10px] font-black uppercase tracking-widest">Investeringen</h3></div>
-                <button onClick={()=>setManage(!manage)} className={`px-2 py-1 rounded text-[10px] font-bold ${manage ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>{manage ? 'Klaar' : 'Beheer'}</button>
+                <div className="flex items-center gap-2 text-gray-500"><Ico.Rad/><h3 className="text-[10px] font-black uppercase tracking-widest">Live Beurs</h3></div>
+                <button onClick={()=>setManage(!manage)} className={`px-2 py-1 rounded text-[10px] font-bold ${manage ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>{manage ? 'Klaar' : 'Beheer'}</button>
             </div>
             {manage && (
-                <div className="p-3 bg-gray-100 border-b flex flex-col gap-2 text-[10px] shrink-0">
-                    <div className="flex gap-2 items-center">
-                        <input value={newAsset} onChange={e=>setNewAsset(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addAsset()} className="flex-1 p-1.5 border rounded outline-none focus:border-blue-500" placeholder="Nieuwe investering (bijv. Shell)" />
-                        <button onClick={addAsset} className="bg-blue-600 text-white px-3 py-1.5 rounded font-bold hover:bg-blue-700">+</button>
-                    </div>
+                <div className="p-3 bg-gray-100 border-b flex gap-2 shrink-0">
+                    <input value={newAsset} onChange={e=>setNewAsset(e.target.value)} className="flex-1 p-1.5 border rounded text-[10px]" placeholder="Bijv. TSLA of Shell" />
+                    <button onClick={addAsset} className="bg-blue-600 text-white px-3 rounded font-bold">+</button>
                 </div>
             )}
             <div className="p-4 space-y-3 overflow-y-auto flex-1 bg-white hide-scroll">
-                {assets.map((a, i) => {
-                    const data = getInvData(a);
+                {loading && Object.keys(liveData).length === 0 ? (
+                    <div className="text-center text-xs text-blue-500 animate-pulse mt-10">Koersen laden...</div>
+                ) : assets.map((a) => {
+                    const data = liveData[a];
+                    if(!data) return null;
                     const isPos = data.tr.d >= 0;
-                    const bgClass = isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
-                    const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
+                    const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(2)}%</span>;
 
                     return (
-                        <div key={a} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, a)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, a)} className={`relative p-3 border rounded-lg flex flex-col shadow-sm transition overflow-hidden ${bgClass} ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
-                            <div className="flex justify-between items-start mb-1.5">
-                                <div className="flex-1 pr-2">
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="font-black text-sm text-gray-900 leading-none">{a}</span>
-                                        <span className="text-[8px] font-bold text-[#c586c0] uppercase">{data.type}</span>
-                                    </div>
-                                </div>
-                                {manage ? (
-                                    <button onClick={()=>removeAsset(a)} className="text-red-400 font-bold hover:text-red-600 text-lg leading-none">&times;</button>
-                                ) : (
-                                    <div className="flex gap-1 flex-wrap justify-end">
-                                        {data.plats.map(p => <span key={p} className="bg-white/60 border border-black/10 text-gray-800 px-1.5 py-0.5 rounded text-[7px] font-bold uppercase">{p}</span>)}
-                                    </div>
-                                )}
+                        <div key={a} className={`p-3 border rounded-lg shadow-sm transition ${isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                            <div className="flex justify-between items-start mb-1">
+                                <span className="font-black text-sm text-gray-900">{a}</span>
+                                {manage ? <button onClick={()=>removeAsset(a)} className="text-red-500 font-bold">&times;</button> : 
+                                <span className="text-[10px] font-mono font-bold">{data.currency} {data.price.toFixed(2)}</span>}
                             </div>
-                            
-                            <p className="text-[10px] text-gray-600 leading-snug whitespace-pre-line mb-3 mt-1">
-                                {data.desc}
-                            </p>
-
-                            <div className="flex justify-between items-center pt-2 mt-auto border-t border-black/5 text-[9px] font-black uppercase tracking-tighter">
-                                <div>1U: <P v={data.tr.h}/></div>
+                            <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-tighter mt-2 border-t border-black/5 pt-2">
                                 <div>1D: <P v={data.tr.d}/></div>
                                 <div>1W: <P v={data.tr.w}/></div>
                                 <div>1M: <P v={data.tr.m}/></div>
@@ -1368,6 +1332,7 @@ ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
+
 
 
 
