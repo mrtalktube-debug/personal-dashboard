@@ -210,18 +210,6 @@ function CryptoWidget({ lang }) {
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState('');
 
-    const getMockTrends = (sym) => {
-        const hash = sym.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
-        return {
-            h: ((hash%5) - 2) + 0.4,
-            d: ((hash%15) - 5) + 0.2, 
-            w: ((hash%30) - 10) + 1.1,
-            m: ((hash%60) - 20) + 5.5,
-            y: ((hash%200) - 50) + 40.0,
-            a: hash * 5 + 120
-        };
-    };
-
     useEffect(() => {
         if(valuta === 'USD') {
             fetch('https://open.er-api.com/v6/latest/EUR')
@@ -235,8 +223,6 @@ function CryptoWidget({ lang }) {
     useEffect(() => {
         const fetchBitvavo = async () => {
             const bvKeys = S.load('bitvavo_keys', {pub: '', sec: ''});
-            
-            // Controle op lege keys
             if(!bvKeys || !bvKeys.pub || !bvKeys.sec) {
                 setErr(lang==='nl'?'Vul je Bitvavo keys in via Instellingen':'Enter Bitvavo keys in Settings');
                 setLoading(false); return;
@@ -252,12 +238,16 @@ function CryptoWidget({ lang }) {
                 let calcTotal = 0;
                 const combined = data.balances.map(b => {
                     const amount = parseFloat(b.available) + parseFloat(b.inOrder);
-                    if(b.symbol === 'EUR') { calcTotal += amount; return { sym: 'EUR', amount, price: 1, val: amount, tr: getMockTrends('EUR') }; }
+                    if(b.symbol === 'EUR') { 
+                        calcTotal += amount; 
+                        return { sym: 'EUR', amount, price: 1, val: amount, tr: {d: 0, w: 0, m: 0, y: 0} }; 
+                    }
                     const priceObj = data.prices.find(p => p.market === `${b.symbol}-EUR`);
                     const price = priceObj ? parseFloat(priceObj.price) : 0;
                     const val = amount * price;
                     calcTotal += val;
-                    return { sym: b.symbol, amount, price, val, tr: getMockTrends(b.symbol) };
+                    const tr = data.trends && data.trends[b.symbol] ? data.trends[b.symbol] : {d: 0, w: 0, m: 0, y: 0};
+                    return { sym: b.symbol, amount, price, val, tr };
                 }).sort((a,b) => b.val - a.val);
 
                 setPortfolio(combined); setTotalEur(calcTotal); setErr('');
@@ -293,14 +283,14 @@ function CryptoWidget({ lang }) {
                     </div>
                 </div>
                 
-                {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Data inladen...</div> : 
+                {loading ? <div className="flex-1 flex justify-center items-center text-xs font-bold text-blue-500 animate-pulse">Syncing met Bitvavo API...</div> : 
                  err ? <div className="flex-1 text-[10px] text-red-500 font-bold p-4 bg-red-50 rounded border border-red-100 flex items-center justify-center text-center">{err}</div> :
                  (
                     <div className="space-y-3 overflow-y-auto flex-1 hide-scroll pr-1 pb-2">
                         {portfolio.map((c, i) => {
                             const isPos = c.tr.d >= 0;
                             const bgClass = isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
-                            const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{v.toFixed(1)}%</span>;
+                            const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{(v || 0).toFixed(2)}%</span>;
                             
                             const displayVal = c.val * exRate;
                             const displayPrice = c.price * exRate;
@@ -319,7 +309,7 @@ function CryptoWidget({ lang }) {
                                             <svg viewBox="0 0 40 20" className="w-10 h-4 overflow-visible">
                                                 <polyline points={sparklinePts} fill="none" stroke={isPos ? '#16a34a' : '#dc2626'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                                             </svg>
-                                            <span className={`text-xs font-black ${isPos ? 'text-green-600' : 'text-red-600'}`}>{isPos?'+':''}{c.tr.d.toFixed(1)}%</span>
+                                            <span className={`text-xs font-black ${isPos ? 'text-green-600' : 'text-red-600'}`}>{isPos?'+':''}{(c.tr.d || 0).toFixed(2)}%</span>
                                         </div>
                                         <div className="w-1/3 text-right">
                                             <span className={`font-bold text-lg block leading-none ${isPos ? 'text-green-600' : 'text-red-600'}`}>{sym}{displayPrice.toLocaleString('nl-NL', {maximumFractionDigits: displayPrice < 1 ? 4 : 2})}</span>
@@ -327,7 +317,7 @@ function CryptoWidget({ lang }) {
                                         </div>
                                     </div>
                                     <div className="flex justify-between items-center pt-2 mt-1 border-t border-black/10 text-[9px] font-black uppercase tracking-tighter">
-                                        <div>1U: <P v={c.tr.h}/></div>
+                                        <div>1D: <P v={c.tr.d}/></div>
                                         <div>1W: <P v={c.tr.w}/></div>
                                         <div>1M: <P v={c.tr.m}/></div>
                                         <div>1J: <P v={c.tr.y}/></div>
@@ -345,7 +335,8 @@ function CryptoWidget({ lang }) {
 function AgendaWidget({ lang }) {
     const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
     const cals = rawCals.map(c=>c.name).filter(Boolean);
-    const [view, setView] = useState('week'); const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
+    const [view, setView] = useState('week'); 
+    const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
     const [f, setF] = useState(cals);
     const [items, setItems] = useState([]);
     
@@ -359,16 +350,45 @@ function AgendaWidget({ lang }) {
                 try {
                     const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(c.val)}`);
                     const txt = await res.text();
-                    let cur = {}; const lines = txt.split(/\r?\n/);
-                    for(let l of lines) {
-                        if(l.startsWith('BEGIN:VEVENT')) cur = {};
-                        else if(l.startsWith('SUMMARY:')) cur.t = l.substring(8);
-                        else if(l.startsWith('DTSTART')) { const m = l.match(/:(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/); if(m) { cur.date = `${m[1]}-${m[2]}-${m[3]}`; cur.time = m[4] ? `${m[4]}:${m[5]}` : 'Hele dag'; } }
-                        else if(l.startsWith('END:VEVENT') && cur.t && cur.date) allEvs.push({...cur, p: c.name});
+                    let cur = {}; 
+                    const lines = txt.split(/\r?\n/);
+                    
+                    for(let k = 0; k < lines.length; k++) {
+                        let l = lines[k];
+                        
+                        // FIX: iCal Line Folding (Magister breekt lange zinnen af op een nieuwe regel die met een spatie begint)
+                        while (k + 1 < lines.length && (lines[k+1].startsWith(' ') || lines[k+1].startsWith('\t'))) {
+                            k++; 
+                            l += lines[k].substring(1);
+                        }
+                        
+                        if(l.startsWith('BEGIN:VEVENT')) {
+                            cur = {};
+                        }
+                        else if(l.startsWith('SUMMARY')) { 
+                            // FIX: Zoek de eerste dubbele punt om parameters zoals SUMMARY;LANGUAGE=nl: over te slaan
+                            const idx = l.indexOf(':'); 
+                            if(idx !== -1) {
+                                cur.t = l.substring(idx + 1).replace(/\\,/g, ',').replace(/\\;/g, ';'); 
+                            }
+                        }
+                        else if(l.startsWith('DTSTART')) { 
+                            // FIX: Robuustere Regex die dwars door tijdzone parameters (TZID) heen kijkt
+                            const m = l.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?/); 
+                            if(m) { 
+                                cur.date = `${m[1]}-${m[2]}-${m[3]}`; 
+                                cur.time = m[4] ? `${m[4]}:${m[5]}` : 'Hele dag'; 
+                            } 
+                        }
+                        else if(l.startsWith('END:VEVENT') && cur.t && cur.date) {
+                            allEvs.push({...cur, p: c.name});
+                        }
                     }
                 } catch(e) { console.error("iCal error", e); }
             }
-            if(allEvs.length === 0) allEvs = [{ t: 'Geen afspraken of vul iCal link in bij instellingen.', p: cals[0] || 'Systeem', date: new Date().toISOString().split('T')[0], time: '00:00' }];
+            if(allEvs.length === 0) {
+                allEvs = [{ t: 'Geen afspraken of vul iCal link in bij instellingen.', p: cals[0] || 'Systeem', date: new Date().toISOString().split('T')[0], time: '00:00' }];
+            }
             setItems(allEvs);
         };
         fetchCals();
@@ -377,8 +397,19 @@ function AgendaWidget({ lang }) {
     const colors = ['border-red-500', 'border-blue-500', 'border-green-500', 'border-purple-500', 'border-yellow-500', 'border-pink-500'];
     const getColor = (name) => colors[cals.indexOf(name) % colors.length];
 
-    const tEnd = new Date(d); tEnd.setDate(tEnd.getDate() + 7); const dEnd = tEnd.toISOString().split('T')[0];
-    const filteredItems = items.filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd))).sort((a,b)=>a.time.localeCompare(b.time));
+    const tEnd = new Date(d); 
+    tEnd.setDate(tEnd.getDate() + 7); 
+    const dEnd = tEnd.toISOString().split('T')[0];
+    
+    // FIX: Sorteer éérst op datum, dan pas op tijd. Zorg dat "Hele dag" als 00:00 wordt gerekend in de sortering.
+    const filteredItems = items
+        .filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd)))
+        .sort((a,b) => {
+            if(a.date !== b.date) return a.date.localeCompare(b.date);
+            const tA = a.time === 'Hele dag' ? '00:00' : a.time;
+            const tB = b.time === 'Hele dag' ? '00:00' : b.time;
+            return tA.localeCompare(tB);
+        });
 
     return (
         <div className="widget h-[450px]">
@@ -386,7 +417,17 @@ function AgendaWidget({ lang }) {
             <div className="flex border-b bg-white overflow-x-auto p-2 gap-2 hide-scroll">{cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-2 py-1.5 text-[9px] font-bold border rounded uppercase whitespace-nowrap ${f.includes(p)?'bg-[#0073b1] text-white border-[#0073b1]':'text-gray-400 bg-gray-50'}`}>{p}</button>)}</div>
             <div className="p-3 flex border-b bg-gray-50 justify-center"><div className="flex items-center gap-1 bg-white border rounded"><button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&lt;</button><span className="text-[10px] font-bold w-[90px] text-center">{fmtDate(d)}</span><button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&gt;</button></div></div>
             <div className="flex-1 p-4 bg-white grid grid-cols-2 gap-3 overflow-y-auto content-start">
-                {filteredItems.map((i, idx) => <div key={idx} className={`p-3 border-l-4 ${getColor(i.p)} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}><div className="flex justify-between items-start mb-1"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week'?`${fmtDate(i.date).slice(0,5)} `:''}{i.p}</span><span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded">{i.time}</span></div><span className="font-bold text-xs leading-tight">{i.t}</span></div>)}
+                {filteredItems.map((i, idx) => (
+                    <div key={idx} className={`p-3 border-l-4 ${getColor(i.p)} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}>
+                        <div className="flex justify-between items-start mb-1">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                {view==='week' ? `${fmtDate(i.date).slice(0,5)} ` : ''}{i.p}
+                            </span>
+                            <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded">{i.time}</span>
+                        </div>
+                        <span className="font-bold text-xs leading-tight">{i.t}</span>
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -912,12 +953,12 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
             if (!res.ok || dbData.error) {
                 alert("FOUT BIJ OPSLAAN: " + (dbData.error || res.statusText));
                 setIsSaving(false);
-                return; // Stop direct, niet herladen!
+                return; 
             }
         } catch(e) { 
             alert("NETWERK FOUT BIJ OPSLAAN: " + e.message); 
             setIsSaving(false);
-            return; // Stop direct!
+            return; 
         }
 
         setIsSaving(false);
@@ -977,7 +1018,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                     <label className="text-[9px] font-bold text-gray-500 uppercase block mb-1">AI Chat URL (Voor updates)</label>
                     <div className="flex gap-2">
                         <input type="text" placeholder="Link van AI chat..." value={aiUrl} onChange={e=>setAiUrl(e.target.value)} className="flex-1 p-3 border rounded text-xs font-mono bg-white shadow-sm outline-none focus:border-blue-500" />
-                        <a href={aiUrl || '#'} target="_blank" className="bg-blue-600 text-white px-4 rounded flex items-center justify-center font-bold text-xs hover:bg-blue-700 transition">Open Chat</a>
+                        <a href={aiUrl || '#'} target="_blank" className="bg-blue-600 text-white px-4 rounded flex items-center justify-center font-bold text-xs hover:bg-blue-700 transition">Open</a>
                     </div>
                 </section>
             </div>
@@ -1005,20 +1046,24 @@ function App() {
                 try {
                     const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}&t=${Date.now()}`, { cache: 'no-store' });
                     if(res.ok) {
-                        const cloudData = await res.json();
+                        let cloudData = await res.json();
                         
+                        if (typeof cloudData === 'string') {
+                            try { cloudData = JSON.parse(cloudData); } catch(e) {}
+                        }
+
                         if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
                             Object.keys(cloudData).forEach(k => S.save(k, cloudData[k]));
                         }
                     }
-                } catch(e) { console.error("Cloud synchronisatie mislukt.", e); }
+                } catch(e) { console.error("Auto-sync mislukt", e); }
                 
                 setLang(S.load('lang', 'nl'));
                 setLayout(S.load('layout_v7', defaultLayout));
                 setIsSyncing(false); 
             }
         };
-        doSync();
+        autoSync();
     }, [isAuth]);
 
     useEffect(() => {
@@ -1048,7 +1093,7 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met de veilige cloud...' : 'Personal Dashboard ver. 4.0'}</p>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.0'}</p>
                     {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
