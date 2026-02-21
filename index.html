@@ -356,6 +356,7 @@ function AgendaWidget({ lang }) {
                     for(let k = 0; k < lines.length; k++) {
                         let l = lines[k];
                         
+                        // FIX: iCal Line Folding (Plakt zinnen die op een nieuwe regel doorgaan weer aan elkaar)
                         while (k + 1 < lines.length && (lines[k+1].startsWith(' ') || lines[k+1].startsWith('\t'))) {
                             k++; 
                             l += lines[k].substring(1);
@@ -371,6 +372,7 @@ function AgendaWidget({ lang }) {
                             }
                         }
                         else if(l.startsWith('DTSTART')) { 
+                            // FIX: Negeer TZID en vind direct het 2026xxxxTxxxxxx format
                             const m = l.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?/); 
                             if(m) { 
                                 cur.date = `${m[1]}-${m[2]}-${m[3]}`; 
@@ -398,6 +400,7 @@ function AgendaWidget({ lang }) {
     tEnd.setDate(tEnd.getDate() + 7); 
     const dEnd = tEnd.toISOString().split('T')[0];
     
+    // FIX: Sorteer éérst op datum, en daarna pas op tijd (waarbij Hele dag bovenaan de dag komt)
     const filteredItems = items
         .filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd)))
         .sort((a,b) => {
@@ -1014,7 +1017,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                     <label className="text-[9px] font-bold text-gray-500 uppercase block mb-1">AI Chat URL (Voor updates)</label>
                     <div className="flex gap-2">
                         <input type="text" placeholder="Link van AI chat..." value={aiUrl} onChange={e=>setAiUrl(e.target.value)} className="flex-1 p-3 border rounded text-xs font-mono bg-white shadow-sm outline-none focus:border-blue-500" />
-                        <a href={aiUrl || '#'} target="_blank" className="bg-blue-600 text-white px-4 rounded flex items-center justify-center font-bold text-xs hover:bg-blue-700 transition">Open Chat</a>
+                        <a href={aiUrl || '#'} target="_blank" className="bg-blue-600 text-white px-4 rounded flex items-center justify-center font-bold text-xs hover:bg-blue-700 transition">Open</a>
                     </div>
                 </section>
             </div>
