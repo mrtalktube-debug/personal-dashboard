@@ -647,7 +647,7 @@ function PepperWidget({ lang }) {
     const deals = [{ t: 'Sony WH-1000XM5', p: '€259', o: '€349', d: '25%', h: true }, { t: 'MacBook Air M2', p: '€899', o: '€1199', d: '25%', h: true }];
     return (
         <div className="widget h-[350px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Tag/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper</h3></div></div>
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Pepper/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper</h3></div></div>
             <div className="p-4 flex gap-4 overflow-x-auto flex-1 items-center bg-white hide-scroll">
                 {deals.map((d, i) => (
                     <div key={i} className="min-w-[180px] h-[260px] border rounded p-3 bg-white hover:border-red-400 transition flex flex-col shadow-sm">
@@ -883,47 +883,29 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v7', n); };
 
     const saveAll = async () => { 
-        // 1. Sla lokaal op
         S.save('bitvavo_keys', bvKeys); 
         S.save('api_keys_dyn', apis); 
         S.save('icals_dyn', icals); 
         S.save('ai_chat_url', aiUrl); 
         S.save('layout_v7', layout);
         
-        // 2. Bundel data
-        const cloudSettings = {
-            bitvavo_keys: bvKeys,
-            api_keys_dyn: apis,
-            icals_dyn: icals,
-            ai_chat_url: aiUrl,
-            layout_v7: layout,
-            newscats: S.load('newscats', ['Nieuws', 'Tech', 'Beurs']),
-            news_blocked: S.load('news_blocked', []),
-            inv_assets: S.load('inv_assets', ['ASML Holding', 'Novo Nordisk', 'Vanguard S&P 500']),
-            wcity: S.load('wcity', 'Zoetermeer')
-        };
+        // Push naar Vercel API voor Cloud Opslag
+        const cloudSettings = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('d_')) {
+                cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
+            }
+        }
 
-        // 3. Stuur naar cloud
         try {
-            const res = await fetch('/api/settings', {
+            await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings })
             });
-            
-            if (res.ok) {
-                alert("✅ Succesvol opgeslagen in de cloud! Je kunt het nu op elk apparaat laden.");
-            } else {
-                const errData = await res.json();
-                alert(`❌ Cloud Fout: ${errData.error}. Check of je database goed gekoppeld is in Vercel.`);
-                return; // Stop met herladen zodat je de error kunt lezen
-            }
-        } catch(e) { 
-            console.error("Cloud opslag mislukt", e); 
-            alert("❌ Netwerkfout bij het opslaan naar de cloud.");
-            return; // Stop met herladen
-        }
-        
+        } catch(e) { console.error("Cloud opslag mislukt", e); }
+
         onClose(); 
         window.location.reload(); 
     };
@@ -993,51 +975,38 @@ function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lang, setLang] = useState(S.load('lang', 'nl'));
-    const [isSyncing, setIsSyncing] = useState(true); // Altijd checken bij laden
+    const [isSyncing, setIsSyncing] = useState(false);
     
     const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'sports', 'sudoku', 'lang'];
-    const [layout, setLayout] = useState(S.load('layout_v7', defaultLayout));
-    
-    // Bij allereerste keer inladen controleren we ALTIJD de cloud (als je al ingelogd was op mobiel bijv.)
-    useEffect(() => {
-        const checkCloud = async () => {
-            if (isAuth) {
-                try {
-                    const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}`);
-                    if(res.ok) {
-                        const cloudData = await res.json();
-                        if (cloudData && Object.keys(cloudData).length > 0) {
-                            Object.keys(cloudData).forEach(k => S.save(k, cloudData[k]));
-                            setLayout(cloudData.layout_v7 || defaultLayout);
-                        }
-                    }
-                } catch(e) { console.error("Achtergrond sync mislukt", e); }
+    const [layout, setLayout] = useState(() => {
+        let l = S.load('layout_v7', null);
+        if (!l) {
+            l = S.load('layout_v6', defaultLayout);
+            if (l.includes('f1') || l.includes('golf')) {
+                l = l.filter(w => w !== 'f1' && w !== 'golf');
+                l.splice(7, 0, 'sports'); 
             }
-            setIsSyncing(false);
-        };
-        
-        if (isAuth) {
-            checkCloud();
-        } else {
-            setIsSyncing(false);
+            S.save('layout_v7', l);
         }
-    }, [isAuth]);
-
+        return l;
+    });
+    
     useEffect(() => {
-        if (!isAuth && !isSyncing && window.google) {
+        if (!isAuth && window.google) {
             window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredentialResponse });
             window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large", shape: "pill" });
         }
-    }, [isAuth, isSyncing]);
+    }, [isAuth]);
 
     const handleCredentialResponse = async (response) => {
         try {
             const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
             if(payload.email.toLowerCase() === ALLOWED_EMAIL.toLowerCase()) { 
                 setIsSyncing(true);
-                // Probeer cloud data op te halen zodra je op login klikt
+                
+                // Ophalen uit de Cloud Database (Upstash) via api/settings.js
                 try {
-                    const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}`);
+                    const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}&t=${Date.now()}`, { cache: 'no-store' });
                     if(res.ok) {
                         const cloudData = await res.json();
                         if (cloudData && Object.keys(cloudData).length > 0) {
@@ -1045,7 +1014,7 @@ function App() {
                             setLayout(cloudData.layout_v7 || defaultLayout);
                         }
                     }
-                } catch(e) { console.error("Cloud sync mislukt, we gebruiken lokale opslag.", e); }
+                } catch(e) { console.error("Cloud sync ophalen mislukt.", e); }
                 
                 setIsSyncing(false);
                 setIsAuth(true); 
@@ -1063,7 +1032,7 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud...' : 'Personal Dashboard ver. 4.0'}</p>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met de cloud...' : 'Personal Dashboard ver. 4.0'}</p>
                     {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
