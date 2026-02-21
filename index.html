@@ -356,7 +356,6 @@ function AgendaWidget({ lang }) {
                     for(let k = 0; k < lines.length; k++) {
                         let l = lines[k];
                         
-                        // FIX: iCal Line Folding (Magister breekt lange zinnen af op een nieuwe regel die met een spatie begint)
                         while (k + 1 < lines.length && (lines[k+1].startsWith(' ') || lines[k+1].startsWith('\t'))) {
                             k++; 
                             l += lines[k].substring(1);
@@ -366,14 +365,12 @@ function AgendaWidget({ lang }) {
                             cur = {};
                         }
                         else if(l.startsWith('SUMMARY')) { 
-                            // FIX: Zoek de eerste dubbele punt om parameters zoals SUMMARY;LANGUAGE=nl: over te slaan
                             const idx = l.indexOf(':'); 
                             if(idx !== -1) {
                                 cur.t = l.substring(idx + 1).replace(/\\,/g, ',').replace(/\\;/g, ';'); 
                             }
                         }
                         else if(l.startsWith('DTSTART')) { 
-                            // FIX: Robuustere Regex die dwars door tijdzone parameters (TZID) heen kijkt
                             const m = l.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?/); 
                             if(m) { 
                                 cur.date = `${m[1]}-${m[2]}-${m[3]}`; 
@@ -401,7 +398,6 @@ function AgendaWidget({ lang }) {
     tEnd.setDate(tEnd.getDate() + 7); 
     const dEnd = tEnd.toISOString().split('T')[0];
     
-    // FIX: Sorteer éérst op datum, dan pas op tijd. Zorg dat "Hele dag" als 00:00 wordt gerekend in de sortering.
     const filteredItems = items
         .filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd)))
         .sort((a,b) => {
@@ -1018,7 +1014,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                     <label className="text-[9px] font-bold text-gray-500 uppercase block mb-1">AI Chat URL (Voor updates)</label>
                     <div className="flex gap-2">
                         <input type="text" placeholder="Link van AI chat..." value={aiUrl} onChange={e=>setAiUrl(e.target.value)} className="flex-1 p-3 border rounded text-xs font-mono bg-white shadow-sm outline-none focus:border-blue-500" />
-                        <a href={aiUrl || '#'} target="_blank" className="bg-blue-600 text-white px-4 rounded flex items-center justify-center font-bold text-xs hover:bg-blue-700 transition">Open</a>
+                        <a href={aiUrl || '#'} target="_blank" className="bg-blue-600 text-white px-4 rounded flex items-center justify-center font-bold text-xs hover:bg-blue-700 transition">Open Chat</a>
                     </div>
                 </section>
             </div>
@@ -1063,7 +1059,7 @@ function App() {
                 setIsSyncing(false); 
             }
         };
-        autoSync();
+        doSync();
     }, [isAuth]);
 
     useEffect(() => {
