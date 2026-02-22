@@ -245,6 +245,7 @@ function AIWidget({ lang }) {
         try {
             const saved = S.load('ai_hist', null);
             if(saved && Array.isArray(saved) && saved.length > 0) {
+                // Filter oude default berichten eruit als die er nog in staan
                 if(saved[0]?.t?.includes('Gemini') || saved[0]?.t?.includes('OpenRouter') || saved[0]?.t?.includes('Spark') || saved[0]?.t?.includes('MICHAEL AI')) return defaultHist;
                 return saved;
             }
@@ -441,11 +442,12 @@ function AIWidget({ lang }) {
 
     return (
         <div className={`widget ai-transition relative ${exp?'h-[450px]':'h-[72px]'} flex flex-col overflow-hidden`}>
-            {/* Header met Schaap logo */}
+            {/* Header met ECHTE Schaap foto */}
             <div className="p-4 bg-white border-b flex justify-between items-center cursor-pointer shrink-0 z-20" onClick={()=>setExp(true)}>
                 <div className="flex items-center gap-2">
-                    <span className="bg-gradient-to-br from-gray-700 to-black text-white p-1.5 rounded-lg shadow-sm"><Ico.Sheep className="w-5 h-5"/></span>
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-800">MICHAEL AI</h3>
+                    {/* ZORG DAT schaap.jpg IN DEZELFDE MAP STAAT ALS JE HTML BESTAND */}
+                    <img src="schaap.jpg" alt="AI Logo" className="w-8 h-8 rounded-lg shadow-sm object-contain bg-gray-50 border border-gray-100" />
+                    {/* Tekst "MICHAEL AI" is hier verwijderd voor een strakkere look */}
                 </div>
                 {exp ? (
                     <div className="flex items-center gap-2">
@@ -482,59 +484,6 @@ function AIWidget({ lang }) {
                                 <div className="bg-[#f0f4f9] px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm">
                                     <div className="flex gap-1.5"><span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}/><span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}/><span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}/></div>
                                 </div>
-                            </div>
-                        )}
-                        <div className="h-4"></div>
-                    </div>
-                    
-                    {/* Input bar zonder Michael AI logo */}
-                    <div className="p-3 bg-white border-t shrink-0 z-20">
-                        {attachedFile && (
-                            <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-bold px-3 py-1.5 rounded-lg w-fit mb-2 shadow-sm">
-                                📎 {attachedFile.name}
-                                <button onClick={()=>setAttachedFile(null)} className="hover:text-red-500 ml-1">×</button>
-                            </div>
-                        )}
-                        <div className="flex items-center gap-2 bg-[#f0f4f9] rounded-full p-1.5 pl-3 border border-transparent focus-within:border-gray-300 transition shadow-inner">
-                            <input type="file" ref={fileRef} accept="image/*,text/*,.pdf,.csv,.json" onChange={handleFile} className="hidden"/>
-                            <button onClick={()=>fileRef.current.click()} className="text-gray-400 hover:text-gray-800 transition p-0.5" title="Bestand of Foto toevoegen">
-                                <Ico.Clip/>
-                            </button>
-                            <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}} placeholder={lang==='nl'?'Vraag of commando...':'Question or command...'} className="flex-1 bg-transparent text-[13px] outline-none px-2 text-gray-800 placeholder-gray-400" disabled={loading}/>
-                            
-                            <div className="flex items-center gap-1 bg-white rounded-full p-1 shadow-sm border border-gray-100 pr-1 pl-1">
-                                <button onClick={send} disabled={loading || (!msg.trim() && !attachedFile)} className={`flex items-center justify-center w-8 h-8 rounded-full transition shrink-0 ${msg.trim()||attachedFile?'bg-[#0b57d0] text-white shadow-md hover:bg-blue-800':'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-                                    <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </>
-            )}
-
-            {/* History view */}
-            {exp && view === 'history' && (
-                <div className="flex-1 overflow-y-auto p-4 space-y-2 hide-scroll">
-                    {sessions.length === 0 ? (
-                        <div className="flex-1 flex items-center justify-center text-gray-400 text-xs font-bold h-full">
-                            {lang==='nl'?'Nog geen opgeslagen chats.':'No saved chats yet.'}
-                        </div>
-                    ) : sessions.map(s => (
-                        <div key={s.id} onClick={()=>loadSession(s)} className={`p-3 rounded-lg border cursor-pointer transition hover:border-gray-300 hover:bg-gray-50 ${activeSession===s.id?'border-gray-400 bg-gray-50':'border-gray-100 bg-white'}`}>
-                            <div className="flex justify-between items-start">
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-bold text-gray-800 truncate">{s.title}</div>
-                                    <div className="text-[10px] text-gray-400 mt-0.5">{s.date} · {s.msgs.length} berichten</div>
-                                </div>
-                                <button onClick={e=>deleteSession(s.id, e)} className="text-gray-300 hover:text-red-500 transition text-xs ml-2 shrink-0">✕</button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
 
 function CryptoWidget({ lang }) {
     const [valuta, setValuta] = useState('EUR'); 
