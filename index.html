@@ -157,293 +157,349 @@ function DailyBriefing({ lang }) {
 
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
+    const [loading, setLoading] = useState(false);
     const [voices, setVoices] = useState([]);
-    const [attachedFile, setAttachedFile] = useState(null);
-    
-    // Snelheid en Play/Stop status
-    const [speechRate, setSpeechRate] = useState(1);
     const [playingId, setPlayingId] = useState(null);
-    
+    const [attachedFile, setAttachedFile] = useState(null);
     const fileRef = useRef(null);
     const chatEndRef = useRef(null);
+    const chatContainerRef = useRef(null);
+
+    /* ── Chat Sessions ── */
+    const defaultHist = [{r:'ai', t: lang==='nl'?'Hoi! Ik ben Spark ⚡ — jouw AI-assistent. Stel een vraag, geef een commando, of upload een bestand.':'Hi! I\'m Spark ⚡ — your AI assistant. Ask a question, give a command, or upload a file.'}];
     
-    const defaultHist = [{r: 'ai', t: lang==='nl'?'Hallo! Ik ben verbonden via Groq. Upload een foto/bestand of stel je vraag!':'Hello! I am connected via Groq. Ask a question!'}];
-    
+    const [sessions, setSessions] = useState(() => {
+        try { return S.load('spark_sessions', []); } catch(e) { return []; }
+    });
+    const [activeSession, setActiveSession] = useState(null);
     const [hist, setHist] = useState(() => {
         try {
             const saved = S.load('ai_hist', null);
-            if (saved && Array.isArray(saved) && saved.length > 0) return saved;
+            if(saved && Array.isArray(saved) && saved.length > 0) {
+                if(saved[0]?.t?.includes('Gemini') || saved[0]?.t?.includes('OpenRouter') || saved[0]?.t?.includes('Welkom')) return defaultHist;
+                return saved;
+            }
             return defaultHist;
         } catch(e) { return defaultHist; }
     });
-    
-    const [exp, setExp] = useState(false);
-    
-    // Model state met actuele stabiele Groq modellen
-    const [model, setModel] = useState(() => {
-        const savedModel = S.load('ai_model', 'llama-3.3-70b-versatile');
-        if (savedModel.includes('mixtral') || savedModel.includes('free') || savedModel.includes('gemini') || savedModel.includes('gpt-oss')) return 'llama-3.3-70b-versatile';
-        return savedModel;
-    });
 
+    const [view, setView] = useState('chat'); // 'chat' | 'history'
+    const [exp, setExp] = useState(false);
+
+    /* ── Model: single reliable model with auto-fallback ── */
+    const MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+
+    /* ── TTS Voices ── */
     useEffect(() => {
-        const updateVoices = () => setVoices(window.speechSynthesis.getVoices());
-        updateVoices();
-        window.speechSynthesis.onvoiceschanged = updateVoices;
+        const u = () => setVoices(window.speechSynthesis.getVoices());
+        u(); window.speechSynthesis.onvoiceschanged = u;
     }, []);
 
-    // Automatisch scrollen naar het laatste bericht
+    /* ── Auto-scroll within chat only ── */
     useEffect(() => {
-        if (exp) {
-            setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        if(exp && chatContainerRef.current) {
+            requestAnimationFrame(() => {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            });
         }
-    }, [hist, exp]);
+    }, [hist, exp, loading]);
 
-    // Voorlees functionaliteit (Play / Stop)
-    const toggleSpeak = (txt, id) => {
+    /* ── TTS per message ── */
+    const toggleSpeak = (txt, id, rate = 1) => {
         const synth = window.speechSynthesis;
-        if (playingId === id) {
-            synth.cancel(); 
-            setPlayingId(null);
-            return;
-        }
-        synth.cancel(); 
-        
-        const cleanTxt = txt.replace(/\[Bijgevoegd.*?\]\n/g, '');
-        const u = new SpeechSynthesisUtterance(cleanTxt);
-        
-        let bestVoice = voices.find(v => v.lang.includes(lang==='nl'?'nl':'en') && (v.name.includes('Google') || v.name.includes('Premium') || v.name.includes('Natural') || v.name.includes('Siri')));
-        if (!bestVoice) bestVoice = voices.find(v => v.lang.includes(lang==='nl'?'nl':'en'));
-        
-        if (bestVoice) u.voice = bestVoice;
-        u.lang = lang === 'nl' ? 'nl-NL' : 'en-US';
-        u.rate = speechRate; 
-        
+        if(playingId === id) { synth.cancel(); setPlayingId(null); return; }
+        synth.cancel();
+        const clean = txt.replace(/\[Bijgevoegd.*?\]\n/g, '').replace(/```[\s\S]*?```/g, 'codeblok').replace(/[#*_`]/g, '');
+        const u = new SpeechSynthesisUtterance(clean);
+        let v = voices.find(v => v.lang.includes(lang==='nl'?'nl':'en') && /Google|Premium|Natural|Siri/i.test(v.name));
+        if(!v) v = voices.find(v => v.lang.includes(lang==='nl'?'nl':'en'));
+        if(v) u.voice = v;
+        u.lang = lang==='nl'?'nl-NL':'en-US';
+        u.rate = rate;
         u.onend = () => setPlayingId(null);
         u.onerror = () => setPlayingId(null);
-        
         setPlayingId(id);
         synth.speak(u);
     };
 
+    /* ── File handling ── */
     const handleFile = (e) => {
-        const file = e.target.files[0];
-        if(!file) return;
+        const file = e.target.files[0]; if(!file) return;
         const isImg = file.type.startsWith('image/');
         const reader = new FileReader();
-        reader.onload = (ev) => {
-            setAttachedFile({ name: file.name, type: isImg ? 'image' : 'text', content: ev.target.result });
-        };
-        if (isImg) reader.readAsDataURL(file); 
-        else reader.readAsText(file);
+        reader.onload = (ev) => setAttachedFile({name: file.name, type: isImg?'image':'text', content: ev.target.result});
+        if(isImg) reader.readAsDataURL(file); else reader.readAsText(file);
     };
 
+    /* ── Delete message ── */
     const deleteMsg = (idx) => {
-        const n = hist.filter((_, i) => i !== idx);
-        if (n.length === 0) {
-            setHist(defaultHist);
-            S.save('ai_hist', defaultHist);
-        } else {
-            setHist(n);
-            S.save('ai_hist', n.map(m => ({r: m.r, t: m.t}))); 
-        }
+        const n = hist.filter((_,i)=>i!==idx);
+        const r = n.length===0 ? defaultHist : n;
+        setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
     };
 
+    /* ── Session management ── */
+    const saveCurrentSession = () => {
+        if(hist.length <= 1) return;
+        const title = hist.find(m=>m.r==='usr')?.t?.slice(0,40) || 'Chat';
+        const session = {id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: hist.map(m=>({r:m.r, t:m.t}))};
+        const updated = [session, ...sessions].slice(0, 20);
+        setSessions(updated); S.save('spark_sessions', updated);
+    };
+    const newChat = () => {
+        saveCurrentSession();
+        setHist(defaultHist); S.save('ai_hist', defaultHist);
+        setActiveSession(null); setView('chat');
+    };
+    const loadSession = (session) => {
+        saveCurrentSession();
+        setHist(session.msgs); S.save('ai_hist', session.msgs);
+        setActiveSession(session.id); setView('chat');
+    };
+    const deleteSession = (id, e) => {
+        e.stopPropagation();
+        const updated = sessions.filter(s=>s.id!==id);
+        setSessions(updated); S.save('spark_sessions', updated);
+    };
+
+    /* ── Dashboard commands (improved NLP) ── */
+    const tryDashboardCommand = (input) => {
+        const low = input.toLowerCase().replace(/[?!.,]/g, '');
+        
+        // Weather
+        if(/\b(weer|weather|temperatuur|graden)\b/.test(low)) {
+            let city = null;
+            const m = low.match(/(?:weer\s+(?:in|van|naar)|weather\s+(?:in|for|to)|naar|in)\s+([a-zà-ÿ\s-]+)/i);
+            if(m) city = m[1].replace(/\b(de|het|een|the|a)\b/gi,'').trim();
+            if(!city || city.length < 2) {
+                const words = low.replace(/\b(weer|weather|temperatuur|graden|wat|is|het|hoe|in|van|toon|laat|zien|verander|change|show|set)\b/gi,'').trim().split(/\s+/).filter(w=>w.length>1);
+                city = words.join(' ');
+            }
+            if(city && city.length >= 2) {
+                emitCmd('SET_CITY', city.charAt(0).toUpperCase() + city.slice(1));
+                return lang==='nl'?`✅ Weer aangepast naar **${city}**.`:`✅ Weather changed to **${city}**.`;
+            }
+            return null;
+        }
+        // Agenda
+        if(/\b(agenda|schedule|kalender|calendar)\b/.test(low)) {
+            const m = low.match(/(?:van|voor|of|for)\s+([a-zà-ÿ]+)/i);
+            if(m) { emitCmd('SET_AGENDA', m[1].trim()); return lang==='nl'?`✅ Agenda gefilterd op ${m[1].trim()}.`:`✅ Schedule filtered for ${m[1].trim()}.`; }
+        }
+        // News
+        if(/\b(nieuws|news)\b/.test(low)) {
+            const m = low.match(/(?:over|about|van|of)\s+([a-zà-ÿ0-9\s]+)/i);
+            if(m) { emitCmd('SET_NEWS', m[1].trim()); return lang==='nl'?`✅ Nieuws gefilterd op ${m[1].trim()}.`:`✅ News filtered for ${m[1].trim()}.`; }
+        }
+        // Sports
+        if(/\b(sport|resultat|f1|formula|voetbal|football|race)\b/.test(low)) {
+            const m = low.match(/(?:van|for|over|about)\s+([a-zà-ÿ0-9\s]+)/i);
+            const q = m ? m[1].trim() : 'verstappen';
+            emitCmd('SET_SPORTS', q);
+            return lang==='nl'?`✅ Sport gefilterd op ${q}.`:`✅ Sports filtered for ${q}.`;
+        }
+        return null;
+    };
+
+    /* ── Send message ── */
     const send = async () => {
-        if(!msg && !attachedFile) return; 
+        if(!msg.trim() && !attachedFile) return;
+        let displayMsg = msg.trim();
+        if(attachedFile) displayMsg = `[Bijgevoegd: ${attachedFile.name}]\n${displayMsg}`;
         
-        let displayMsg = msg || '';
-        if (attachedFile) displayMsg = `[Bijgevoegd: ${attachedFile.name}]\n${msg}`;
-        
-        const n = [...hist, {r: 'usr', t: displayMsg, file: attachedFile}]; 
-        setHist(n); 
-        S.save('ai_hist', n.map(m => ({r: m.r, t: m.t}))); 
-        
+        const n = [...hist, {r:'usr', t: displayMsg, file: attachedFile}];
+        setHist(n); S.save('ai_hist', n.map(m=>({r:m.r, t:m.t})));
         setMsg(''); setAttachedFile(null);
         if(fileRef.current) fileRef.current.value = '';
 
-        // --- DASHBOARD AGENT COMMANDO'S ---
-        const inputLower = displayMsg.toLowerCase(); 
-        let handled = false;
-        let actionText = '';
-
-        if (inputLower.includes('weer') || inputLower.includes('weather')) {
-            // Slimmere extractie, begrijpt ook "verander in de locatie los angeles"
-            let city = 'Bali';
-            const match = inputLower.match(/(?:naar|in|locatie)\s+([a-z\s]+)/i);
-            if (match) {
-                city = match[1].replace(/de locatie|het|toon|laat|zien/gi, '').trim();
-            }
-            emitCmd('SET_CITY', city);
-            actionText = lang==='nl' ? `Ik heb de weerlocatie aangepast naar ${city}.` : `Changed weather location to ${city}.`;
-            handled = true;
-        } else if (inputLower.includes('agenda') || inputLower.includes('schedule')) {
-            const m = inputLower.match(/(?:van|voor|alleen)\s+([a-z]+)/i);
-            const person = m ? m[1].trim() : inputLower.replace('agenda', '').trim();
-            emitCmd('SET_AGENDA', person);
-            actionText = lang==='nl' ? `Ik heb de agenda gefilterd op ${person}.` : `Filtered schedule for ${person}.`;
-            handled = true;
-        } else if (inputLower.includes('resultat') || inputLower.includes('sport')) {
-            const m = inputLower.match(/(?:van|voor|alleen)\s+([a-z]+)/i);
-            const query = m ? m[1].trim() : 'verstappen';
-            emitCmd('SET_SPORTS', query); 
-            actionText = lang==='nl' ? `Ik zet de sport filters om voor resultaten van ${query}.` : `Showing sports results for ${query}.`;
-            handled = true;
-        } else if (inputLower.includes('nieuws') || inputLower.includes('news')) {
-            const m = inputLower.match(/(?:over|van)\s+([a-z0-9]+)/i);
-            const query = m ? m[1].trim() : 'audi';
-            emitCmd('SET_NEWS', query); 
-            actionText = lang==='nl' ? `Ik heb het nieuws direct gefilterd op ${query}.` : `Filtered news for ${query}.`;
-            handled = true;
-        }
-
-        if (handled) {
+        // Try dashboard command first
+        const cmdResult = tryDashboardCommand(displayMsg);
+        if(cmdResult) {
             setTimeout(() => {
-                const replyObj = {r: 'ai', t: actionText};
-                const r = [...n, replyObj];
-                setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t})));
-            }, 500);
+                const r = [...n, {r:'ai', t: cmdResult}];
+                setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+            }, 400);
             return;
         }
-        
-        // --- API REQUEST ---
-        const apiKeyObj = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'));
-        const groqKey = apiKeyObj ? apiKeyObj.val : '';
-        
-        if (groqKey) {
-            try {
-                let apiModel = model;
-                const messages = n.slice(-5).map(m => {
-                    if (m.r === 'usr' && m.file && m.file.type === 'image') {
-                        apiModel = 'llama-3.2-11b-vision-preview'; 
-                        return {
-                            role: 'user',
-                            content: [
-                                { type: "text", text: m.t.replace(/\[Bijgevoegd:.*?\]\n/, '') || 'Beschrijf deze afbeelding in detail.' },
-                                { type: "image_url", image_url: { url: m.file.content } }
-                            ]
-                        };
-                    } else if (m.r === 'usr' && m.file && m.file.type === 'text') {
-                        return { role: 'user', content: `Bestand ${m.file.name}:\n${m.file.content}\n\n${m.t}` };
-                    } else {
-                        return { role: m.r === 'usr' ? 'user' : 'assistant', content: m.t };
-                    }
-                });
 
-                const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${groqKey}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({ model: apiModel, messages: messages })
+        // API call with auto-fallback
+        const apiKeyObj = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'));
+        const groqKey = apiKeyObj?.val;
+        
+        if(!groqKey) {
+            setTimeout(() => {
+                const r = [...n, {r:'ai', t: lang==='nl'?'⚠️ Geen Groq key gevonden. Ga naar Instellingen → API Keys → voeg een key toe met naam **Groq**.\n\nMaak gratis een key aan op https://console.groq.com/keys':'⚠️ No Groq key found. Go to Settings → API Keys → add a key named **Groq**.'}];
+                setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+            }, 400);
+            return;
+        }
+
+        setLoading(true);
+        
+        // Build messages
+        const buildMessages = () => {
+            const system = {role:'system', content: lang==='nl'
+                ? 'Je bent Spark, een snelle en behulpzame AI-assistent in een persoonlijk dashboard. Antwoord beknopt en in het Nederlands tenzij anders gevraagd. Je kunt het dashboard aansturen (weer, agenda, nieuws, sport).'
+                : 'You are Spark, a fast and helpful AI assistant in a personal dashboard. Answer concisely.'
+            };
+            const recent = n.slice(-8).map(m => {
+                if(m.r==='usr' && m.file?.type==='text') return {role:'user', content:`Bestand ${m.file.name}:\n${m.file.content.slice(0,3000)}\n\n${m.t.replace(/\[Bijgevoegd:.*?\]\n/,'')}`};
+                if(m.r==='usr' && m.file?.type==='image') return {role:'user', content:[
+                    {type:'text', text: m.t.replace(/\[Bijgevoegd:.*?\]\n/,'') || 'Beschrijf deze afbeelding.'},
+                    {type:'image_url', image_url:{url: m.file.content}}
+                ]};
+                return {role: m.r==='usr'?'user':'assistant', content: m.t};
+            });
+            return [system, ...recent];
+        };
+
+        const messages = buildMessages();
+        let success = false;
+
+        for(const modelId of MODELS) {
+            try {
+                let useModel = modelId;
+                // Use vision model for images
+                if(attachedFile?.type === 'image' && modelId === MODELS[0]) useModel = 'llama-3.2-11b-vision-preview';
+                
+                const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method:'POST',
+                    headers:{'Authorization':`Bearer ${groqKey}`, 'Content-Type':'application/json'},
+                    body: JSON.stringify({model: useModel, messages, temperature: 0.7, max_tokens: 2048})
                 });
                 const data = await res.json();
                 
-                if(data.choices && data.choices[0].message) { 
+                if(data.choices?.[0]?.message?.content) {
                     const reply = data.choices[0].message.content;
-                    const r = [...n, {r: 'ai', t: reply}]; 
-                    setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t}))); 
-                } else if (data.error) {
-                    const r = [...n, {r: 'ai', t: `API Error: ${data.error.message}` }]; 
-                    setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t})));
+                    const r = [...n, {r:'ai', t: reply}];
+                    setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+                    success = true; break;
+                } else if(data.error) {
+                    console.warn(`Spark: ${useModel} failed, trying next...`, data.error.message);
+                    continue;
                 }
-            } catch(e) { 
-                const r = [...n, {r: 'ai', t: 'Netwerk of API Error.'}]; 
-                setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t}))); 
-            }
-        } else { 
-            setTimeout(() => { 
-                const r = [...n, {r: 'ai', t: `Geen API key gevonden. Vul je Groq key in bij de Instellingen onder de naam 'Groq'.`}]; 
-                setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t}))); 
-            }, 600); 
+            } catch(e) { console.warn(`Spark: ${modelId} network error`, e); continue; }
         }
+        
+        if(!success) {
+            const r = [...n, {r:'ai', t: lang==='nl'?'⚠️ Alle modellen zijn tijdelijk onbereikbaar. Probeer het over een minuutje opnieuw.':'⚠️ All models temporarily unavailable. Try again in a minute.'}];
+            setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+        }
+        setLoading(false);
     };
 
+    /* ── Render: Chat message ── */
+    const ChatMsg = ({m, i}) => {
+        const isAi = m.r === 'ai';
+        const [speed, setSpeed] = useState(1);
+        return (
+            <div className={`flex flex-col ${isAi?'items-start':'items-end'} group`}>
+                <div className="flex items-start gap-1.5 max-w-[90%]">
+                    {!isAi && <button onClick={()=>deleteMsg(i)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition mt-2 text-[10px]">✕</button>}
+                    <div className={`px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm whitespace-pre-wrap ${isAi?'bg-[#f0f4f9] text-gray-800 rounded-bl-sm':'bg-[#0b57d0] text-white rounded-br-sm'}`}>
+                        {m.t.includes('[Bijgevoegd:') && <div className="text-[10px] opacity-60 mb-1.5 pb-1 border-b border-current/20 italic">📎 {m.t.split('\n')[0].replace('[Bijgevoegd: ','').replace(']','')}</div>}
+                        {m.t.replace(/\[Bijgevoegd:.*?\]\n/,'')}
+                    </div>
+                    {isAi && <button onClick={()=>deleteMsg(i)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition mt-2 text-[10px]">✕</button>}
+                </div>
+                {isAi && (
+                    <div className="flex items-center gap-2 mt-1 ml-1">
+                        <button onClick={()=>toggleSpeak(m.t, i, speed)} className={`flex items-center gap-1 text-[9px] font-bold uppercase transition ${playingId===i?'text-red-500':'text-gray-400 hover:text-blue-600'}`}>
+                            <Ico.Spk/> {playingId===i?(lang==='nl'?'Stop':'Stop'):(lang==='nl'?'Voorlees':'Speak')}
+                        </button>
+                        <select value={speed} onChange={e=>{setSpeed(parseFloat(e.target.value)); if(playingId===i){window.speechSynthesis.cancel();setPlayingId(null);}}} className="text-[9px] text-gray-400 bg-transparent outline-none cursor-pointer">
+                            <option value={0.85}>0.85x</option>
+                            <option value={1}>1x</option>
+                            <option value={1.15}>1.15x</option>
+                            <option value={1.3}>1.3x</option>
+                        </select>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    /* ── Render ── */
     return (
-        <div className={`widget ai-transition ${exp ? 'h-[500px]' : 'h-[72px]'} flex flex-col`}>
+        <div className={`widget ai-transition ${exp?'h-[500px]':'h-[72px]'} flex flex-col overflow-hidden`}>
+            {/* Header */}
             <div className="p-4 bg-white border-b flex justify-between items-center cursor-pointer shrink-0" onClick={()=>setExp(true)}>
-                <div className="flex items-center gap-2 text-blue-600">
-                    <span className="bg-blue-100 p-1.5 rounded-full"><Ico.Bot/></span>
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-800">AI Assistant</h3>
+                <div className="flex items-center gap-2">
+                    <span className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-1.5 rounded-lg"><Ico.Bot/></span>
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-800">Spark ⚡</h3>
                 </div>
                 {exp ? (
-                    <div className="flex gap-2 items-center">
-                        <select value={speechRate} onChange={e=>setSpeechRate(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} className="bg-gray-50 border border-gray-200 rounded-full px-2 py-1 text-[9px] font-bold text-gray-600 outline-none cursor-pointer">
-                            <option value={1}>1.0x 🔊</option>
-                            <option value={1.5}>1.5x 🔊</option>
-                            <option value={2}>2.0x 🔊</option>
-                        </select>
-                        <button onClick={(e)=>{e.stopPropagation();setExp(false)}} className="text-gray-400 hover:text-gray-800 transition font-bold text-xl px-2">&times;</button>
+                    <div className="flex items-center gap-2">
+                        <button onClick={e=>{e.stopPropagation();setView(view==='history'?'chat':'history')}} className={`px-2.5 py-1 rounded-full text-[9px] font-bold transition ${view==='history'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                            {view==='history'?'← Chat':'📋 Historie'}
+                        </button>
+                        {view==='chat' && <button onClick={e=>{e.stopPropagation();newChat()}} className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-[9px] font-bold text-gray-500 transition">+ Nieuw</button>}
+                        <button onClick={e=>{e.stopPropagation();setExp(false)}} className="text-gray-400 hover:text-gray-800 transition font-bold text-lg ml-1">×</button>
                     </div>
                 ) : <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Openen ▼</div>}
             </div>
-            
-            <div className={`flex-1 flex overflow-hidden bg-white ${exp ? 'opacity-100' : 'opacity-0'}`}>
-                <div className="flex-1 p-4 overflow-y-auto space-y-5 block hide-scroll">
-                    {hist.map((m, i) => (
-                        <div key={i} className={`flex flex-col ${m.r==='ai'?'items-start':'items-end'}`}>
-                            <div className="flex items-center gap-2 max-w-[90%]">
-                                {m.r === 'usr' && <button onClick={()=>deleteMsg(i)} className="text-gray-200 hover:text-red-500 transition px-1 text-xs">✖</button>}
-                                
-                                <div className={`px-4 py-3 rounded-2xl text-[13.5px] leading-relaxed shadow-sm ${m.r==='ai'?'bg-[#f0f4f9] text-gray-800 rounded-bl-none':'bg-[#0b57d0] text-white rounded-br-none whitespace-pre-wrap'}`}>
-                                    {m.t.includes('[Bijgevoegd:') ? (
-                                        <div className="text-[10px] opacity-70 mb-2 italic border-b border-current pb-1">📎 {m.t.split('\n')[0].replace('[Bijgevoegd: ', '').replace(']', '')}</div>
-                                    ) : null}
-                                    {m.t.replace(/\[Bijgevoegd:.*?\]\n/, '')}
+
+            {/* Body */}
+            {exp && view === 'chat' && (
+                <>
+                    <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 hide-scroll" style={{overscrollBehavior:'contain'}}>
+                        {hist.map((m,i) => <ChatMsg key={i} m={m} i={i}/>)}
+                        {loading && (
+                            <div className="flex items-start">
+                                <div className="bg-[#f0f4f9] px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm">
+                                    <div className="flex gap-1.5"><span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}/><span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}/><span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}/></div>
                                 </div>
-
-                                {m.r === 'ai' && <button onClick={()=>deleteMsg(i)} className="text-gray-200 hover:text-red-500 transition px-1 text-xs">✖</button>}
                             </div>
-                            
-                            {m.r==='ai' && (
-                                <button onClick={()=>toggleSpeak(m.t, i)} className={`mt-1 ml-2 flex items-center gap-1 text-[9px] font-bold uppercase transition ${playingId === i ? 'text-red-500 hover:text-red-700' : 'text-gray-400 hover:text-blue-600'}`}>
-                                    {playingId === i ? <><Ico.Spk/> {lang==='nl'?'Stop':'Stop'}</> : <><Ico.Spk/> {lang==='nl'?'Voorlees':'Speak'}</>}
-                                </button>
-                            )}
-                        </div>
-                    ))}
-                    <div ref={chatEndRef} className="h-1"></div>
-                </div>
-            </div>
-
-            {exp && (
-                <div className="p-3 bg-white border-t shrink-0">
-                    {attachedFile && (
-                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-bold px-3 py-1.5 rounded-lg w-fit mb-2 shadow-sm">
-                            <span>📎 {attachedFile.name}</span>
-                            <button onClick={()=>setAttachedFile(null)} className="text-blue-500 hover:text-red-500 text-sm ml-2">&times;</button>
-                        </div>
-                    )}
-                    <div className="flex items-center gap-2 bg-[#f0f4f9] rounded-full p-1.5 pl-3 shadow-inner border border-transparent focus-within:border-gray-200 transition">
-                        <input type="file" ref={fileRef} accept="image/*, text/*, application/pdf, .csv, .json" onChange={handleFile} className="hidden" />
-                        <button onClick={()=>fileRef.current.click()} className="text-gray-500 hover:text-gray-800 transition p-1" title="Foto of Bestand toevoegen">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-                        </button>
-                        
-                        <input 
-                            value={msg} 
-                            onChange={e=>setMsg(e.target.value)} 
-                            onKeyPress={e=>e.key==='Enter'&&send()} 
-                            placeholder={lang==='nl'?"Vraag het de AI..." : "Ask the AI..."} 
-                            className="flex-1 bg-transparent text-[13.5px] outline-none px-2 text-gray-800 placeholder-gray-500" 
-                        />
-                        
-                        <div className="flex items-center gap-1 bg-white rounded-full p-1 shadow-sm border border-gray-200 pr-1">
-                            <select value={model} onChange={e=>{setModel(e.target.value);S.save('ai_model',e.target.value)}} className="bg-transparent text-gray-600 font-bold text-[10px] outline-none cursor-pointer pl-2 pr-1 appearance-none">
-                                <option value="llama-3.3-70b-versatile">Pro ▾</option>
-                                <option value="llama-3.1-8b-instant">Fast ▾</option>
-                                <option value="deepseek-r1-distill-llama-70b">R1 ▾</option>
-                            </select>
-                            <div className="w-px h-4 bg-gray-200 mx-1"></div>
-                            <button onClick={send} className={`flex items-center justify-center w-8 h-8 rounded-full transition ${msg || attachedFile ? 'bg-[#0b57d0] text-white shadow-md hover:bg-blue-800' : 'bg-gray-100 text-gray-400'}`}>
+                        )}
+                        <div ref={chatEndRef}/>
+                    </div>
+                    
+                    {/* Input bar */}
+                    <div className="p-3 bg-white border-t shrink-0">
+                        {attachedFile && (
+                            <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-bold px-3 py-1.5 rounded-lg w-fit mb-2">
+                                📎 {attachedFile.name}
+                                <button onClick={()=>setAttachedFile(null)} className="hover:text-red-500 ml-1">×</button>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-2 bg-[#f0f4f9] rounded-full p-1.5 pl-3 border border-transparent focus-within:border-blue-200 transition">
+                            <input type="file" ref={fileRef} accept="image/*,text/*,.pdf,.csv,.json" onChange={handleFile} className="hidden"/>
+                            <button onClick={()=>fileRef.current.click()} className="text-gray-400 hover:text-gray-700 transition p-0.5" title="Bestand toevoegen">
+                                <Ico.Clip/>
+                            </button>
+                            <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}} placeholder={lang==='nl'?'Vraag aan Spark...':'Ask Spark...'} className="flex-1 bg-transparent text-[13px] outline-none px-2 text-gray-800 placeholder-gray-400" disabled={loading}/>
+                            <button onClick={send} disabled={loading || (!msg.trim() && !attachedFile)} className={`flex items-center justify-center w-8 h-8 rounded-full transition shrink-0 ${msg.trim()||attachedFile?'bg-[#0b57d0] text-white shadow hover:bg-blue-800':'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                                 <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                             </button>
                         </div>
                     </div>
+                </>
+            )}
+
+            {/* History view */}
+            {exp && view === 'history' && (
+                <div className="flex-1 overflow-y-auto p-4 space-y-2 hide-scroll">
+                    {sessions.length === 0 ? (
+                        <div className="flex-1 flex items-center justify-center text-gray-400 text-xs font-bold h-full">
+                            {lang==='nl'?'Nog geen opgeslagen chats.':'No saved chats yet.'}
+                        </div>
+                    ) : sessions.map(s => (
+                        <div key={s.id} onClick={()=>loadSession(s)} className={`p-3 rounded-lg border cursor-pointer transition hover:border-blue-300 hover:bg-blue-50 ${activeSession===s.id?'border-blue-400 bg-blue-50':'border-gray-100 bg-gray-50'}`}>
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-bold text-gray-800 truncate">{s.title}</div>
+                                    <div className="text-[10px] text-gray-400 mt-0.5">{s.date} · {s.msgs.length} berichten</div>
+                                </div>
+                                <button onClick={e=>deleteSession(s.id, e)} className="text-gray-300 hover:text-red-500 transition text-xs ml-2 shrink-0">✕</button>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
     );
 }
-    
+
 function CryptoWidget({ lang }) {
     const [valuta, setValuta] = useState('EUR'); 
     const [exRate, setExRate] = useState(1);
