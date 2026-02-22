@@ -90,58 +90,143 @@ function WeatherBar({ lang }) {
     const [c, setC] = useState(S.load('wcity', 'Zoetermeer'));
     const [w, setW] = useState(null);
     const [locLoading, setLocLoading] = useState(false);
-
-    useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_CITY') { setC(e.detail.payload); S.save('wcity', e.detail.payload); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, []);
     
-    useEffect(() => {
-        fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${c}&count=1&language=${lang}`).then(r=>r.json()).then(d=>{
-            if(d.results){
-                const { latitude:lat, longitude:lon, name } = d.results[0];
-                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation&hourly=precipitation_probability&timezone=auto`)
-                .then(r=>r.json()).then(wd => { const ch=new Date().getHours(); let rf=null; for(let i=ch; i<ch+12; i++) { if(wd.hourly.precipitation_probability[i]>30){rf=i-ch;break;} } setW({ t: Math.round(wd.current.temperature_2m), f: Math.round(wd.current.apparent_temperature), rain: rf, name }); });
-            }
-        });
-    }, [c, lang]);
+    // Houdt bij of we GPS voorrang moeten geven.
+    const [autoGps, setAutoGps] = useState(S.load('auto_gps', true));
 
-    const handleLocate = () => {
-        if(!navigator.geolocation) return alert('Geolocatie wordt niet ondersteund door je browser.');
+    // Luister naar commando's van de AI Assistent
+    useEffect(() => { 
+        const h = (e) => { 
+            if(e.detail.type === 'SET_CITY') { 
+                setC(e.detail.payload); 
+                S.save('wcity', e.detail.payload);
+                setAutoGps(false); // Zet auto-GPS uit als de AI het verandert
+                S.save('auto_gps', false);
+            }
+        }; 
+        window.addEventListener('dashCmd', h); 
+        return () => window.removeEventListener('dashCmd', h); 
+    }, []);
+
+    const handleLocate = (silent = false) => {
+        if(!navigator.geolocation) {
+            if(!silent) alert('Geolocatie wordt niet ondersteund door je browser.');
+            return;
+        }
         setLocLoading(true);
         navigator.geolocation.getCurrentPosition(async (pos) => {
             const { latitude, longitude } = pos.coords;
             try {
                 const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=${lang}`);
                 const data = await res.json();
-                const newCity = data.city || data.locality || 'Amsterdam';
+                const newCity = data.city || data.locality || 'Huidige Locatie';
                 setC(newCity);
                 S.save('wcity', newCity);
+                setAutoGps(true);
+                S.save('auto_gps', true);
             } catch(e) {
                 console.error("Locatiefout:", e);
             }
             setLocLoading(false);
         }, () => {
-            alert('Toegang tot locatie geweigerd.');
+            if(!silent) alert('Toegang tot locatie geweigerd. Stel de locatie handmatig in.');
             setLocLoading(false);
+            setAutoGps(false);
+            S.save('auto_gps', false);
         });
+    };
+
+    // Voer GPS check uit bij het laden (als autoGps aan staat)
+    useEffect(() => {
+        if (autoGps) {
+            handleLocate(true); // silent = true, geeft geen irritante popups bij weigering
+        }
+    }, []);
+    
+    // Haal de weerdata inclusief Weercode op
+    useEffect(() => {
+        if (!c) return;
+        fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${c}&count=1&language=${lang}`)
+        .then(r=>r.json())
+        .then(d=>{
+            if(d.results){
+                const { latitude:lat, longitude:lon, name } = d.results[0];
+                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation,weathercode&hourly=precipitation_probability&timezone=auto`)
+                .then(r=>r.json()).then(wd => { 
+                    const ch=new Date().getHours(); 
+                    let rf=null; 
+                    for(let i=ch; i<ch+12; i++) { 
+                        if(wd.hourly && wd.hourly.precipitation_probability[i]>30){rf=i-ch;break;} 
+                    } 
+                    setW({ 
+                        t: Math.round(wd.current.temperature_2m), 
+                        f: Math.round(wd.current.apparent_temperature), 
+                        code: wd.current.weathercode, // Sla weercode op voor het icoon
+                        rain: rf, 
+                        name 
+                    }); 
+                });
+            }
+        });
+    }, [c, lang]);
+
+    // Bepaal het dynamische icoon op basis van de weercode
+    const WxIco = ({ code }) => {
+        if (code === undefined || code === null) return <Ico.Wea />; // Standaard wolk bij laden
+        if (code === 0) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" strokeWidth="2"/><path strokeWidth="2" strokeLinecap="round" d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>; // Zon
+        if (code >= 1 && code <= 3) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>; // Wolken
+        if (code >= 51 && code <= 67 || code >= 80 && code <= 82) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 13v8m-4-6v8m-4-6v8m9-10.9A5 5 0 107.1 8a6 6 0 1010.9 3.1z"/></svg>; // Regen
+        if (code >= 71 && code <= 77 || code === 85 || code === 86) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 2v20m5.5-15.5l-11 11m0-11l11 11"/></svg>; // Sneeuw
+        if (code >= 95) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>; // Onweer
+        return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M4 12h16M4 8h16M4 16h16"/></svg>; // Mist/Standaard
+    };
+
+    const handleManualClick = () => {
+        const n = prompt(lang === 'nl' ? "Voer stad in:" : "Enter city:", w?.name || c);
+        if(n) {
+            setC(n);
+            S.save('wcity', n);
+            setAutoGps(false); // Zet auto-GPS uit bij handmatige invoer
+            S.save('auto_gps', false);
+        }
     };
 
     return (
         <div className="bg-white/10 px-4 md:px-10 py-3 border-b border-white/10 flex justify-between items-center text-white text-xs font-bold uppercase tracking-widest">
             <div className="flex gap-4 md:gap-8 items-center w-full">
-                <div className="flex items-center gap-1.5">
-                    <div className="flex items-center gap-2 cursor-pointer hover:text-blue-300 transition" onClick={()=>{const n=prompt(lang==='nl'?"Stad:":"City:",c);if(n){setC(n);S.save('wcity',n);}}}>
-                        <Ico.Wea/> <span className="hidden md:inline">{w?.name||c}</span>
+                {/* Locatie selector */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2 cursor-pointer hover:text-blue-300 transition" onClick={handleManualClick}>
+                        <WxIco code={w?.code} />
+                        {/* Verwijderd: hidden md:inline | Toegevoegd: truncate max-w zodat het niet breekt op mobile */}
+                        <span className="truncate max-w-[130px] md:max-w-[250px]">{w?.name || c}</span>
                     </div>
-                    <button onClick={handleLocate} className={`p-1 bg-white/10 rounded hover:bg-white/20 transition ${locLoading ? 'animate-pulse text-blue-300' : ''}`} title="Gebruik huidige locatie">
+                    {/* GPS Knop: kleurt blauw als Auto-GPS aan staat */}
+                    <button onClick={() => handleLocate(false)} className={`p-1 bg-white/10 rounded hover:bg-white/20 transition ${locLoading ? 'animate-pulse text-blue-300' : autoGps ? 'text-blue-400' : ''}`} title="Gebruik huidige locatie (GPS)">
                         <Ico.Loc />
                     </button>
                 </div>
-                <div className="flex gap-3 md:gap-4 items-center"><span className="text-sm md:text-lg">{w?.t}°C</span><span className="opacity-60 text-[10px] md:text-xs">{lang==='nl'?'Gevoel':'Feels'}: {w?.f}°C</span></div>
-                <div className="ml-auto bg-blue-500/20 px-3 py-1.5 rounded flex items-center gap-2"><span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span><span className="hidden md:inline">{w?.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : w?.rain ? (lang==='nl'?`Regen over ${w.rain}u`:`Rain in ${w.rain}h`) : (lang==='nl'?"Geen regen verwacht":"No rain expected")}</span><span className="md:hidden">{w?.rain===0?"Regen":w?.rain?`${w.rain}u`:"Droog"}</span></div>
+                
+                {/* Temperatuur */}
+                <div className="flex gap-2 md:gap-4 items-center shrink-0">
+                    <span className="text-sm md:text-lg">{w?.t !== undefined ? `${w.t}°C` : '...'}</span>
+                    <span className="opacity-60 text-[10px] md:text-xs whitespace-nowrap">{lang==='nl'?'Gevoel':'Feels'}: {w?.f !== undefined ? `${w.f}°C` : '...'}</span>
+                </div>
+                
+                {/* Regen indicator */}
+                <div className="ml-auto bg-blue-500/20 px-3 py-1.5 rounded flex items-center gap-2 shrink-0">
+                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+                    <span className="hidden sm:inline">
+                        {w?.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : w?.rain ? (lang==='nl'?`Regen over ${w.rain}u`:`Rain in ${w.rain}h`) : (lang==='nl'?"Geen regen verwacht":"No rain expected")}
+                    </span>
+                    <span className="sm:hidden">
+                        {w?.rain === 0 ? "Regen" : w?.rain ? `${w.rain}u` : "Droog"}
+                    </span>
+                </div>
             </div>
         </div>
     );
 }
-
 function DailyBriefing({ lang }) {
     const hour = new Date().getHours();
     let greetingNL = hour >= 6 && hour < 12 ? 'Goedemorgen' : hour >= 12 && hour < 18 ? 'Goedemiddag' : 'Goedenavond';
