@@ -139,7 +139,7 @@ function WeatherBar({ lang }) {
     // Voer GPS check uit bij het laden (als autoGps aan staat)
     useEffect(() => {
         if (autoGps) {
-            handleLocate(true); // silent = true, geeft geen irritante popups bij weigering
+            handleLocate(true); // silent = true voorkomt popups bij load
         }
     }, []);
     
@@ -161,7 +161,7 @@ function WeatherBar({ lang }) {
                     setW({ 
                         t: Math.round(wd.current.temperature_2m), 
                         f: Math.round(wd.current.apparent_temperature), 
-                        code: wd.current.weathercode, // Sla weercode op voor het icoon
+                        code: wd.current.weathercode,
                         rain: rf, 
                         name 
                     }); 
@@ -182,40 +182,44 @@ function WeatherBar({ lang }) {
     };
 
     const handleManualClick = () => {
-        const n = prompt(lang === 'nl' ? "Voer stad in:" : "Enter city:", w?.name || c);
-        if(n) {
-            setC(n);
-            S.save('wcity', n);
-            setAutoGps(false); // Zet auto-GPS uit bij handmatige invoer
+        // Zorg dat de prompt leeg is in plaats van gevuld met de huidige stad
+        const n = prompt(lang === 'nl' ? "Voer stad in:" : "Enter city:", "");
+        if(n && n.trim() !== "") {
+            setC(n.trim());
+            S.save('wcity', n.trim());
+            setAutoGps(false);
             S.save('auto_gps', false);
         }
     };
 
     return (
-        <div className="bg-white/10 px-4 md:px-10 py-3 border-b border-white/10 flex justify-between items-center text-white text-xs font-bold uppercase tracking-widest">
-            <div className="flex gap-4 md:gap-8 items-center w-full">
+        <div className="bg-white/5 px-4 md:px-10 py-3 border-b border-white/10 flex items-center text-white text-xs font-bold uppercase tracking-widest overflow-x-auto hide-scroll">
+            {/* COMPACT & LINKS UITGELIJND */}
+            <div className="flex gap-2 sm:gap-4 items-center shrink-0">
+                
                 {/* Locatie selector */}
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 bg-black/20 px-3 py-1.5 rounded-lg border border-white/5">
                     <div className="flex items-center gap-2 cursor-pointer hover:text-blue-300 transition" onClick={handleManualClick}>
                         <WxIco code={w?.code} />
-                        {/* Verwijderd: hidden md:inline | Toegevoegd: truncate max-w zodat het niet breekt op mobile */}
-                        <span className="truncate max-w-[130px] md:max-w-[250px]">{w?.name || c}</span>
+                        <span className="truncate max-w-[120px] md:max-w-[200px] block">{w?.name || c}</span>
                     </div>
-                    {/* GPS Knop: kleurt blauw als Auto-GPS aan staat */}
-                    <button onClick={() => handleLocate(false)} className={`p-1 bg-white/10 rounded hover:bg-white/20 transition ${locLoading ? 'animate-pulse text-blue-300' : autoGps ? 'text-blue-400' : ''}`} title="Gebruik huidige locatie (GPS)">
+                    {/* Verticaal streepje als separator */}
+                    <div className="w-px h-3 bg-white/20 mx-1"></div>
+                    <button onClick={() => handleLocate(false)} className={`p-1 bg-white/10 rounded hover:bg-white/20 transition ${locLoading ? 'animate-pulse text-blue-300' : autoGps ? 'text-blue-400' : 'text-gray-400'}`} title="Gebruik huidige locatie (GPS)">
                         <Ico.Loc />
                     </button>
                 </div>
                 
                 {/* Temperatuur */}
-                <div className="flex gap-2 md:gap-4 items-center shrink-0">
-                    <span className="text-sm md:text-lg">{w?.t !== undefined ? `${w.t}°C` : '...'}</span>
-                    <span className="opacity-60 text-[10px] md:text-xs whitespace-nowrap">{lang==='nl'?'Gevoel':'Feels'}: {w?.f !== undefined ? `${w.f}°C` : '...'}</span>
+                <div className="flex gap-2 items-center shrink-0 bg-black/20 px-3 py-1.5 rounded-lg border border-white/5">
+                    <span className="text-sm md:text-base">{w?.t !== undefined ? `${w.t}°C` : '...'}</span>
+                    <span className="opacity-40 font-normal">|</span>
+                    <span className="opacity-70 text-[10px] whitespace-nowrap">{lang==='nl'?'Gevoel':'Feels'}: {w?.f !== undefined ? `${w.f}°C` : '...'}</span>
                 </div>
                 
                 {/* Regen indicator */}
-                <div className="ml-auto bg-blue-500/20 px-3 py-1.5 rounded flex items-center gap-2 shrink-0">
-                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+                <div className="bg-[#0073b1]/40 border border-[#0073b1]/50 px-3 py-1.5 rounded-lg flex items-center gap-2 shrink-0">
+                    <span className="w-2 h-2 bg-blue-300 rounded-full animate-pulse"></span>
                     <span className="hidden sm:inline">
                         {w?.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : w?.rain ? (lang==='nl'?`Regen over ${w.rain}u`:`Rain in ${w.rain}h`) : (lang==='nl'?"Geen regen verwacht":"No rain expected")}
                     </span>
@@ -223,10 +227,12 @@ function WeatherBar({ lang }) {
                         {w?.rain === 0 ? "Regen" : w?.rain ? `${w.rain}u` : "Droog"}
                     </span>
                 </div>
+
             </div>
         </div>
     );
 }
+    
 function DailyBriefing({ lang }) {
     const hour = new Date().getHours();
     let greetingNL = hour >= 6 && hour < 12 ? 'Goedemorgen' : hour >= 12 && hour < 18 ? 'Goedemiddag' : 'Goedenavond';
