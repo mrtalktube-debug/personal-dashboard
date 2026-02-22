@@ -158,7 +158,9 @@ function DailyBriefing({ lang }) {
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
     const [loading, setLoading] = useState(false);
+    const [voices, setVoices] = useState([]);
     
+    // Voorlees Status, Snelheid & Welk bericht is geselecteerd
     const [playingId, setPlayingId] = useState(null);
     const [speechRate, setSpeechRate] = useState(1);
     const [activeMsgIdx, setActiveMsgIdx] = useState(null); 
@@ -192,10 +194,14 @@ function AIWidget({ lang }) {
     const [view, setView] = useState('chat');
     const [exp, setExp] = useState(false);
 
+    /* ── FIX: Zorg dat TTS altijd de actuele geschiedenis ziet ── */
+    const histRef = useRef(hist);
+    useEffect(() => { histRef.current = hist; }, [hist]);
+
     /* ── Sync rate ref ── */
     useEffect(() => { rateRef.current = speechRate; }, [speechRate]);
 
-    /* ── Auto-scroll: only chat container, to user message ── */
+    /* ── Auto-scroll: scrolt sec de chat-container, verstoort het dashboard niet ── */
     useEffect(() => {
         if (exp && hist.length > prevHistLen.current) {
             setTimeout(() => {
@@ -212,26 +218,26 @@ function AIWidget({ lang }) {
         prevHistLen.current = hist.length;
     }, [hist.length, exp]);
 
-    /* ── TTS Engine: skips user msgs, auto-continues AI msgs ── */
-    const findNextAiIdx = (fromIdx) => {
-        for (let i = fromIdx; i < hist.length; i++) {
-            if (hist[i].r === 'ai') return i;
+    /* ── TTS Engine: slaat user msgs over, leest AI continu door ── */
+    const findNextAiIdx = (fromIdx, historyArray) => {
+        for (let i = fromIdx; i < historyArray.length; i++) {
+            if (historyArray[i].r === 'ai') return i;
         }
         return -1;
     };
 
     const speakSequence = (startIndex) => {
         const synth = window.speechSynthesis;
+        const currentHist = histRef.current;
         
-        /* <!-- FIX: zoek eerstvolgende AI-bericht, skip user msgs --> */
-        const aiIdx = findNextAiIdx(startIndex);
+        const aiIdx = findNextAiIdx(startIndex, currentHist);
         if (aiIdx === -1 || isCancelledRef.current) {
             setPlayingId(null);
             setActiveMsgIdx(null);
             return;
         }
 
-        const txt = hist[aiIdx].t;
+        const txt = currentHist[aiIdx].t;
         const clean = txt
             .replace(/\[Bijgevoegd.*?\]\n/g, '')
             .replace(/```[\s\S]*?```/g, 'codeblok')
@@ -240,14 +246,14 @@ function AIWidget({ lang }) {
             .trim();
         
         if (!clean) {
-            /* <!-- FIX: leeg bericht? spring naar volgende AI msg --> */
             speakSequence(aiIdx + 1);
             return;
         }
 
+        synth.cancel();
+
         const u = new SpeechSynthesisUtterance(clean);
         
-        /* <!-- FIX: haal voices ELKE keer vers op (iOS/Safari fix) --> */
         const currentVoices = synth.getVoices();
         const langCode = lang === 'nl' ? 'nl' : 'en';
         let voice = currentVoices.find(v => v.lang.includes(langCode) && /Google|Premium|Natural|Siri/i.test(v.name));
@@ -258,18 +264,15 @@ function AIWidget({ lang }) {
         u.rate = rateRef.current;
         
         u.onend = () => {
-            if (!isCancelledRef.current) {
-                /* <!-- FIX: zoek VOLGENDE ai bericht na huidige --> */
-                setTimeout(() => speakSequence(aiIdx + 1), 250);
-            }
+            if (!isCancelledRef.current) setTimeout(() => speakSequence(aiIdx + 1), 250);
         };
         u.onerror = (e) => {
-            if (e.error !== 'canceled' && !isCancelledRef.current) {
-                setTimeout(() => speakSequence(aiIdx + 1), 100);
-            }
+            if (e.error !== 'canceled' && !isCancelledRef.current) setTimeout(() => speakSequence(aiIdx + 1), 100);
         };
 
         setPlayingId(aiIdx);
+        // SAFARI BUG FIX: Bewaar referentie om onbedoelde 'garbage collection' te voorkomen
+        window.utteranceRef = u; 
         synth.speak(u);
     };
 
@@ -287,14 +290,15 @@ function AIWidget({ lang }) {
         setPlayingId(null);
     };
 
-    /* <!-- FIX: live snelheid aanpassen — herstart huidige utterance direct --> */
+    /* ── Directe Snelheidsaanpassing zonder Timeout blokkade ── */
     const changeRate = (newRate) => {
         setSpeechRate(newRate);
+        rateRef.current = newRate; 
         if (playingId !== null) {
             const currentIdx = playingId;
             window.speechSynthesis.cancel();
             isCancelledRef.current = false;
-            setTimeout(() => speakSequence(currentIdx), 60);
+            speakSequence(currentIdx);
         }
     };
 
@@ -355,7 +359,7 @@ function AIWidget({ lang }) {
             if(city && city.length >= 2) {
                 const clean = city.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
                 emitCmd('SET_CITY', clean);
-                return lang==='nl'?`✅ Weer aangepast naar ${clean}.`:`✅ Weather changed to ${clean}.`;
+                return lang==='nl'?`✅ Weer aangepast naar **${clean}**.`:`✅ Weather changed to **${clean}**.`;
             }
             return null;
         }
@@ -420,6 +424,7 @@ function AIWidget({ lang }) {
         });
 
         try {
+            // Forceert het krachtigste Llama model. Schakelt automatisch naar Vision bij foto's.
             let useModel = attachedFile?.type === 'image' ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
             const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method:'POST',
@@ -431,24 +436,8 @@ function AIWidget({ lang }) {
                 const r = [...n, {r:'ai', t: data.choices[0].message.content}];
                 setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
             } else if(data.error) {
-                /* Fallback model */
-                try {
-                    const res2 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                        method:'POST', headers:{'Authorization':`Bearer ${groqKey}`, 'Content-Type':'application/json'},
-                        body: JSON.stringify({model:'llama-3.1-8b-instant', messages: [system, ...recent], temperature: 0.7, max_tokens: 2048})
-                    });
-                    const d2 = await res2.json();
-                    if(d2.choices?.[0]?.message?.content) {
-                        const r = [...n, {r:'ai', t: d2.choices[0].message.content}];
-                        setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
-                    } else {
-                        const r = [...n, {r:'ai', t: `⚠️ ${data.error.message}`}];
-                        setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
-                    }
-                } catch(e2) {
-                    const r = [...n, {r:'ai', t:'⚠️ Beide modellen onbereikbaar. Probeer het over een minuut.'}];
-                    setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
-                }
+                const r = [...n, {r:'ai', t: `⚠️ API Error: ${data.error.message}`}];
+                setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
             }
         } catch(e) {
             const r = [...n, {r:'ai', t:'⚠️ Netwerkfout. Check je verbinding.'}];
@@ -518,7 +507,7 @@ function AIWidget({ lang }) {
                                     
                                     {/* Play knop bij klik op AI bericht */}
                                     {isClicked && playingId === null && isAi && (
-                                        <div className="flex items-center gap-3 mt-2 ml-2 bg-white border border-gray-200 p-2 rounded-xl shadow-lg z-10" onClick={e=>e.stopPropagation()}>
+                                        <div className="flex items-center gap-3 mt-2 ml-2 bg-white border border-gray-200 p-2 rounded-xl shadow-lg z-10 animate-fade-in" onClick={e=>e.stopPropagation()}>
                                             <button onClick={() => startSpeaking(i)} className="flex items-center gap-1 text-[10px] font-black uppercase text-blue-600 hover:text-blue-800 transition">
                                                 ▶ Voorlees
                                             </button>
@@ -537,7 +526,7 @@ function AIWidget({ lang }) {
                         <div className="h-4"></div>
                     </div>
                     
-                    {/* Input bar */}
+                    {/* Input bar zonder model dropdown */}
                     <div className="p-3 bg-white border-t shrink-0 z-20">
                         {attachedFile && (
                             <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-bold px-3 py-1.5 rounded-lg w-fit mb-2 shadow-sm">
@@ -553,7 +542,7 @@ function AIWidget({ lang }) {
                             <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}} placeholder={lang==='nl'?'Vraag aan Spark...':'Ask Spark...'} className="flex-1 bg-transparent text-[13px] outline-none px-2 text-gray-800 placeholder-gray-400" disabled={loading}/>
                             
                             <div className="flex items-center gap-1 bg-white rounded-full p-1 shadow-sm border border-gray-100 pr-1 pl-3">
-                                <span className="text-gray-400 font-black text-[9px] uppercase tracking-wider mr-1 hidden sm:inline">Spark Pro</span>
+                                <span className="text-gray-400 font-black text-[9px] uppercase tracking-wider mr-1 hidden sm:inline">Spark AI</span>
                                 <div className="w-px h-4 bg-gray-200 mx-1 hidden sm:block"></div>
                                 <button onClick={send} disabled={loading || (!msg.trim() && !attachedFile)} className={`flex items-center justify-center w-8 h-8 rounded-full transition shrink-0 ${msg.trim()||attachedFile?'bg-[#0b57d0] text-white shadow-md hover:bg-blue-800':'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                                     <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
