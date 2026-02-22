@@ -191,8 +191,11 @@ function AIWidget({ lang }) {
         } catch(e) { return defaultHist; }
     });
 
-    const [view, setView] = useState('chat'); // 'chat' | 'history'
+    const [view, setView] = useState('chat');
     const [exp, setExp] = useState(false);
+
+    /* ── Model ── */
+    const MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
 
     /* ── TTS Voices ── */
     useEffect(() => {
@@ -200,10 +203,9 @@ function AIWidget({ lang }) {
         u(); window.speechSynthesis.onvoiceschanged = u;
     }, []);
 
-    // Sla de huidige snelheid op voor de voorlees-loop
     useEffect(() => { rateRef.current = speechRate; }, [speechRate]);
 
-    /* ── Auto-scroll naar BOVENKANT van laatste user-bericht, ZONDER pagina te verschuiven ── */
+    /* ── Auto-scroll ── */
     useEffect(() => {
         if (exp && hist.length > prevHistLen.current) {
             setTimeout(() => {
@@ -220,8 +222,8 @@ function AIWidget({ lang }) {
         prevHistLen.current = hist.length;
     }, [hist.length, exp]);
 
-    /* ── TTS: Continu voorlezen ── */
-    const speakSequence = (startIndex, forceRate = null) => {
+    /* ── TTS: Continu voorlezen (Gefixt voor iOS/Safari) ── */
+    const speakSequence = (startIndex) => {
         if (startIndex >= hist.length) {
             setPlayingId(null);
             return;
@@ -229,27 +231,30 @@ function AIWidget({ lang }) {
         
         isCancelledRef.current = false;
         const synth = window.speechSynthesis;
-        synth.cancel();
 
         const currentMsg = hist[startIndex];
         const cleanTxt = currentMsg.t.replace(/\[Bijgevoegd.*?\]\n/g, '').replace(/```[\s\S]*?```/g, 'codeblok').replace(/[#*_`]/g, '');
         
-        // Ga direct door naar de volgende als deze leeg/afbeelding is
         if (!cleanTxt.trim()) {
-            speakSequence(startIndex + 1, forceRate);
+            speakSequence(startIndex + 1);
             return;
         }
 
         const u = new SpeechSynthesisUtterance(cleanTxt);
-        let v = voices.find(v => v.lang.includes(lang==='nl'?'nl':'en') && /Google|Premium|Natural|Siri/i.test(v.name));
-        if(!v) v = voices.find(v => v.lang.includes(lang==='nl'?'nl':'en'));
+        
+        // Dynamische fallback voor mobiel als voices leeg is
+        const currentVoices = voices.length > 0 ? voices : synth.getVoices();
+        let v = currentVoices.find(v => v.lang.includes(lang==='nl'?'nl':'en') && /Google|Premium|Natural|Siri/i.test(v.name));
+        if(!v) v = currentVoices.find(v => v.lang.includes(lang==='nl'?'nl':'en'));
         if(v) u.voice = v;
         
         u.lang = lang === 'nl' ? 'nl-NL' : 'en-US';
-        u.rate = forceRate !== null ? forceRate : rateRef.current;
+        u.rate = rateRef.current;
         
         u.onend = () => {
-            if (!isCancelledRef.current) speakSequence(startIndex + 1, forceRate);
+            if (!isCancelledRef.current) {
+                setTimeout(() => speakSequence(startIndex + 1), 200);
+            }
         };
         u.onerror = (e) => {
             if (e.error !== 'canceled') setPlayingId(null);
@@ -266,7 +271,15 @@ function AIWidget({ lang }) {
         setPlayingId(null);
     };
 
-    /* ── File handling (Camera / Foto's via accept) ── */
+    const handleRateChangeEnd = () => {
+        if (playingId !== null) {
+            const currentId = playingId;
+            window.speechSynthesis.cancel();
+            setTimeout(() => speakSequence(currentId), 50);
+        }
+    };
+
+    /* ── File handling ── */
     const handleFile = (e) => {
         const file = e.target.files[0]; if(!file) return;
         const isImg = file.type.startsWith('image/');
@@ -275,7 +288,6 @@ function AIWidget({ lang }) {
         if(isImg) reader.readAsDataURL(file); else reader.readAsText(file);
     };
 
-    /* ── Delete message ── */
     const deleteMsg = (idx, e) => {
         e.stopPropagation();
         const n = hist.filter((_,i)=>i!==idx);
@@ -311,13 +323,10 @@ function AIWidget({ lang }) {
     /* ── Dashboard commands ── */
     const tryDashboardCommand = (input) => {
         const low = input.toLowerCase().replace(/[?!.,]/g, '');
-        
         if(/\b(weer|weather|temperatuur|graden)\b/.test(low)) {
             let city = null;
             const match = input.match(/(?:naar|in|locatie)\s+([a-zA-Z\s]+)/i);
-            if(match) {
-                city = match[1].replace(/de locatie|het|toon|laat|zien|verander/gi, '').trim();
-            }
+            if(match) city = match[1].replace(/de locatie|het|toon|laat|zien|verander/gi, '').trim();
             if(!city || city.length < 2) {
                 const words = low.replace(/\b(weer|weather|temperatuur|graden|wat|is|het|hoe|in|van|toon|laat|zien|verander|change|show|set|de|locatie)\b/gi,'').trim().split(/\s+/).filter(w=>w.length>1);
                 city = words.join(' ');
@@ -396,7 +405,6 @@ function AIWidget({ lang }) {
         };
 
         try {
-            // Hardcode het meest stabiele Pro model. Schakelt automatisch naar Vision bij afbeeldingen.
             let useModel = 'llama-3.3-70b-versatile';
             if(attachedFile?.type === 'image') useModel = 'llama-3.2-11b-vision-preview';
             
@@ -443,7 +451,7 @@ function AIWidget({ lang }) {
                 ) : <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Openen ▼</div>}
             </div>
 
-            {/* Zwevende STOP & Snelheid balk (Altijd in beeld tijdens afspelen) */}
+            {/* Zwevende STOP & Snelheid balk */}
             {playingId !== null && exp && view === 'chat' && (
                 <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-50 bg-white p-2 rounded-full shadow-2xl flex items-center gap-3 border border-gray-200 animate-fade-in">
                     <button onClick={stopSpeaking} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full flex items-center gap-1 text-[10px] font-black uppercase tracking-widest transition">
@@ -454,7 +462,8 @@ function AIWidget({ lang }) {
                         <span className="text-[8px] font-bold text-gray-400 uppercase">Snelheid</span>
                         <input type="range" min="0.5" max="1.5" step="0.05" value={speechRate} 
                             onChange={e => setSpeechRate(parseFloat(e.target.value))} 
-                            onPointerUp={() => { if(playingId !== null) speakSequence(playingId); }}
+                            onMouseUp={handleRateChangeEnd}
+                            onTouchEnd={handleRateChangeEnd}
                             className="w-20 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" 
                         />
                         <span className="text-[10px] font-mono text-gray-700 font-bold w-6">{speechRate.toFixed(2)}x</span>
@@ -481,7 +490,7 @@ function AIWidget({ lang }) {
                                         {isAi && <button onClick={(e)=>deleteMsg(i, e)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition mt-2 text-[10px]">✕</button>}
                                     </div>
                                     
-                                    {/* Play knop verschijnt als je erop klikt (en er niets speelt) */}
+                                    {/* Play knop verschijnt als je erop klikt */}
                                     {isClicked && playingId === null && isAi && (
                                         <div className="flex items-center gap-3 mt-2 ml-2 bg-white border border-gray-200 p-2 rounded-xl shadow-lg z-10 animate-fade-in" onClick={e=>e.stopPropagation()}>
                                             <button onClick={() => speakSequence(i)} className="flex items-center gap-1 text-[10px] font-black uppercase text-blue-600 hover:text-blue-800 transition">
