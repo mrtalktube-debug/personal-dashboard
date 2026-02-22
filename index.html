@@ -170,9 +170,11 @@ function AIWidget({ lang }) {
     const chatContainerRef = useRef(null);
     const lastUserMsgRef = useRef(null);
     const prevHistLen = useRef(0);
+    const isCancelledRef = useRef(false);
+    const rateRef = useRef(speechRate);
 
     /* ── Chat Sessions ── */
-    const defaultHist = [{r:'ai', t: lang==='nl'?'Hoi! Ik ben Spark ⚡ — jouw AI-assistent. Stel een vraag, geef een commando, of upload een bestand.':'Hi! I\'m Spark ⚡ — your AI assistant. Ask a question, give a command, or upload a file.'}];
+    const defaultHist = [{r:'ai', t: lang==='nl'?'Hoi! Ik ben Spark ⚡ — jouw AI-assistent. Stel een vraag, geef een commando, of upload een bestand of foto.':'Hi! I\'m Spark ⚡ — your AI assistant. Ask a question, give a command, or upload a file.'}];
     
     const [sessions, setSessions] = useState(() => {
         try { return S.load('spark_sessions', []); } catch(e) { return []; }
@@ -192,26 +194,26 @@ function AIWidget({ lang }) {
     const [view, setView] = useState('chat'); // 'chat' | 'history'
     const [exp, setExp] = useState(false);
 
-    /* ── Model: single reliable model with auto-fallback ── */
-    const MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-    const [model, setModel] = useState(() => {
-        const savedModel = S.load('ai_model', 'llama-3.3-70b-versatile');
-        if (savedModel.includes('mixtral') || savedModel.includes('free') || savedModel.includes('gemini') || savedModel.includes('gpt-oss')) return 'llama-3.3-70b-versatile';
-        return savedModel;
-    });
-
     /* ── TTS Voices ── */
     useEffect(() => {
         const u = () => setVoices(window.speechSynthesis.getVoices());
         u(); window.speechSynthesis.onvoiceschanged = u;
     }, []);
 
-    /* ── Auto-scroll naar BOVENKANT van laatste user-bericht ── */
+    // Sla de huidige snelheid op voor de voorlees-loop
+    useEffect(() => { rateRef.current = speechRate; }, [speechRate]);
+
+    /* ── Auto-scroll naar BOVENKANT van laatste user-bericht, ZONDER pagina te verschuiven ── */
     useEffect(() => {
         if (exp && hist.length > prevHistLen.current) {
             setTimeout(() => {
-                if (lastUserMsgRef.current) {
-                    lastUserMsgRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (chatContainerRef.current && lastUserMsgRef.current) {
+                    const container = chatContainerRef.current;
+                    const target = lastUserMsgRef.current;
+                    container.scrollTo({
+                        top: target.offsetTop - container.offsetTop - 16,
+                        behavior: 'smooth'
+                    });
                 }
             }, 100);
         }
@@ -219,21 +221,22 @@ function AIWidget({ lang }) {
     }, [hist.length, exp]);
 
     /* ── TTS: Continu voorlezen ── */
-    const speakSequence = (startIndex) => {
+    const speakSequence = (startIndex, forceRate = null) => {
         if (startIndex >= hist.length) {
             setPlayingId(null);
             return;
         }
         
+        isCancelledRef.current = false;
         const synth = window.speechSynthesis;
         synth.cancel();
 
         const currentMsg = hist[startIndex];
         const cleanTxt = currentMsg.t.replace(/\[Bijgevoegd.*?\]\n/g, '').replace(/```[\s\S]*?```/g, 'codeblok').replace(/[#*_`]/g, '');
         
-        // Sla lege berichten over en ga door naar de volgende
+        // Ga direct door naar de volgende als deze leeg/afbeelding is
         if (!cleanTxt.trim()) {
-            speakSequence(startIndex + 1);
+            speakSequence(startIndex + 1, forceRate);
             return;
         }
 
@@ -243,14 +246,13 @@ function AIWidget({ lang }) {
         if(v) u.voice = v;
         
         u.lang = lang === 'nl' ? 'nl-NL' : 'en-US';
-        u.rate = speechRate;
+        u.rate = forceRate !== null ? forceRate : rateRef.current;
         
-        // Zodra dit bericht klaar is, lees direct het volgende bericht voor
         u.onend = () => {
-            speakSequence(startIndex + 1);
+            if (!isCancelledRef.current) speakSequence(startIndex + 1, forceRate);
         };
-        u.onerror = () => {
-            setPlayingId(null);
+        u.onerror = (e) => {
+            if (e.error !== 'canceled') setPlayingId(null);
         };
 
         setPlayingId(startIndex);
@@ -259,11 +261,12 @@ function AIWidget({ lang }) {
 
     const stopSpeaking = (e) => {
         if(e) e.stopPropagation();
+        isCancelledRef.current = true;
         window.speechSynthesis.cancel();
         setPlayingId(null);
     };
 
-    /* ── File handling (Ondersteunt Camera / Foto's via accept tag) ── */
+    /* ── File handling (Camera / Foto's via accept) ── */
     const handleFile = (e) => {
         const file = e.target.files[0]; if(!file) return;
         const isImg = file.type.startsWith('image/');
@@ -309,37 +312,31 @@ function AIWidget({ lang }) {
     const tryDashboardCommand = (input) => {
         const low = input.toLowerCase().replace(/[?!.,]/g, '');
         
-        // Slimmere Weer regex voor "Los Angeles", "New York"
         if(/\b(weer|weather|temperatuur|graden)\b/.test(low)) {
             let city = null;
-            // Zoek specifiek naar plaatsnamen na "in", "naar" of "locatie"
             const match = input.match(/(?:naar|in|locatie)\s+([a-zA-Z\s]+)/i);
             if(match) {
-                city = match[1].replace(/de locatie|het|toon|laat|zien/gi, '').trim();
+                city = match[1].replace(/de locatie|het|toon|laat|zien|verander/gi, '').trim();
             }
             if(!city || city.length < 2) {
                 const words = low.replace(/\b(weer|weather|temperatuur|graden|wat|is|het|hoe|in|van|toon|laat|zien|verander|change|show|set|de|locatie)\b/gi,'').trim().split(/\s+/).filter(w=>w.length>1);
                 city = words.join(' ');
             }
             if(city && city.length >= 2) {
-                // Capitalize every word for cities like Los Angeles
                 const cleanCity = city.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                 emitCmd('SET_CITY', cleanCity);
                 return lang==='nl'?`✅ Weer aangepast naar **${cleanCity}**.`:`✅ Weather changed to **${cleanCity}**.`;
             }
             return null;
         }
-        // Agenda
         if(/\b(agenda|schedule|kalender|calendar)\b/.test(low)) {
             const m = low.match(/(?:van|voor|of|for)\s+([a-zà-ÿ]+)/i);
             if(m) { emitCmd('SET_AGENDA', m[1].trim()); return lang==='nl'?`✅ Agenda gefilterd op ${m[1].trim()}.`:`✅ Schedule filtered for ${m[1].trim()}.`; }
         }
-        // News
         if(/\b(nieuws|news)\b/.test(low)) {
             const m = low.match(/(?:over|about|van|of)\s+([a-zà-ÿ0-9\s]+)/i);
             if(m) { emitCmd('SET_NEWS', m[1].trim()); return lang==='nl'?`✅ Nieuws gefilterd op ${m[1].trim()}.`:`✅ News filtered for ${m[1].trim()}.`; }
         }
-        // Sports
         if(/\b(sport|resultat|f1|formula|voetbal|football|race)\b/.test(low)) {
             const m = low.match(/(?:van|for|over|about)\s+([a-zà-ÿ0-9\s]+)/i);
             const q = m ? m[1].trim() : 'verstappen';
@@ -398,41 +395,33 @@ function AIWidget({ lang }) {
             return [system, ...recent];
         };
 
-        const messages = buildMessages();
-        let success = false;
-
-        for(const modelId of MODELS) {
-            try {
-                let useModel = modelId;
-                if(attachedFile?.type === 'image' && modelId === MODELS[0]) useModel = 'llama-3.2-11b-vision-preview';
-                
-                const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                    method:'POST',
-                    headers:{'Authorization':`Bearer ${groqKey}`, 'Content-Type':'application/json'},
-                    body: JSON.stringify({model: useModel, messages, temperature: 0.7, max_tokens: 2048})
-                });
-                const data = await res.json();
-                
-                if(data.choices?.[0]?.message?.content) {
-                    const reply = data.choices[0].message.content;
-                    const r = [...n, {r:'ai', t: reply}];
-                    setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
-                    success = true; break;
-                } else if(data.error) {
-                    console.warn(`Spark: ${useModel} failed, trying next...`);
-                    continue;
-                }
-            } catch(e) { continue; }
-        }
-        
-        if(!success) {
-            const r = [...n, {r:'ai', t: lang==='nl'?'⚠️ Alle modellen zijn tijdelijk onbereikbaar. Probeer het over een minuutje opnieuw.':'⚠️ All models temporarily unavailable. Try again in a minute.'}];
+        try {
+            // Hardcode het meest stabiele Pro model. Schakelt automatisch naar Vision bij afbeeldingen.
+            let useModel = 'llama-3.3-70b-versatile';
+            if(attachedFile?.type === 'image') useModel = 'llama-3.2-11b-vision-preview';
+            
+            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method:'POST',
+                headers:{'Authorization':`Bearer ${groqKey}`, 'Content-Type':'application/json'},
+                body: JSON.stringify({model: useModel, messages: buildMessages(), temperature: 0.7, max_tokens: 2048})
+            });
+            const data = await res.json();
+            
+            if(data.choices?.[0]?.message?.content) {
+                const reply = data.choices[0].message.content;
+                const r = [...n, {r:'ai', t: reply}];
+                setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+            } else if(data.error) {
+                const r = [...n, {r:'ai', t: `API Error: ${data.error.message}` }];
+                setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+            }
+        } catch(e) { 
+            const r = [...n, {r:'ai', t: 'Netwerk of API Error.'}];
             setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
         }
         setLoading(false);
     };
 
-    // Zoek de index van de laatste user-prompt (om hier naartoe te scrollen)
     const lastUserIdx = hist.map(m=>m.r).lastIndexOf('usr');
 
     return (
@@ -454,12 +443,22 @@ function AIWidget({ lang }) {
                 ) : <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Openen ▼</div>}
             </div>
 
-            {/* Zwevende STOP knop (alleen zichtbaar tijdens voorlezen) */}
+            {/* Zwevende STOP & Snelheid balk (Altijd in beeld tijdens afspelen) */}
             {playingId !== null && exp && view === 'chat' && (
-                <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-50">
-                    <button onClick={stopSpeaking} className="bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition transform hover:scale-105 border border-red-400">
-                        ⏹ Stop Voorlezen
+                <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-50 bg-white p-2 rounded-full shadow-2xl flex items-center gap-3 border border-gray-200 animate-fade-in">
+                    <button onClick={stopSpeaking} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full flex items-center gap-1 text-[10px] font-black uppercase tracking-widest transition">
+                        ⏹ Stop
                     </button>
+                    <div className="w-px h-6 bg-gray-200"></div>
+                    <div className="flex items-center gap-2 pr-2">
+                        <span className="text-[8px] font-bold text-gray-400 uppercase">Snelheid</span>
+                        <input type="range" min="0.5" max="1.5" step="0.05" value={speechRate} 
+                            onChange={e => setSpeechRate(parseFloat(e.target.value))} 
+                            onPointerUp={() => { if(playingId !== null) speakSequence(playingId); }}
+                            className="w-20 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" 
+                        />
+                        <span className="text-[10px] font-mono text-gray-700 font-bold w-6">{speechRate.toFixed(2)}x</span>
+                    </div>
                 </div>
             )}
 
@@ -473,30 +472,21 @@ function AIWidget({ lang }) {
                             
                             return (
                                 <div key={i} ref={i === lastUserIdx ? lastUserMsgRef : null} className={`flex flex-col ${isAi?'items-start':'items-end'} group relative`}>
-                                    <div className="flex items-start gap-1.5 max-w-[95%] cursor-pointer" onClick={() => setActiveMsgIdx(isClicked ? null : i)}>
+                                    <div className="flex items-start gap-1.5 max-w-[95%] cursor-pointer" onClick={() => { if(playingId === null) setActiveMsgIdx(isClicked ? null : i) }}>
                                         {!isAi && <button onClick={(e)=>deleteMsg(i, e)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition mt-2 text-[10px]">✕</button>}
-                                        <div className={`px-4 py-2.5 rounded-2xl text-[13.5px] leading-relaxed shadow-sm whitespace-pre-wrap transition ${isClicked ? 'ring-2 ring-blue-300' : ''} ${isAi?'bg-[#f0f4f9] text-gray-800 rounded-bl-sm':'bg-[#0b57d0] text-white rounded-br-sm'}`}>
+                                        <div className={`px-4 py-2.5 rounded-2xl text-[13.5px] leading-relaxed shadow-sm whitespace-pre-wrap transition ${isClicked && playingId === null ? 'ring-2 ring-blue-300' : ''} ${isAi?'bg-[#f0f4f9] text-gray-800 rounded-bl-sm':'bg-[#0b57d0] text-white rounded-br-sm'}`}>
                                             {m.t.includes('[Bijgevoegd:') && <div className="text-[10px] opacity-60 mb-1.5 pb-1 border-b border-current/20 italic">📎 {m.t.split('\n')[0].replace('[Bijgevoegd: ','').replace(']','')}</div>}
                                             {m.t.replace(/\[Bijgevoegd:.*?\]\n/,'')}
                                         </div>
                                         {isAi && <button onClick={(e)=>deleteMsg(i, e)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition mt-2 text-[10px]">✕</button>}
                                     </div>
                                     
-                                    {/* Schuifregelaar & Play/Stop Controls (alleen zichtbaar na klik) */}
-                                    {isClicked && (
-                                        <div className={`flex items-center gap-3 mt-2 ${isAi ? 'ml-2' : 'mr-2'} bg-white border border-gray-200 p-2 rounded-xl shadow-lg z-10 animate-fade-in`} onClick={e=>e.stopPropagation()}>
-                                            <button onClick={() => playingId !== null ? stopSpeaking() : speakSequence(i)} className={`flex items-center gap-1 text-[10px] font-black uppercase transition ${playingId !== null ? 'text-red-500 hover:text-red-700' : 'text-blue-600 hover:text-blue-800'}`}>
-                                                {playingId !== null ? '⏹ Stop' : '▶ Voorlees'}
+                                    {/* Play knop verschijnt als je erop klikt (en er niets speelt) */}
+                                    {isClicked && playingId === null && isAi && (
+                                        <div className="flex items-center gap-3 mt-2 ml-2 bg-white border border-gray-200 p-2 rounded-xl shadow-lg z-10 animate-fade-in" onClick={e=>e.stopPropagation()}>
+                                            <button onClick={() => speakSequence(i)} className="flex items-center gap-1 text-[10px] font-black uppercase text-blue-600 hover:text-blue-800 transition">
+                                                ▶ Voorlees
                                             </button>
-                                            <div className="w-px h-4 bg-gray-300"></div>
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-[8px] font-bold text-gray-400">SNELHEID</span>
-                                                <input type="range" min="0.5" max="2" step="0.1" value={speechRate} onChange={e => {
-                                                    setSpeechRate(parseFloat(e.target.value));
-                                                    if(playingId !== null) stopSpeaking();
-                                                }} className="w-20 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-                                                <span className="text-[9px] font-mono text-gray-600 font-bold w-5">{speechRate}x</span>
-                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -527,13 +517,9 @@ function AIWidget({ lang }) {
                             </button>
                             <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}} placeholder={lang==='nl'?'Vraag aan Spark...':'Ask Spark...'} className="flex-1 bg-transparent text-[13px] outline-none px-2 text-gray-800 placeholder-gray-400" disabled={loading}/>
                             
-                            <div className="flex items-center gap-1 bg-white rounded-full p-1 shadow-sm border border-gray-100 pr-1">
-                                <select value={model} onChange={e=>{setModel(e.target.value);S.save('ai_model',e.target.value)}} className="bg-transparent text-gray-600 font-bold text-[10px] outline-none cursor-pointer pl-2 pr-1 appearance-none">
-                                    <option value="llama-3.3-70b-versatile">Pro ▾</option>
-                                    <option value="deepseek-r1-distill-llama-70b">R1 ▾</option>
-                                    <option value="llama-3.1-8b-instant">Fast ▾</option>
-                                </select>
-                                <div className="w-px h-4 bg-gray-200 mx-1"></div>
+                            <div className="flex items-center gap-1 bg-white rounded-full p-1 shadow-sm border border-gray-100 pr-1 pl-3">
+                                <span className="text-gray-400 font-black text-[9px] uppercase tracking-wider mr-1 hidden sm:inline">Spark Pro</span>
+                                <div className="w-px h-4 bg-gray-200 mx-1 hidden sm:block"></div>
                                 <button onClick={send} disabled={loading || (!msg.trim() && !attachedFile)} className={`flex items-center justify-center w-8 h-8 rounded-full transition shrink-0 ${msg.trim()||attachedFile?'bg-[#0b57d0] text-white shadow-md hover:bg-blue-800':'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                                     <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                                 </button>
