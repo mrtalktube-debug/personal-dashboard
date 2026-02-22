@@ -157,12 +157,18 @@ function DailyBriefing({ lang }) {
 
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
-    const [autoSpeak, setAutoSpeak] = useState(S.load('ai_autospeak', false));
     const [voices, setVoices] = useState([]);
     const [attachedFile, setAttachedFile] = useState(null);
-    const fileRef = useRef(null);
     
-    const defaultHist = [{r: 'ai', t: lang==='nl'?'Hallo! Ik ben verbonden via Groq. Kies een actie, upload een bestand of stel je vraag!':'Hello! I am connected via Groq. Ask a question!'}];
+    // Snelheid en Play/Stop status
+    const [speechRate, setSpeechRate] = useState(1);
+    const [playingId, setPlayingId] = useState(null);
+    
+    const fileRef = useRef(null);
+    const chatEndRef = useRef(null);
+    
+    const defaultHist = [{r: 'ai', t: lang==='nl'?'Hallo! Ik ben verbonden via Groq. Upload een foto/bestand of stel je vraag!':'Hello! I am connected via Groq. Ask a question!'}];
+    
     const [hist, setHist] = useState(() => {
         try {
             const saved = S.load('ai_hist', null);
@@ -171,68 +177,103 @@ function AIWidget({ lang }) {
         } catch(e) { return defaultHist; }
     });
     
-    const [showHist, setShowHist] = useState(false);
     const [exp, setExp] = useState(false);
     
+    // Model state met actuele stabiele Groq modellen
     const [model, setModel] = useState(() => {
         const savedModel = S.load('ai_model', 'llama-3.3-70b-versatile');
-        if (savedModel.includes('free') || savedModel.includes('gemini') || savedModel.includes('openrouter')) return 'llama-3.3-70b-versatile';
+        if (savedModel.includes('mixtral') || savedModel.includes('free') || savedModel.includes('gemini') || savedModel.includes('gpt-oss')) return 'llama-3.3-70b-versatile';
         return savedModel;
     });
 
-    // Haal moderne/premium browser stemmen op
     useEffect(() => {
         const updateVoices = () => setVoices(window.speechSynthesis.getVoices());
         updateVoices();
         window.speechSynthesis.onvoiceschanged = updateVoices;
     }, []);
 
-    const speak = (txt) => {
-        if (!autoSpeak) return;
+    // Automatisch scrollen naar het laatste bericht
+    useEffect(() => {
+        if (exp) {
+            setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        }
+    }, [hist, exp]);
+
+    // Voorlees functionaliteit (Play / Stop)
+    const toggleSpeak = (txt, id) => {
         const synth = window.speechSynthesis;
-        synth.cancel(); // Stop de vorige zin
-        const u = new SpeechSynthesisUtterance(txt);
+        if (playingId === id) {
+            synth.cancel(); 
+            setPlayingId(null);
+            return;
+        }
+        synth.cancel(); 
         
-        // Zoek naar moderne/Premium stemmen (afhankelijk van browser/OS)
+        const cleanTxt = txt.replace(/\[Bijgevoegd.*?\]\n/g, '');
+        const u = new SpeechSynthesisUtterance(cleanTxt);
+        
         let bestVoice = voices.find(v => v.lang.includes(lang==='nl'?'nl':'en') && (v.name.includes('Google') || v.name.includes('Premium') || v.name.includes('Natural') || v.name.includes('Siri')));
         if (!bestVoice) bestVoice = voices.find(v => v.lang.includes(lang==='nl'?'nl':'en'));
         
         if (bestVoice) u.voice = bestVoice;
         u.lang = lang === 'nl' ? 'nl-NL' : 'en-US';
-        u.rate = 1.0;
+        u.rate = speechRate; 
+        
+        u.onend = () => setPlayingId(null);
+        u.onerror = () => setPlayingId(null);
+        
+        setPlayingId(id);
         synth.speak(u);
     };
 
-    // Verwerk bijlagen
     const handleFile = (e) => {
         const file = e.target.files[0];
         if(!file) return;
+        const isImg = file.type.startsWith('image/');
         const reader = new FileReader();
         reader.onload = (ev) => {
-            setAttachedFile({ name: file.name, text: ev.target.result });
+            setAttachedFile({ name: file.name, type: isImg ? 'image' : 'text', content: ev.target.result });
         };
-        reader.readAsText(file); // Leest text, csv, logs, json etc.
+        if (isImg) reader.readAsDataURL(file); 
+        else reader.readAsText(file);
     };
-    
+
+    const deleteMsg = (idx) => {
+        const n = hist.filter((_, i) => i !== idx);
+        if (n.length === 0) {
+            setHist(defaultHist);
+            S.save('ai_hist', defaultHist);
+        } else {
+            setHist(n);
+            S.save('ai_hist', n.map(m => ({r: m.r, t: m.t}))); 
+        }
+    };
+
     const send = async () => {
         if(!msg && !attachedFile) return; 
         
-        // Combineer file en prompt als er een bijlage is
-        let finalMsg = msg;
-        if (attachedFile) finalMsg = `[Bijgevoegd Bestand: ${attachedFile.name}]\n${attachedFile.text}\n\n${msg || 'Analyseer dit bestand.'}`;
+        let displayMsg = msg || '';
+        if (attachedFile) displayMsg = `[Bijgevoegd: ${attachedFile.name}]\n${msg}`;
         
-        const inputLower = finalMsg.toLowerCase(); 
-        const n = [...hist, {r: 'usr', t: finalMsg}]; 
-        setHist(n); S.save('ai_hist', n); setMsg(''); setAttachedFile(null);
+        const n = [...hist, {r: 'usr', t: displayMsg, file: attachedFile}]; 
+        setHist(n); 
+        S.save('ai_hist', n.map(m => ({r: m.r, t: m.t}))); 
+        
+        setMsg(''); setAttachedFile(null);
         if(fileRef.current) fileRef.current.value = '';
 
         // --- DASHBOARD AGENT COMMANDO'S ---
+        const inputLower = displayMsg.toLowerCase(); 
         let handled = false;
         let actionText = '';
 
         if (inputLower.includes('weer') || inputLower.includes('weather')) {
-            const m = inputLower.match(/(?:naar|in)\s+([a-z\s]+)/i);
-            const city = m ? m[1].trim() : 'Bali';
+            // Slimmere extractie, begrijpt ook "verander in de locatie los angeles"
+            let city = 'Bali';
+            const match = inputLower.match(/(?:naar|in|locatie)\s+([a-z\s]+)/i);
+            if (match) {
+                city = match[1].replace(/de locatie|het|toon|laat|zien/gi, '').trim();
+            }
             emitCmd('SET_CITY', city);
             actionText = lang==='nl' ? `Ik heb de weerlocatie aangepast naar ${city}.` : `Changed weather location to ${city}.`;
             handled = true;
@@ -245,68 +286,79 @@ function AIWidget({ lang }) {
         } else if (inputLower.includes('resultat') || inputLower.includes('sport')) {
             const m = inputLower.match(/(?:van|voor|alleen)\s+([a-z]+)/i);
             const query = m ? m[1].trim() : 'verstappen';
-            emitCmd('SET_SPORTS', query); // Let op: Sports widget heeft hier later nog een listener voor nodig
+            emitCmd('SET_SPORTS', query); 
             actionText = lang==='nl' ? `Ik zet de sport filters om voor resultaten van ${query}.` : `Showing sports results for ${query}.`;
             handled = true;
         } else if (inputLower.includes('nieuws') || inputLower.includes('news')) {
             const m = inputLower.match(/(?:over|van)\s+([a-z0-9]+)/i);
             const query = m ? m[1].trim() : 'audi';
-            emitCmd('SET_NEWS', query); // Let op: News widget heeft hier later nog een listener voor nodig
+            emitCmd('SET_NEWS', query); 
             actionText = lang==='nl' ? `Ik heb het nieuws direct gefilterd op ${query}.` : `Filtered news for ${query}.`;
             handled = true;
         }
 
         if (handled) {
             setTimeout(() => {
-                const r = [...n, {r: 'ai', t: actionText}];
-                setHist(r); S.save('ai_hist', r);
-                speak(actionText);
+                const replyObj = {r: 'ai', t: actionText};
+                const r = [...n, replyObj];
+                setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t})));
             }, 500);
             return;
         }
-        // ----------------------------------
         
+        // --- API REQUEST ---
         const apiKeyObj = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'));
         const groqKey = apiKeyObj ? apiKeyObj.val : '';
         
         if (groqKey) {
             try {
-                const messages = [...hist.slice(-5), {r: 'usr', t: finalMsg}].map(m => ({
-                    role: m.r === 'usr' ? 'user' : 'assistant',
-                    content: m.t
-                }));
+                let apiModel = model;
+                const messages = n.slice(-5).map(m => {
+                    if (m.r === 'usr' && m.file && m.file.type === 'image') {
+                        apiModel = 'llama-3.2-11b-vision-preview'; 
+                        return {
+                            role: 'user',
+                            content: [
+                                { type: "text", text: m.t.replace(/\[Bijgevoegd:.*?\]\n/, '') || 'Beschrijf deze afbeelding in detail.' },
+                                { type: "image_url", image_url: { url: m.file.content } }
+                            ]
+                        };
+                    } else if (m.r === 'usr' && m.file && m.file.type === 'text') {
+                        return { role: 'user', content: `Bestand ${m.file.name}:\n${m.file.content}\n\n${m.t}` };
+                    } else {
+                        return { role: m.r === 'usr' ? 'user' : 'assistant', content: m.t };
+                    }
+                });
 
                 const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                     method: "POST",
                     headers: { "Authorization": `Bearer ${groqKey}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({ model: model, messages: messages })
+                    body: JSON.stringify({ model: apiModel, messages: messages })
                 });
                 const data = await res.json();
                 
                 if(data.choices && data.choices[0].message) { 
                     const reply = data.choices[0].message.content;
                     const r = [...n, {r: 'ai', t: reply}]; 
-                    setHist(r); S.save('ai_hist', r); 
-                    speak(reply);
+                    setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t}))); 
                 } else if (data.error) {
                     const r = [...n, {r: 'ai', t: `API Error: ${data.error.message}` }]; 
-                    setHist(r); S.save('ai_hist', r);
+                    setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t})));
                 }
             } catch(e) { 
                 const r = [...n, {r: 'ai', t: 'Netwerk of API Error.'}]; 
-                setHist(r); S.save('ai_hist', r); 
+                setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t}))); 
             }
         } else { 
             setTimeout(() => { 
-                const r = [...n, {r: 'ai', t: `Geen API key gevonden. Vul je Groq key in bij de Instellingen.`}]; 
-                setHist(r); S.save('ai_hist', r); 
+                const r = [...n, {r: 'ai', t: `Geen API key gevonden. Vul je Groq key in bij de Instellingen onder de naam 'Groq'.`}]; 
+                setHist(r); S.save('ai_hist', r.map(m => ({r: m.r, t: m.t}))); 
             }, 600); 
         }
     };
 
     return (
-        <div className={`widget ai-transition ${exp ? 'h-[450px]' : 'h-[72px]'} flex flex-col`}>
-            {/* Header Area */}
+        <div className={`widget ai-transition ${exp ? 'h-[500px]' : 'h-[72px]'} flex flex-col`}>
             <div className="p-4 bg-white border-b flex justify-between items-center cursor-pointer shrink-0" onClick={()=>setExp(true)}>
                 <div className="flex items-center gap-2 text-blue-600">
                     <span className="bg-blue-100 p-1.5 rounded-full"><Ico.Bot/></span>
@@ -314,33 +366,44 @@ function AIWidget({ lang }) {
                 </div>
                 {exp ? (
                     <div className="flex gap-2 items-center">
-                        <button onClick={(e)=>{e.stopPropagation();setAutoSpeak(!autoSpeak)}} className={`flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold transition shadow-sm border ${autoSpeak ? 'bg-blue-100 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-500'}`}>
-                            {autoSpeak ? '🔊 Voice Aan' : '🔈 Voice Uit'}
-                        </button>
-                        <button onClick={(e)=>{e.stopPropagation();setHist(defaultHist);S.save('ai_hist', defaultHist)}} className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 transition rounded text-[9px] font-bold">Wis</button>
-                        <button onClick={(e)=>{e.stopPropagation();setShowHist(!showHist)}} className={`px-2 py-1 transition rounded text-[9px] font-bold ${showHist ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Historie</button>
-                        <button onClick={(e)=>{e.stopPropagation();setExp(false)}} className="text-gray-400 hover:text-gray-800 transition font-bold ml-1 px-2 text-lg">&times;</button>
+                        <select value={speechRate} onChange={e=>setSpeechRate(parseFloat(e.target.value))} onClick={e=>e.stopPropagation()} className="bg-gray-50 border border-gray-200 rounded-full px-2 py-1 text-[9px] font-bold text-gray-600 outline-none cursor-pointer">
+                            <option value={1}>1.0x 🔊</option>
+                            <option value={1.5}>1.5x 🔊</option>
+                            <option value={2}>2.0x 🔊</option>
+                        </select>
+                        <button onClick={(e)=>{e.stopPropagation();setExp(false)}} className="text-gray-400 hover:text-gray-800 transition font-bold text-xl px-2">&times;</button>
                     </div>
                 ) : <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Openen ▼</div>}
             </div>
             
-            {/* Chat Area */}
             <div className={`flex-1 flex overflow-hidden bg-white ${exp ? 'opacity-100' : 'opacity-0'}`}>
-                <div className={`flex-1 p-4 overflow-y-auto space-y-4 ${showHist ? 'hidden md:block' : 'block'}`}>
+                <div className="flex-1 p-4 overflow-y-auto space-y-5 block hide-scroll">
                     {hist.map((m, i) => (
                         <div key={i} className={`flex flex-col ${m.r==='ai'?'items-start':'items-end'}`}>
-                            <div className={`px-4 py-3 rounded-2xl text-[13px] max-w-[85%] leading-relaxed ${m.r==='ai'?'bg-[#f0f4f9] text-gray-800 rounded-bl-none':'bg-[#0b57d0] text-white rounded-br-none whitespace-pre-wrap'}`}>
-                                {m.t.includes('[Bijgevoegd Bestand:') ? (
-                                    <div className="text-[10px] opacity-70 mb-2 italic border-b border-white/20 pb-1">📎 Bestand gekoppeld in context</div>
-                                ) : null}
-                                {m.t.replace(/\[Bijgevoegd Bestand:.*?\]\n.*\n\n/, '')}
+                            <div className="flex items-center gap-2 max-w-[90%]">
+                                {m.r === 'usr' && <button onClick={()=>deleteMsg(i)} className="text-gray-200 hover:text-red-500 transition px-1 text-xs">✖</button>}
+                                
+                                <div className={`px-4 py-3 rounded-2xl text-[13.5px] leading-relaxed shadow-sm ${m.r==='ai'?'bg-[#f0f4f9] text-gray-800 rounded-bl-none':'bg-[#0b57d0] text-white rounded-br-none whitespace-pre-wrap'}`}>
+                                    {m.t.includes('[Bijgevoegd:') ? (
+                                        <div className="text-[10px] opacity-70 mb-2 italic border-b border-current pb-1">📎 {m.t.split('\n')[0].replace('[Bijgevoegd: ', '').replace(']', '')}</div>
+                                    ) : null}
+                                    {m.t.replace(/\[Bijgevoegd:.*?\]\n/, '')}
+                                </div>
+
+                                {m.r === 'ai' && <button onClick={()=>deleteMsg(i)} className="text-gray-200 hover:text-red-500 transition px-1 text-xs">✖</button>}
                             </div>
+                            
+                            {m.r==='ai' && (
+                                <button onClick={()=>toggleSpeak(m.t, i)} className={`mt-1 ml-2 flex items-center gap-1 text-[9px] font-bold uppercase transition ${playingId === i ? 'text-red-500 hover:text-red-700' : 'text-gray-400 hover:text-blue-600'}`}>
+                                    {playingId === i ? <><Ico.Spk/> {lang==='nl'?'Stop':'Stop'}</> : <><Ico.Spk/> {lang==='nl'?'Voorlees':'Speak'}</>}
+                                </button>
+                            )}
                         </div>
                     ))}
+                    <div ref={chatEndRef} className="h-1"></div>
                 </div>
             </div>
 
-            {/* Gemini-Style Input Area */}
             {exp && (
                 <div className="p-3 bg-white border-t shrink-0">
                     {attachedFile && (
@@ -349,9 +412,9 @@ function AIWidget({ lang }) {
                             <button onClick={()=>setAttachedFile(null)} className="text-blue-500 hover:text-red-500 text-sm ml-2">&times;</button>
                         </div>
                     )}
-                    <div className="flex items-center gap-2 bg-[#f0f4f9] rounded-full p-2 pl-3 shadow-inner">
-                        <input type="file" ref={fileRef} onChange={handleFile} className="hidden" />
-                        <button onClick={()=>fileRef.current.click()} className="text-gray-500 hover:text-gray-800 transition" title="Bijlage toevoegen">
+                    <div className="flex items-center gap-2 bg-[#f0f4f9] rounded-full p-1.5 pl-3 shadow-inner border border-transparent focus-within:border-gray-200 transition">
+                        <input type="file" ref={fileRef} accept="image/*, text/*, application/pdf, .csv, .json" onChange={handleFile} className="hidden" />
+                        <button onClick={()=>fileRef.current.click()} className="text-gray-500 hover:text-gray-800 transition p-1" title="Foto of Bestand toevoegen">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
                         </button>
                         
@@ -360,18 +423,18 @@ function AIWidget({ lang }) {
                             onChange={e=>setMsg(e.target.value)} 
                             onKeyPress={e=>e.key==='Enter'&&send()} 
                             placeholder={lang==='nl'?"Vraag het de AI..." : "Ask the AI..."} 
-                            className="flex-1 bg-transparent text-sm outline-none px-2 text-gray-800 placeholder-gray-500" 
+                            className="flex-1 bg-transparent text-[13.5px] outline-none px-2 text-gray-800 placeholder-gray-500" 
                         />
                         
-                        <div className="flex items-center gap-1 bg-white rounded-full p-1 shadow-sm border border-gray-100 pr-2">
-                            <select value={model} onChange={e=>{setModel(e.target.value);S.save('ai_model',e.target.value)}} className="bg-transparent text-gray-600 font-bold text-[10px] outline-none cursor-pointer pl-2 pr-1">
+                        <div className="flex items-center gap-1 bg-white rounded-full p-1 shadow-sm border border-gray-200 pr-1">
+                            <select value={model} onChange={e=>{setModel(e.target.value);S.save('ai_model',e.target.value)}} className="bg-transparent text-gray-600 font-bold text-[10px] outline-none cursor-pointer pl-2 pr-1 appearance-none">
                                 <option value="llama-3.3-70b-versatile">Pro ▾</option>
+                                <option value="llama-3.1-8b-instant">Fast ▾</option>
                                 <option value="deepseek-r1-distill-llama-70b">R1 ▾</option>
-                                <option value="mixtral-8x7b-32768">Mix ▾</option>
                             </select>
                             <div className="w-px h-4 bg-gray-200 mx-1"></div>
-                            <button onClick={send} className={`flex items-center justify-center w-7 h-7 rounded-full transition ${msg || attachedFile ? 'bg-[#0b57d0] text-white shadow-md' : 'bg-gray-100 text-gray-400'}`}>
-                                <svg className="w-3.5 h-3.5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                            <button onClick={send} className={`flex items-center justify-center w-8 h-8 rounded-full transition ${msg || attachedFile ? 'bg-[#0b57d0] text-white shadow-md hover:bg-blue-800' : 'bg-gray-100 text-gray-400'}`}>
+                                <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                             </button>
                         </div>
                     </div>
@@ -380,7 +443,6 @@ function AIWidget({ lang }) {
         </div>
     );
 }
-
 function CryptoWidget({ lang }) {
     const [valuta, setValuta] = useState('EUR'); 
     const [exRate, setExRate] = useState(1);
