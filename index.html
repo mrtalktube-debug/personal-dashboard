@@ -16,12 +16,6 @@
         .widget { background: rgba(255,255,255,0.98); border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; position: relative; overflow: hidden; }
         .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; transition: 0.2s; text-align: center; cursor: pointer; }
         .tab-btn.active { color: var(--p-blue); border-bottom-color: var(--p-blue); background: rgba(0,115,177,0.05); }
-        .sudoku-container { width: 100%; max-width: 320px; aspect-ratio: 1/1; margin: 0 auto; display: grid; grid-template-columns: repeat(9, 1fr); border: 2px solid #1a1a1a; background: white; }
-        .sudoku-cell { width: 100%; height: 100%; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.1s; position: relative; user-select: none; }
-        .sudoku-cell.selected { background: #e0f2fe; border-color: var(--p-blue); z-index: 10; }
-        .sudoku-cell.fixed { background: #f8fafc; font-weight: 900; color: #1e293b; font-size: 1.1rem; }
-        .sudoku-cell.input { font-weight: 700; color: var(--p-blue); font-size: 1.2rem; }
-        .sudoku-candidates { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); width: 100%; height: 100%; font-size: 0.45rem; line-height: 1; color: #64748b; padding: 1px; }
         .border-r-thick { border-right: 2px solid #1a1a1a !important; }
         .border-b-thick { border-bottom: 2px solid #1a1a1a !important; }
         .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; box-shadow: -10px 0 30px rgba(0,0,0,0.5); transform: translateX(100%); transition: 0.3s ease; overflow-y: auto; }
@@ -72,15 +66,11 @@ const Ico = {
     F1: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>,
     Glf: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path strokeWidth="2" d="M12 18a6 6 0 100-12 6 6 0 000 12z"/></svg>,
     Trp: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 4v2a4 4 0 01-8 0V4m12 4v2a4 4 0 01-1 2.652M4 8v2a4 4 0 001 2.652M12 20v-4m0 0V11m0 5h-4m4 0h4" /></svg>,
-    Lng: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 11.37 9.198 15.299 6 18.5"/></svg>,
-    Fod: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>,
-    Sud: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16M10 4v16M14 4v16"/></svg>,
     Clip: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>,
     Up: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
     Dn: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>,
     Drag: () => <svg className="w-4 h-4 text-gray-400 cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>,
-    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>,
-    Pepper: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
 };
 
 function WeatherBar({ lang }) {
@@ -219,10 +209,6 @@ function WeatherBar({ lang }) {
     );
 }
 
-function DailyBriefing({ lang }) {
-    return null; 
-}
-
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
     const [loading, setLoading] = useState(false);
@@ -233,7 +219,8 @@ function AIWidget({ lang }) {
     const lastUserMsgRef = useRef(null);
     const prevHistLen = useRef(0);
 
-    const defaultHist = [];
+    /* ── Chat Sessions ── */
+    const defaultHist = []; 
     
     const [sessions, setSessions] = useState(() => {
         try { return S.load('michael_sessions', []); } catch(e) { return []; }
@@ -253,6 +240,7 @@ function AIWidget({ lang }) {
     const [view, setView] = useState('chat');
     const [exp, setExp] = useState(false);
 
+    /* ── Auto-Sync Helper ── */
     const syncToCloud = () => {
         const cloudSettings = {};
         for (let i = 0; i < localStorage.length; i++) {
@@ -268,6 +256,7 @@ function AIWidget({ lang }) {
         }).catch(()=>{});
     };
 
+    /* ── Auto-scroll ── */
     useEffect(() => {
         if (exp && hist.length > prevHistLen.current) {
             setTimeout(() => {
@@ -284,6 +273,7 @@ function AIWidget({ lang }) {
         prevHistLen.current = hist.length;
     }, [hist.length, exp]);
 
+    /* ── File handling ── */
     const handleFile = (e) => {
         const file = e.target.files[0]; if(!file) return;
         const isImg = file.type.startsWith('image/');
@@ -299,6 +289,7 @@ function AIWidget({ lang }) {
         syncToCloud();
     };
 
+    /* ── Session management ── */
     const saveCurrentSession = () => {
         if(hist.length <= 1) return;
         const title = hist.find(m=>m.r==='usr')?.t?.slice(0,40) || 'Chat';
@@ -325,6 +316,7 @@ function AIWidget({ lang }) {
         syncToCloud();
     };
 
+    /* ── Dashboard commands ── */
     const tryDashboardCommand = (input) => {
         const low = input.toLowerCase().replace(/[?!.,'"]/g, '');
         
@@ -360,6 +352,7 @@ function AIWidget({ lang }) {
         return null;
     };
 
+    /* ── Send message ── */
     const send = async () => {
         if(!msg.trim() && !attachedFile) return;
         let displayMsg = msg.trim();
@@ -1320,42 +1313,6 @@ function RadarWidget({ lang }) {
     );
 }
 
-function PepperWidget({ lang }) {
-    const deals = [{ t: 'Sony WH-1000XM5', p: '€259', o: '€349', d: '25%', h: true }, { t: 'MacBook Air M2', p: '€899', o: '€1199', d: '25%', h: true }];
-    return (
-        <div className="widget h-[450px]">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Pepper/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper</h3></div></div>
-            <div className="p-4 flex gap-4 overflow-x-auto flex-1 items-center bg-white hide-scroll">
-                {deals.map((d, i) => (
-                    <div key={i} className="min-w-[180px] h-[260px] border rounded p-3 bg-white hover:border-red-400 transition flex flex-col shadow-sm">
-                        <div className="h-[80px] w-full bg-gray-100 rounded mb-3 flex items-center justify-center text-[9px] font-bold text-gray-400 border border-dashed">IMG</div>
-                        <div className="flex gap-1 mb-2">{d.h && <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">HOT</span>}<span className="bg-green-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">-{d.d}</span></div>
-                        <h4 className="text-[11px] font-bold leading-tight mb-auto">{d.t}</h4>
-                        <div className="flex items-baseline gap-2 mt-3"><span className="text-lg font-bold text-blue-600">{d.p}</span><span className="text-[10px] text-gray-400 line-through font-bold">{d.o}</span></div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function RecipeWidget({ lang }) {
-    const allRecs = [{ n: "Ribeye Herb Butter", p: 52, k: 650, t: 15, c: "Vlees", ing: "Ribeye\nBoter", stp: "1. Bakken.\n2. Rusten." }, { n: "Kip Teriyaki", p: 48, k: 510, t: 25, c: "Kip", ing: "Kip\nRijst", stp: "1. Koken.\n2. Bakken." }];
-    const [f, setF] = useState('All'); const [exp, setExp] = useState(null);
-    const filtered = allRecs.filter(r => f === 'All' || r.c === f);
-    return (
-        <div className="widget h-[450px]">
-            <div className="p-4 border-b bg-gray-50 flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Fod/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].rec}</h3></div></div>
-            <div className="flex gap-2 p-3 border-b bg-white overflow-x-auto hide-scroll">{['All', 'Vlees', 'Kip', 'Vis'].map(x => <button key={x} onClick={() => {setF(x); setExp(null);}} className={`px-3 py-1 rounded-full text-[9px] font-bold border transition ${f === x ? 'bg-gray-900 text-white border-gray-900' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'}`}>{x.toUpperCase()}</button>)}</div>
-            <div className="p-4 space-y-3 flex-1 overflow-y-auto bg-white">
-                {filtered.map((r, i) => (
-                    <div key={i} onClick={()=>setExp(exp===i?null:i)} className="p-3 border rounded cursor-pointer hover:border-blue-400 transition bg-white shadow-sm flex flex-col"><div className="flex justify-between items-start mb-2"><h4 className="text-xs font-bold text-gray-800">{r.n}</h4><span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[9px] font-black">{r.p}g EIWIT</span></div><p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{r.t} MIN | {r.k} KCAL</p>{exp === i && <div className="mt-3 pt-3 border-t text-[10px] text-gray-600 whitespace-pre-line leading-relaxed"><span className="font-bold text-gray-900 uppercase">Ingrediënten:</span><br/>{r.ing}<br/><br/><span className="font-bold text-gray-900 uppercase">Bereiding:</span><br/>{r.stp}</div>}</div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
 function SportsWidget({ lang }) {
     const [tab, setTab] = useState('lst');
     const [search, setSearch] = useState('');
@@ -1491,63 +1448,6 @@ function SportsWidget({ lang }) {
     );
 }
 
-function SudokuWidget({ lang }) {
-    const [diff, setDiff] = useState('Medium'); const [mode, setMode] = useState('normal'); 
-    const [grid, setGrid] = useState(Array(81).fill(null)); const [fixed, setFixed] = useState(Array(81).fill(false)); const [notes, setNotes] = useState(Array(81).fill([]));
-    const [history, setHistory] = useState([]); const [sel, setSel] = useState(null);
-
-    const generate = (d) => { const n=Array(81).fill(null); const f=Array(81).fill(false); const c=d==='Medium'?32:24; for(let i=0;i<c;i++){ let idx=Math.floor(Math.random()*81); n[idx]=Math.floor(Math.random()*9)+1; f[idx]=true; } setGrid(n); setFixed(f); setNotes(Array(81).fill([])); setHistory([]); setSel(null); };
-    useEffect(() => generate(diff), [diff]);
-
-    const push = () => setHistory(p => [...p, {grid: [...grid], notes: [...notes]}]);
-    const undo = () => { if(history.length === 0) return; const last = history[history.length - 1]; setGrid(last.grid); setNotes(last.notes); setHistory(history.slice(0, -1)); };
-    const num = (n) => { if(sel === null || fixed[sel]) return; push(); if(mode === 'normal') { const g = [...grid]; g[sel] = n; setGrid(g); } else { const nt = [...notes]; if(nt[sel].includes(n)) nt[sel] = nt[sel].filter(x => x !== n); else nt[sel] = [...nt[sel], n].sort(); setNotes(nt); } };
-
-    return (
-        <div className="widget p-6 h-[450px] bg-gray-50">
-            <div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2 text-gray-500"><Ico.Sud/><h3 className="text-[10px] font-black uppercase tracking-widest">SUDOKU</h3></div><select value={diff} onChange={e=>{setDiff(e.target.value); generate(e.target.value)}} className="text-[10px] font-bold border rounded px-2 py-1 outline-none text-blue-700 bg-white"><option>Medium</option><option>Hard</option></select></div>
-            <div className="flex-1 flex flex-col justify-center items-center w-full">
-                <div className="sudoku-container bg-white shadow-md">
-                    {grid.map((c, i) => <div key={i} onClick={()=>setSel(i)} className={`sudoku-cell ${Math.floor(i/9)%3===2 && Math.floor(i/9)!==8 ? 'border-b-thick' : ''} ${i%3===2 && i%9!==8 ? 'border-r-thick' : ''} ${fixed[i] ? 'fixed' : c ? 'input' : ''} ${sel === i ? 'selected' : ''}`}>{c ? c : (notes[i].length > 0 && <div className="sudoku-candidates">{[1,2,3,4,5,6,7,8,9].map(n => <span key={n}>{notes[i].includes(n) ? n : ''}</span>)}</div>)}</div>)}
-                </div>
-            </div>
-            <div className="mt-4 flex flex-col gap-2">
-                <div className="flex justify-between gap-1">{[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={()=>num(n)} className="flex-1 bg-white border py-2 rounded font-black shadow-sm">{n}</button>)}</div>
-                <div className="flex gap-2 h-10"><button onClick={()=>setMode('normal')} className={`flex-1 rounded font-bold text-[10px] uppercase border ${mode==='normal'?'bg-blue-600 text-white':'bg-white text-gray-600'}`}>Normaal</button><button onClick={()=>setMode('note')} className={`flex-1 rounded font-bold text-[10px] uppercase border ${mode==='note'?'bg-blue-600 text-white':'bg-white text-gray-600'}`}>Notitie</button><button onClick={undo} disabled={history.length===0} className="w-14 bg-white border rounded text-gray-500 disabled:opacity-30">Undo</button><button onClick={()=>generate(diff)} className="px-4 bg-gray-800 text-white rounded text-[10px] font-black uppercase">{T[lang].new}</button></div>
-            </div>
-        </div>
-    );
-}
-
-function LanguageWidget({ lang }) {
-    const [l, setL] = useState('Spaans'); const [t, setT] = useState('w');
-    const [h, setH] = useState(S.load('lang_hist', []));
-    const finish = () => { const dt = fmtDate(new Date().toISOString().split('T')[0]); const nh = [{d: dt, l, a: t==='w'?'Woord':t==='v'?'Werkwoord':'Gesprek'}, ...h]; setH(nh); S.save('lang_hist', nh); alert('Opgeslagen in Historie!'); };
-
-    return (
-        <div className="widget h-[450px]">
-            <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-                <div className="flex items-center gap-2 text-gray-500"><Ico.Lng /><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].lang}</h3></div>
-                <select value={l} onChange={e=>setL(e.target.value)} className="bg-white border rounded text-[10px] font-bold px-2 py-1 outline-none text-blue-700">
-                    <option>Italiaans</option>
-                    <option>Spaans</option>
-                    <option>Engels</option>
-                    <option>Frans</option>
-                    <option>Duits</option>
-                    <option>Nederlands</option>
-                </select>
-            </div>
-            <div className="flex border-b bg-white">{[ {id:'w', l:'Woord'}, {id:'v', l:'Werkwoord'}, {id:'c', l:'Gesprek'}, {id:'h', l:'Historie'} ].map(x => <button key={x.id} onClick={()=>setT(x.id)} className={`tab-btn ${t === x.id ? 'active' : ''}`}>{x.l}</button>)}</div>
-            <div className="flex-1 p-6 flex flex-col items-center justify-center bg-white overflow-y-auto">
-                {t === 'w' && <div className="text-center"><span className="bg-blue-50 text-blue-700 px-2 py-1 text-[9px] font-bold uppercase rounded">A2 Niveau</span><h4 className="text-3xl font-black my-4">{l === 'Italiaans' ? 'Sviluppare' : 'Desarrollar'}</h4><p className="text-sm text-gray-500 italic mb-6">"Ontwikkelen"</p><button onClick={finish} className="bg-[#0073b1] text-white px-6 py-2 rounded text-[10px] font-black uppercase">Geleerd</button></div>}
-                {t === 'v' && <div className="w-full max-w-sm"><p className="text-[10px] font-black text-gray-400 mb-3 uppercase">{l === 'Italiaans' ? 'Parlare' : 'Hablar'} (Presente)</p><div className="grid grid-cols-2 gap-3 mb-6">{['Yo/Io', 'Tú/Tu', 'Él/Lui', 'Nosotros/Noi'].map(v => <input key={v} placeholder={v} className="p-3 border rounded text-xs outline-none focus:border-blue-500 bg-gray-50"/>)}</div><button onClick={finish} className="w-full bg-[#0073b1] text-white py-3 rounded text-[10px] font-black uppercase">Voltooi Sessie</button></div>}
-                {t === 'c' && <div className="w-full max-w-sm"><div className="bg-blue-50 p-5 rounded-lg text-sm italic border border-blue-100 text-gray-800 mb-6">{l === 'Italiaans' ? '"Lo sviluppo è fondamentale."' : '"El desarrollo es fundamental."'}</div><button onClick={finish} className="w-full bg-[#0073b1] text-white py-3 rounded text-[10px] font-black uppercase">Gesprek Klaar</button></div>}
-                {t === 'h' && <div className="w-full space-y-2">{h.length===0?<p className="text-center text-xs text-gray-400">Geen historie nog.</p>:h.map((x,i)=><div key={i} className="flex justify-between border-b p-2 text-xs"><span className="font-bold text-gray-800">{x.l} - {x.a}</span><span className="text-[10px] text-gray-500">{x.d}</span></div>)}</div>}
-            </div>
-        </div>
-    );
-}
-
 function Settings({ isOpen, onClose, layout, setLayout }) {
     const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
     const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'Groq', val: ''}]));
@@ -1675,7 +1575,7 @@ function App() {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lang, setLang] = useState('nl');
     
-    const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'pepper', 'recipe', 'sports', 'sudoku', 'lang'];
+    const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'sports'];
     const [layout, setLayout] = useState(defaultLayout);
 
     useEffect(() => {
@@ -1743,11 +1643,7 @@ function App() {
         agenda: <div className="col-span-12 lg:col-span-4"><AgendaWidget lang={lang} /></div>, 
         news: <div className="col-span-12 lg:col-span-8"><NewsWidget lang={lang} /></div>, 
         radar: <div className="col-span-12 lg:col-span-4"><RadarWidget lang={lang} /></div>, 
-        pepper: <div className="col-span-12 lg:col-span-4"><PepperWidget lang={lang} /></div>, 
-        recipe: <div className="col-span-12 lg:col-span-4"><RecipeWidget lang={lang} /></div>, 
-        sports: <div className="col-span-12 lg:col-span-4"><SportsWidget lang={lang} /></div>, 
-        sudoku: <div className="col-span-12 lg:col-span-4"><SudokuWidget lang={lang} /></div>, 
-        lang: <div className="col-span-12 lg:col-span-4"><LanguageWidget lang={lang} /></div> 
+        sports: <div className="col-span-12 lg:col-span-4"><SportsWidget lang={lang} /></div> 
     };
 
     const hour = new Date().getHours();
