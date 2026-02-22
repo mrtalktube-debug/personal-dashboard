@@ -1772,23 +1772,22 @@ function App() {
     return (
         <div className="flex flex-col min-h-screen">
             <WeatherBar lang={lang} />
-            <header className="px-6 md:px-10 pt-8 pb-6 max-w-[1600px] mx-auto w-full flex justify-between items-end border-b border-white/10 mb-6">
+            <header className="px-6 md:px-10 py-5 max-w-[1600px] mx-auto w-full flex justify-between items-center border-b border-white/10 mb-6">
                 <div>
-                    <h1 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase drop-shadow-md leading-none">
-                        {dynamicGreeting} MICHAEL
+                    <h1 className="text-xl md:text-2xl font-black text-white tracking-tight drop-shadow-md leading-none">
+                        {dynamicGreeting} Michael
                     </h1>
                 </div>
                 <div className="flex gap-2 md:gap-3 items-center">
-                    <button onClick={() => {const nL=lang==='nl'?'en':'nl'; setLang(nL); S.save('lang', nL)}} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition font-bold text-[10px] uppercase">
+                    <button onClick={() => {const nL=lang==='nl'?'en':'nl'; setLang(nL); S.save('lang', nL)}} className="h-10 px-4 flex items-center justify-center bg-white/10 text-white rounded hover:bg-white/20 transition font-bold text-xs uppercase tracking-widest">
                         {lang === 'nl' ? 'NL / EN' : 'EN / NL'}
                     </button>
-                    <button onClick={() => setSettingsOpen(true)} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition">
+                    <button onClick={() => setSettingsOpen(true)} className="w-10 h-10 flex items-center justify-center bg-white/10 text-white rounded hover:bg-white/20 transition">
                         <Ico.Set />
                     </button>
                 </div>
             </header>
             <main className="px-6 md:px-10 pb-16 max-w-[1600px] mx-auto w-full">
-                <DailyBriefing lang={lang} />
                 <div className="grid grid-cols-12 gap-6 md:gap-8">
                     {layout.map(w => <React.Fragment key={w}>{widgets[w]}</React.Fragment>)}
                 </div>
