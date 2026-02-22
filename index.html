@@ -75,9 +75,6 @@ const Ico = {
     Lng: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 11.37 9.198 15.299 6 18.5"/></svg>,
     Fod: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>,
     Sud: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16M10 4v16M14 4v16"/></svg>,
-    Spk: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>,
-    Trs: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>,
-    Ref: () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
     Clip: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>,
     Up: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
     Dn: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>,
@@ -91,16 +88,14 @@ function WeatherBar({ lang }) {
     const [w, setW] = useState(null);
     const [locLoading, setLocLoading] = useState(false);
     
-    // Houdt bij of we GPS voorrang moeten geven.
     const [autoGps, setAutoGps] = useState(S.load('auto_gps', true));
 
-    // Luister naar commando's van de AI Assistent
     useEffect(() => { 
         const h = (e) => { 
             if(e.detail.type === 'SET_CITY') { 
                 setC(e.detail.payload); 
                 S.save('wcity', e.detail.payload);
-                setAutoGps(false); // Zet auto-GPS uit als de AI het verandert
+                setAutoGps(false); 
                 S.save('auto_gps', false);
             }
         }; 
@@ -136,14 +131,12 @@ function WeatherBar({ lang }) {
         });
     };
 
-    // Voer GPS check uit bij het laden (als autoGps aan staat)
     useEffect(() => {
         if (autoGps) {
-            handleLocate(true); // silent = true voorkomt popups bij load
+            handleLocate(true);
         }
     }, []);
     
-    // Haal de weerdata inclusief Weercode op
     useEffect(() => {
         if (!c) return;
         fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${c}&count=1&language=${lang}`)
@@ -170,19 +163,17 @@ function WeatherBar({ lang }) {
         });
     }, [c, lang]);
 
-    // Bepaal het dynamische icoon op basis van de weercode
     const WxIco = ({ code }) => {
-        if (code === undefined || code === null) return <Ico.Wea />; // Standaard wolk bij laden
-        if (code === 0) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" strokeWidth="2"/><path strokeWidth="2" strokeLinecap="round" d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>; // Zon
-        if (code >= 1 && code <= 3) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>; // Wolken
-        if (code >= 51 && code <= 67 || code >= 80 && code <= 82) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 13v8m-4-6v8m-4-6v8m9-10.9A5 5 0 107.1 8a6 6 0 1010.9 3.1z"/></svg>; // Regen
-        if (code >= 71 && code <= 77 || code === 85 || code === 86) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 2v20m5.5-15.5l-11 11m0-11l11 11"/></svg>; // Sneeuw
-        if (code >= 95) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>; // Onweer
-        return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M4 12h16M4 8h16M4 16h16"/></svg>; // Mist/Standaard
+        if (code === undefined || code === null) return <Ico.Wea />; 
+        if (code === 0) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" strokeWidth="2"/><path strokeWidth="2" strokeLinecap="round" d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>; 
+        if (code >= 1 && code <= 3) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>; 
+        if (code >= 51 && code <= 67 || code >= 80 && code <= 82) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 13v8m-4-6v8m-4-6v8m9-10.9A5 5 0 107.1 8a6 6 0 1010.9 3.1z"/></svg>; 
+        if (code >= 71 && code <= 77 || code === 85 || code === 86) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 2v20m5.5-15.5l-11 11m0-11l11 11"/></svg>; 
+        if (code >= 95) return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>; 
+        return <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M4 12h16M4 8h16M4 16h16"/></svg>; 
     };
 
     const handleManualClick = () => {
-        // Zorg dat de prompt leeg is in plaats van gevuld met de huidige stad
         const n = prompt(lang === 'nl' ? "Voer stad in:" : "Enter city:", "");
         if(n && n.trim() !== "") {
             setC(n.trim());
@@ -194,61 +185,45 @@ function WeatherBar({ lang }) {
 
     return (
         <div className="bg-white/5 px-4 md:px-10 py-3 border-b border-white/10 flex items-center text-white text-xs font-bold uppercase tracking-widest overflow-x-auto hide-scroll">
-            {/* COMPACT & LINKS UITGELIJND */}
             <div className="flex gap-2 sm:gap-4 items-center shrink-0">
-                
-                {/* Locatie selector */}
                 <div className="flex items-center gap-1.5 shrink-0 bg-black/20 px-3 py-1.5 rounded-lg border border-white/5">
                     <div className="flex items-center gap-2 cursor-pointer hover:text-blue-300 transition" onClick={handleManualClick}>
                         <WxIco code={w?.code} />
                         <span className="truncate max-w-[120px] md:max-w-[200px] block">{w?.name || c}</span>
                     </div>
-                    {/* Verticaal streepje als separator */}
                     <div className="w-px h-3 bg-white/20 mx-1"></div>
                     <button onClick={() => handleLocate(false)} className={`p-1 bg-white/10 rounded hover:bg-white/20 transition ${locLoading ? 'animate-pulse text-blue-300' : autoGps ? 'text-blue-400' : 'text-gray-400'}`} title="Gebruik huidige locatie (GPS)">
                         <Ico.Loc />
                     </button>
                 </div>
                 
-                {/* Temperatuur */}
                 <div className="flex gap-2 items-center shrink-0 bg-black/20 px-3 py-1.5 rounded-lg border border-white/5">
                     <span className="text-sm md:text-base">{w?.t !== undefined ? `${w.t}°C` : '...'}</span>
                     <span className="opacity-40 font-normal">|</span>
                     <span className="opacity-70 text-[10px] whitespace-nowrap">{lang==='nl'?'Gevoel':'Feels'}: {w?.f !== undefined ? `${w.f}°C` : '...'}</span>
                 </div>
                 
-                {/* Regen indicator */}
-                <div className="bg-[#0073b1]/40 border border-[#0073b1]/50 px-3 py-1.5 rounded-lg flex items-center gap-2 shrink-0">
-                    <span className="w-2 h-2 bg-blue-300 rounded-full animate-pulse"></span>
-                    <span className="hidden sm:inline">
-                        {w?.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : w?.rain ? (lang==='nl'?`Regen over ${w.rain}u`:`Rain in ${w.rain}h`) : (lang==='nl'?"Geen regen verwacht":"No rain expected")}
-                    </span>
-                    <span className="sm:hidden">
-                        {w?.rain === 0 ? "Regen" : w?.rain ? `${w.rain}u` : "Droog"}
-                    </span>
-                </div>
-
+                {/* Toon regenindicator alleen als regen == 0 (Nu) of 1 (Over 1u) */}
+                {w?.rain !== null && w?.rain !== undefined && w.rain <= 1 && (
+                    <div className="bg-[#0073b1]/40 border border-[#0073b1]/50 px-3 py-1.5 rounded-lg flex items-center gap-2 shrink-0">
+                        <span className="w-2 h-2 bg-blue-300 rounded-full animate-pulse"></span>
+                        <span className="hidden sm:inline">
+                            {w.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : (lang==='nl'?`Regen over ${w.rain}u`:`Rain in ${w.rain}h`)}
+                        </span>
+                        <span className="sm:hidden">
+                            {w.rain === 0 ? "Regen" : `${w.rain}u`}
+                        </span>
+                    </div>
+                )}
             </div>
         </div>
     );
 }
-    
+
 function DailyBriefing({ lang }) {
-    const hour = new Date().getHours();
-    let greetingNL = hour >= 6 && hour < 12 ? 'Goedemorgen' : hour >= 12 && hour < 18 ? 'Goedemiddag' : 'Goedenavond';
-    let greetingEN = hour >= 6 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening';
-    const dynamicGreeting = lang === 'nl' ? greetingNL : greetingEN;
-
-    return (
-        <div className="bg-blue-600/20 border border-blue-500/30 text-blue-100 rounded-lg p-4 mb-6 flex flex-col md:flex-row items-center gap-4 shadow-lg backdrop-blur-md">
-            <div className="bg-white p-2 rounded-full text-gray-900 shrink-0"><Ico.Sheep /></div>
-            <div className="text-sm font-medium leading-relaxed">
-                <span className="font-bold">{dynamicGreeting}, Michael.</span> Live API systemen en veilige Vercel backend geactiveerd.
-            </div>
-        </div>
-    );
+    return null; // Optioneel, overbodig gemaakt in de nieuwe header layout
 }
-    
+
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
     const [loading, setLoading] = useState(false);
@@ -260,7 +235,7 @@ function AIWidget({ lang }) {
     const prevHistLen = useRef(0);
 
     /* ── Chat Sessions ── */
-    const defaultHist = [{r:'ai', t: lang==='nl'?'Hoi! Ik ben MICHAEL AI. Stel een vraag, geef een commando, of upload een bestand of foto.':'Hi! I\'m MICHAEL AI. Ask a question, give a command, or upload a file.'}];
+    const defaultHist = []; // Leeg volgens wens
     
     const [sessions, setSessions] = useState(() => {
         try { return S.load('michael_sessions', []); } catch(e) { return []; }
@@ -270,7 +245,7 @@ function AIWidget({ lang }) {
         try {
             const saved = S.load('ai_hist', null);
             if(saved && Array.isArray(saved) && saved.length > 0) {
-                if(saved[0]?.t?.includes('Gemini') || saved[0]?.t?.includes('OpenRouter') || saved[0]?.t?.includes('Spark') || saved[0]?.t?.includes('Welkom')) return defaultHist;
+                if(saved[0]?.t?.includes('Gemini') || saved[0]?.t?.includes('OpenRouter') || saved[0]?.t?.includes('Spark') || saved[0]?.t?.includes('MICHAEL AI')) return defaultHist;
                 return saved;
             }
             return defaultHist;
@@ -280,7 +255,23 @@ function AIWidget({ lang }) {
     const [view, setView] = useState('chat');
     const [exp, setExp] = useState(false);
 
-    /* ── Auto-scroll: scrolt direct naar bovenkant eigen vraag ── */
+    /* ── Auto-Sync Helper ── */
+    const syncToCloud = () => {
+        const cloudSettings = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('d_')) {
+                cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
+            }
+        }
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings })
+        }).catch(()=>{});
+    };
+
+    /* ── Auto-scroll ── */
     useEffect(() => {
         if (exp && hist.length > prevHistLen.current) {
             setTimeout(() => {
@@ -309,8 +300,8 @@ function AIWidget({ lang }) {
     const deleteMsg = (idx, e) => {
         e.stopPropagation();
         const n = hist.filter((_,i)=>i!==idx);
-        const r = n.length===0 ? defaultHist : n;
-        setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+        setHist(n); S.save('ai_hist', n.map(m=>({r:m.r, t:m.t})));
+        syncToCloud();
     };
 
     /* ── Session management ── */
@@ -320,11 +311,13 @@ function AIWidget({ lang }) {
         const session = {id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: hist.map(m=>({r:m.r, t:m.t}))};
         const updated = [session, ...sessions].slice(0, 20);
         setSessions(updated); S.save('michael_sessions', updated);
+        syncToCloud();
     };
     const newChat = () => {
         saveCurrentSession();
         setHist(defaultHist); S.save('ai_hist', defaultHist);
         setActiveSession(null); setView('chat');
+        syncToCloud();
     };
     const loadSession = (session) => {
         saveCurrentSession();
@@ -335,26 +328,23 @@ function AIWidget({ lang }) {
         e.stopPropagation();
         const updated = sessions.filter(s=>s.id!==id);
         setSessions(updated); S.save('michael_sessions', updated);
+        syncToCloud();
     };
 
     /* ── Dashboard commands ── */
     const tryDashboardCommand = (input) => {
-        const low = input.toLowerCase().replace(/[?!.,]/g, '');
+        const low = input.toLowerCase().replace(/[?!.,'"]/g, '');
         
         if(/\b(weer|weather|temperatuur|graden|locatie)\b/.test(low)) {
             let city = null;
-            // Haal specifiek de plaatsnaam na voorzetsels op
             const match = low.match(/(?:naar|in|op|voor|van|to|for|at|of)\s+([a-zà-ÿ\s-]+)/i);
-            
             if (match && match[1]) {
                 city = match[1].replace(/\b(de|het|een|the|a|locatie|location)\b/gi, '').trim();
             } else {
-                // Alternatieve fallback filtering
                 city = low.replace(/\b(pas|het|weer|aan|verander|toon|laat|zien|huidige|locatie|temperatuur|graden|wat|is|hoe|van|de|een)\b/gi, '').trim();
             }
-
             if (city && city.length >= 2) {
-                const cleanCity = city.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                const cleanCity = city.split(/\s+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                 emitCmd('SET_CITY', cleanCity);
                 return lang === 'nl' ? `✅ Weerlocatie aangepast naar **${cleanCity}**.` : `✅ Weather location set to **${cleanCity}**.`;
             }
@@ -393,6 +383,7 @@ function AIWidget({ lang }) {
             setTimeout(() => {
                 const r = [...n, {r:'ai', t: cmdResult}];
                 setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+                syncToCloud();
             }, 400);
             return;
         }
@@ -400,8 +391,9 @@ function AIWidget({ lang }) {
         const groqKey = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'))?.val;
         if(!groqKey) {
             setTimeout(() => {
-                const r = [...n, {r:'ai', t: lang==='nl'?'⚠️ Geen Groq key gevonden. Ga naar Instellingen → API Keys → voeg een key toe met naam **Groq**.':'⚠️ No Groq key found. Add key named **Groq** in Settings.'}];
+                const r = [...n, {r:'ai', t: lang==='nl'?'⚠️ Geen Groq key gevonden. Ga naar Instellingen → API Keys → voeg een key toe met naam **Groq**.':'⚠️ No Groq key found.'}];
                 setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+                syncToCloud();
             }, 400);
             return;
         }
@@ -431,13 +423,16 @@ function AIWidget({ lang }) {
             if(data.choices?.[0]?.message?.content) {
                 const r = [...n, {r:'ai', t: data.choices[0].message.content}];
                 setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+                syncToCloud();
             } else if(data.error) {
                 const r = [...n, {r:'ai', t: `⚠️ API Error: ${data.error.message}`}];
                 setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+                syncToCloud();
             }
         } catch(e) {
             const r = [...n, {r:'ai', t:'⚠️ Netwerkfout. Check je verbinding.'}];
             setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+            syncToCloud();
         }
         setLoading(false);
     };
@@ -445,8 +440,8 @@ function AIWidget({ lang }) {
     const lastUserIdx = hist.map(m=>m.r).lastIndexOf('usr');
 
     return (
-        <div className={`widget ai-transition relative ${exp?'h-[500px]':'h-[72px]'} flex flex-col overflow-hidden`}>
-            {/* Header met Schaap logo en MICHAEL AI tekst */}
+        <div className={`widget ai-transition relative ${exp?'h-[450px]':'h-[72px]'} flex flex-col overflow-hidden`}>
+            {/* Header met Schaap logo */}
             <div className="p-4 bg-white border-b flex justify-between items-center cursor-pointer shrink-0 z-20" onClick={()=>setExp(true)}>
                 <div className="flex items-center gap-2">
                     <span className="bg-gradient-to-br from-gray-700 to-black text-white p-1.5 rounded-lg shadow-sm"><Ico.Sheep className="w-5 h-5"/></span>
@@ -492,7 +487,7 @@ function AIWidget({ lang }) {
                         <div className="h-4"></div>
                     </div>
                     
-                    {/* Input bar */}
+                    {/* Input bar zonder Michael AI logo */}
                     <div className="p-3 bg-white border-t shrink-0 z-20">
                         {attachedFile && (
                             <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-bold px-3 py-1.5 rounded-lg w-fit mb-2 shadow-sm">
@@ -505,13 +500,9 @@ function AIWidget({ lang }) {
                             <button onClick={()=>fileRef.current.click()} className="text-gray-400 hover:text-gray-800 transition p-0.5" title="Bestand of Foto toevoegen">
                                 <Ico.Clip/>
                             </button>
-                            <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}} placeholder={lang==='nl'?'Vraag het aan Michael AI...':'Ask Michael AI...'} className="flex-1 bg-transparent text-[13px] outline-none px-2 text-gray-800 placeholder-gray-400" disabled={loading}/>
+                            <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}} placeholder={lang==='nl'?'Vraag of commando...':'Question or command...'} className="flex-1 bg-transparent text-[13px] outline-none px-2 text-gray-800 placeholder-gray-400" disabled={loading}/>
                             
-                            <div className="flex items-center gap-1 bg-white rounded-full p-1 shadow-sm border border-gray-100 pr-1 pl-3">
-                                <span className="flex items-center gap-1.5 text-gray-400 font-black text-[9px] uppercase tracking-wider mr-1 hidden sm:flex">
-                                    <Ico.Sheep className="w-3.5 h-3.5"/> MICHAEL AI
-                                </span>
-                                <div className="w-px h-4 bg-gray-200 mx-1 hidden sm:block"></div>
+                            <div className="flex items-center gap-1 bg-white rounded-full p-1 shadow-sm border border-gray-100 pr-1 pl-1">
                                 <button onClick={send} disabled={loading || (!msg.trim() && !attachedFile)} className={`flex items-center justify-center w-8 h-8 rounded-full transition shrink-0 ${msg.trim()||attachedFile?'bg-[#0b57d0] text-white shadow-md hover:bg-blue-800':'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                                     <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                                 </button>
@@ -1345,7 +1336,7 @@ function RadarWidget({ lang }) {
 function PepperWidget({ lang }) {
     const deals = [{ t: 'Sony WH-1000XM5', p: '€259', o: '€349', d: '25%', h: true }, { t: 'MacBook Air M2', p: '€899', o: '€1199', d: '25%', h: true }];
     return (
-        <div className="widget h-[350px]">
+        <div className="widget h-[450px]">
             <div className="p-4 bg-gray-50 border-b flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Pepper/><h3 className="text-[10px] font-black uppercase tracking-widest italic">Pepper</h3></div></div>
             <div className="p-4 flex gap-4 overflow-x-auto flex-1 items-center bg-white hide-scroll">
                 {deals.map((d, i) => (
@@ -1366,7 +1357,7 @@ function RecipeWidget({ lang }) {
     const [f, setF] = useState('All'); const [exp, setExp] = useState(null);
     const filtered = allRecs.filter(r => f === 'All' || r.c === f);
     return (
-        <div className="widget h-[350px]">
+        <div className="widget h-[450px]">
             <div className="p-4 border-b bg-gray-50 flex justify-between items-center"><div className="flex items-center gap-2 text-gray-500"><Ico.Fod/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].rec}</h3></div></div>
             <div className="flex gap-2 p-3 border-b bg-white overflow-x-auto hide-scroll">{['All', 'Vlees', 'Kip', 'Vis'].map(x => <button key={x} onClick={() => {setF(x); setExp(null);}} className={`px-3 py-1 rounded-full text-[9px] font-bold border transition ${f === x ? 'bg-gray-900 text-white border-gray-900' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'}`}>{x.toUpperCase()}</button>)}</div>
             <div className="p-4 space-y-3 flex-1 overflow-y-auto bg-white">
@@ -1526,7 +1517,7 @@ function SudokuWidget({ lang }) {
     const num = (n) => { if(sel === null || fixed[sel]) return; push(); if(mode === 'normal') { const g = [...grid]; g[sel] = n; setGrid(g); } else { const nt = [...notes]; if(nt[sel].includes(n)) nt[sel] = nt[sel].filter(x => x !== n); else nt[sel] = [...nt[sel], n].sort(); setNotes(nt); } };
 
     return (
-        <div className="widget p-6 h-[500px] bg-gray-50">
+        <div className="widget p-6 h-[450px] bg-gray-50">
             <div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2 text-gray-500"><Ico.Sud/><h3 className="text-[10px] font-black uppercase tracking-widest">SUDOKU</h3></div><select value={diff} onChange={e=>{setDiff(e.target.value); generate(e.target.value)}} className="text-[10px] font-bold border rounded px-2 py-1 outline-none text-blue-700 bg-white"><option>Medium</option><option>Hard</option></select></div>
             <div className="flex-1 flex flex-col justify-center items-center w-full">
                 <div className="sudoku-container bg-white shadow-md">
@@ -1547,7 +1538,7 @@ function LanguageWidget({ lang }) {
     const finish = () => { const dt = fmtDate(new Date().toISOString().split('T')[0]); const nh = [{d: dt, l, a: t==='w'?'Woord':t==='v'?'Werkwoord':'Gesprek'}, ...h]; setH(nh); S.save('lang_hist', nh); alert('Opgeslagen in Historie!'); };
 
     return (
-        <div className="widget h-[400px]">
+        <div className="widget h-[450px]">
             <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
                 <div className="flex items-center gap-2 text-gray-500"><Ico.Lng /><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].lang}</h3></div>
                 <select value={l} onChange={e=>setL(e.target.value)} className="bg-white border rounded text-[10px] font-bold px-2 py-1 outline-none text-blue-700">
@@ -1623,10 +1614,9 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     };
 
     return (
-        <div className={`settings-panel p-6 md:p-8 ${isOpen ? 'open' : ''}`}>
+        <div className={`settings-panel p-6 md:p-8 flex flex-col ${isOpen ? 'open' : ''}`}>
             <div className="flex justify-between items-center mb-8 border-b pb-4"><h2 className="text-2xl font-black uppercase">Configuratie</h2><button onClick={onClose} className="text-3xl text-gray-400 hover:text-gray-800 transition">&times;</button></div>
-            <div className="space-y-8">
-                
+            <div className="space-y-8 flex-1">
                 <section>
                     <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Dashboard Indeling (Drag & Drop)</h3>
                     <div className="space-y-1">
@@ -1678,9 +1668,15 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                     </div>
                 </section>
             </div>
-            <button onClick={saveAll} disabled={isSaving} className="mt-10 w-full bg-[#1a1a1a] text-white py-4 text-[10px] font-black uppercase rounded shadow-lg hover:bg-black transition disabled:opacity-50">
-                {isSaving ? 'BEZIG MET CLOUD SYNC...' : 'OPSLAAN & HERLADEN (CLOUD SYNC)'}
-            </button>
+            
+            <div className="mt-8 shrink-0">
+                <button onClick={saveAll} disabled={isSaving} className="w-full bg-[#1a1a1a] text-white py-4 text-[10px] font-black uppercase rounded shadow-lg hover:bg-black transition disabled:opacity-50">
+                    {isSaving ? 'BEZIG MET CLOUD SYNC...' : 'OPSLAAN & HERLADEN (CLOUD SYNC)'}
+                </button>
+                <button onClick={() => { S.remove('auth_status'); window.location.reload(); }} className="mt-4 w-full bg-red-500/10 text-red-500 py-3 text-[10px] font-black uppercase rounded hover:bg-red-500 hover:text-white transition flex items-center justify-center gap-2">
+                    Uitloggen <Ico.Lock />
+                </button>
+            </div>
         </div>
     );
 }
@@ -1741,8 +1737,6 @@ function App() {
         } catch(e) { console.error("Login failed"); }
     };
 
-    const handleLogout = () => { setIsAuth(false); S.remove('auth_status'); window.location.reload(); };
-
     if (!isAuth || isSyncing) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-[#000a14] text-white">
@@ -1779,11 +1773,18 @@ function App() {
         <div className="flex flex-col min-h-screen">
             <WeatherBar lang={lang} />
             <header className="px-6 md:px-10 pt-8 pb-6 max-w-[1600px] mx-auto w-full flex justify-between items-end border-b border-white/10 mb-6">
-                <div><h1 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase drop-shadow-md leading-none">{dynamicGreeting}</h1><p className="text-blue-200 text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em] mt-2">Michael</p></div>
+                <div>
+                    <h1 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase drop-shadow-md leading-none">
+                        {dynamicGreeting} MICHAEL
+                    </h1>
+                </div>
                 <div className="flex gap-2 md:gap-3 items-center">
-                    <button onClick={() => {const nL=lang==='nl'?'en':'nl'; setLang(nL); S.save('lang', nL)}} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition font-bold text-[10px] uppercase">{lang === 'nl' ? '🇳🇱 NL' : '🇬🇧 EN'}</button>
-                    <button onClick={handleLogout} className="p-2 md:p-3 bg-red-500/20 text-red-400 rounded hover:bg-red-500/40 hover:text-white transition backdrop-blur-sm flex items-center gap-2"><span className="text-[9px] font-bold uppercase tracking-widest hidden md:inline">Uitloggen</span><Ico.Lock /></button>
-                    <button onClick={() => setSettingsOpen(true)} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition"><Ico.Set /></button>
+                    <button onClick={() => {const nL=lang==='nl'?'en':'nl'; setLang(nL); S.save('lang', nL)}} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition font-bold text-[10px] uppercase">
+                        {lang === 'nl' ? 'NL / EN' : 'EN / NL'}
+                    </button>
+                    <button onClick={() => setSettingsOpen(true)} className="p-2 md:p-3 bg-white/10 text-white rounded hover:bg-white/20 transition">
+                        <Ico.Set />
+                    </button>
                 </div>
             </header>
             <main className="px-6 md:px-10 pb-16 max-w-[1600px] mx-auto w-full">
