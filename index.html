@@ -715,8 +715,10 @@ function AgendaWidget({ lang }) {
     const [f, setF] = useState(cals);
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [groupBy, setGroupBy] = useState('time'); 
+    const [groupBy, setGroupBy] = useState('person'); 
     
+    const getDayStr = (dStr) => { const days = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']; return days[new Date(dStr).getDay()]; };
+
     useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => c.toLowerCase().includes(e.detail.payload?.toLowerCase() || '')); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
 
     useEffect(() => { setF(cals); }, [JSON.stringify(cals)]);
