@@ -903,11 +903,11 @@ function AgendaWidget({ lang }) {
         <div className="widget h-[450px] flex flex-col">
             <div className="p-4 bg-gray-50 border-b flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-gray-500"><Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].ag}</h3></div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                     <button onClick={()=>setGroupBy(groupBy==='time'?'person':'time')} className="px-2 py-1 bg-white border shadow-sm text-[9px] font-bold rounded uppercase text-gray-600 hover:text-blue-600 transition">
                         {groupBy === 'time' ? 'Groepeer' : 'Sorteer'}
                     </button>
-                    <div className="relative flex items-center bg-gray-200 p-1 rounded hover:bg-gray-300 transition cursor-pointer">
+                    <div className="relative flex items-center bg-gray-200 p-1 rounded hover:bg-gray-300 transition cursor-pointer mr-3">
                         <span className="px-1.5 text-xs">📅</span>
                         <input type="date" value={d} onChange={(e)=>setD(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </div>
@@ -923,8 +923,8 @@ function AgendaWidget({ lang }) {
             <div className="p-2 flex border-b bg-gray-50 justify-center shrink-0">
                 <div className="flex items-center gap-2 bg-white border rounded shadow-sm">
                     <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&lt;</button>
-                    <span className="text-[10px] font-black text-center uppercase tracking-widest text-gray-600 min-w-[130px]">
-                        <span className="text-blue-600">WK {getWeekNumber(d)}</span> <span className="opacity-30">|</span> {view === 'dag' ? fmtDate(d) : `${fmtDate(d).slice(0,5)} - ${fmtDate(dEnd).slice(0,5)}`}
+                    <span className="text-[10px] font-black text-center uppercase tracking-widest text-gray-600 min-w-[140px]">
+                        <span className="text-blue-600">WK {getWeekNumber(d)}</span> <span className="opacity-30">|</span> {view === 'dag' ? `${getDayStr(d)} ${fmtDate(d)}` : `${getDayStr(d)} ${fmtDate(d).slice(0,5)} - ${getDayStr(dEnd)} ${fmtDate(dEnd).slice(0,5)}`}
                     </span>
                     <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&gt;</button>
                 </div>
@@ -939,7 +939,7 @@ function AgendaWidget({ lang }) {
                                 <div key={idx} className={`p-3 border-l-4 ${getColor(i.p)} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}>
                                     <div className="flex justify-between items-start mb-1">
                                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                                            {view==='week' ? `${fmtDate(i.date).slice(0,5)} ` : ''}{i.p}
+                                            {view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)} ` : ''}{i.p}
                                         </span>
                                         <span className="text-blue-600 font-bold font-mono text-[9px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">
                                             {i.time}{i.endTime ? ` - ${i.endTime}` : ''}
@@ -963,8 +963,8 @@ function AgendaWidget({ lang }) {
                                             {personItems.map((i, idx) => (
                                                 <div key={idx} className="p-2 border bg-white rounded flex flex-col shadow-sm">
                                                     <div className="flex justify-between items-center mb-1">
-                                                        <span className="text-[9px] font-black text-gray-400">
-                                                            {view==='week' ? fmtDate(i.date).slice(0,5) : ''}
+                                                        <span className="text-[9px] font-black text-gray-400 uppercase">
+                                                            {view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)}` : ''}
                                                         </span>
                                                         <span className="text-blue-600 font-bold font-mono text-[9px]">
                                                             {i.time}{i.endTime ? ` - ${i.endTime}` : ''}
@@ -983,12 +983,18 @@ function AgendaWidget({ lang }) {
                     <div className="col-span-2 text-center text-xs text-gray-400 mt-10">Geen afspraken.</div>
                 )}
             </div>
-            {(sumRyan || sumYaron) && (
-                <div className="bg-gray-100 border-t border-gray-200 p-2 shrink-0 flex justify-center gap-6 text-[9px] font-black uppercase tracking-widest text-gray-600">
+            <div className="bg-gray-100 border-t border-gray-200 p-2 shrink-0 flex items-center relative min-h-[36px]">
+                <div className="flex-1 flex justify-center gap-6 text-[9px] font-black uppercase tracking-widest text-gray-600">
                     {sumRyan && <span>🎒 {sumRyan}</span>}
                     {sumYaron && <span>🎒 {sumYaron}</span>}
                 </div>
-            )}
+                <button 
+                    onClick={() => setD(new Date().toISOString().split('T')[0])} 
+                    className="absolute right-2 px-2 py-1 bg-white border shadow-sm text-[9px] font-bold rounded uppercase text-blue-600 hover:text-blue-800 transition"
+                >
+                    Vandaag
+                </button>
+            </div>
         </div>
     );
 }
