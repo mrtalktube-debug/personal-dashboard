@@ -127,22 +127,24 @@ function WeatherBar({ lang }) {
     
     useEffect(() => {
         if (!c) return;
-        fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(c)}&count=1&language=${lang}`)
+        fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(c)}&format=json&limit=1`)
         .then(r=>r.json())
         .then(d=>{
-            if(d.results && d.results.length > 0){
-                const { latitude:lat, longitude:lon, name } = d.results[0];
-                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation,weathercode&hourly=precipitation_probability&timezone=auto`)
+            if(d && d.length > 0){
+                const { lat, lon, name } = d[0];
+                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation,weather_code&hourly=precipitation_probability&timezone=auto`)
                 .then(r=>r.json()).then(wd => { 
                     const ch=new Date().getHours(); 
                     let rf=null; 
                     for(let i=ch; i<ch+12; i++) { 
                         if(wd.hourly && wd.hourly.precipitation_probability[i]>30){rf=i-ch;break;} 
                     } 
-                    setW({ t: Math.round(wd.current.temperature_2m), f: Math.round(wd.current.apparent_temperature), code: wd.current.weathercode, rain: rf, name }); 
+                    setW({ t: Math.round(wd.current.temperature_2m), f: Math.round(wd.current.apparent_temperature), code: wd.current.weather_code || wd.current.weathercode, rain: rf, name: name }); 
                 });
+            } else {
+                setW(prev => ({ ...prev, name: "Niet gevonden" }));
             }
-        });
+        }).catch(() => setW(prev => ({ ...prev, name: "Error" })));
     }, [c, lang]);
 
     const WxIco = ({ code }) => {
