@@ -7,6 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://i.postimg.cc/Hj1WBdLr/nieuw-schaap-logo.png">
+
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -403,6 +404,7 @@ function AIWidget({ lang }) {
         <div className={`widget ai-transition relative ${exp?'h-[450px]':'h-[72px]'} flex flex-col overflow-hidden`}>
             <div className="p-4 bg-white border-b flex justify-between items-center cursor-pointer shrink-0 z-20" onClick={()=>setExp(true)}>
                 <div className="flex items-center gap-2">
+                    {/* HIER IS DE MIX-BLEND-MULTIPLY AANGEBRACHT */}
                     <img src="https://i.postimg.cc/Hj1WBdLr/nieuw-schaap-logo.png" alt="AI Logo" className="w-8 h-8 object-contain mix-blend-multiply" />
                 </div>
                 {exp ? (
@@ -1607,7 +1609,7 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.1'}</p>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.2'}</p>
                     {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
