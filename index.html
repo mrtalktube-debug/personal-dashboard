@@ -436,8 +436,7 @@ function AIWidget({ lang }) {
         <div className={`widget ai-transition relative ${exp?'h-[450px]':'h-[72px]'} flex flex-col overflow-hidden`}>
             <div className="p-4 bg-white border-b flex justify-between items-center cursor-pointer shrink-0 z-20" onClick={()=>setExp(true)}>
                 <div className="flex items-center gap-2">
-                    {/* HIER IS DE MIX-BLEND-MULTIPLY AANGEBRACHT */}
-                    <img src="https://i.postimg.cc/NLqKzZ4C/nieuw-schaap-logo1.png" alt="AI Logo" className="w-8 h-8 object-contain" />
+                    <img src="https://i.postimg.cc/NLqKzZ4C/nieuw-schaap-logo1.png" alt="AI Logo" className="w-8 h-8 object-contain mix-blend-multiply" />
                 </div>
                 {exp ? (
                     <div className="flex items-center gap-2">
@@ -901,25 +900,39 @@ function AgendaWidget({ lang }) {
 
     return (
         <div className="widget h-[450px] flex flex-col">
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-2 text-gray-500"><Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].ag}</h3></div>
-                <div className="flex items-center gap-3">
+            <div className="p-3 bg-gray-50 border-b flex justify-between items-center shrink-0 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                    <div className="relative flex items-center bg-gray-200 p-1.5 rounded hover:bg-gray-300 transition cursor-pointer">
+                        <span className="px-1 text-xs">📅</span>
+                        <span className="text-[10px] font-bold text-gray-600 ml-1 pr-1">{d.slice(8,10)}</span>
+                        <input type="date" value={d} onChange={(e)=>setD(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                    <div className="hidden sm:flex items-center gap-1 text-gray-500 mr-2">
+                        <Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].ag}</h3>
+                    </div>
                     <button onClick={()=>setGroupBy(groupBy==='time'?'person':'time')} className="px-2 py-1 bg-white border shadow-sm text-[9px] font-bold rounded uppercase text-gray-600 hover:text-blue-600 transition">
                         {groupBy === 'time' ? 'Groepeer' : 'Sorteer'}
                     </button>
-                    <div className="relative flex items-center bg-gray-200 p-1 rounded hover:bg-gray-300 transition cursor-pointer mr-3">
-                        <span className="px-1.5 text-xs">📅</span>
-                        <input type="date" value={d} onChange={(e)=>setD(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                    </div>
-                    <div className="flex bg-gray-200 p-1 rounded">
-                        <button onClick={()=>setView('dag')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='dag'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].day}</button>
-                        <button onClick={()=>setView('week')} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='week'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].wk}</button>
+                    <div className="flex bg-gray-200 p-1 rounded relative z-10">
+                        <button onClick={(e)=>{e.preventDefault(); setView('dag');}} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='dag'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].day}</button>
+                        <button onClick={(e)=>{e.preventDefault(); setView('week');}} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='week'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].wk}</button>
                     </div>
                 </div>
+
+                <div>
+                    <button onClick={() => setD(new Date().toISOString().split('T')[0])} className="px-2.5 py-1.5 bg-white border shadow-sm text-[9px] font-bold rounded uppercase text-blue-600 hover:text-blue-800 transition">
+                        Vandaag
+                    </button>
+                </div>
             </div>
+            
             <div className="flex border-b bg-white overflow-x-auto p-2 gap-2 hide-scroll shrink-0">
-                {cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-3 py-1.5 text-[9px] font-bold rounded uppercase whitespace-nowrap border-l-4 transition-all ${f.includes(p) ? `bg-gray-200 text-black ${getColor(p)} shadow-sm` : 'bg-gray-50 text-gray-400 border-transparent'}`}>{p}</button>)}
+                {cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-3 py-1.5 text-[10px] font-bold rounded uppercase whitespace-nowrap border-l-[6px] border border-gray-200 transition-all ${f.includes(p) ? `bg-[#e2e8f0] text-black ${getColor(p)} shadow-sm` : `bg-gray-50 text-gray-400 border-l-gray-300`}`}>{p}</button>)}
             </div>
+            
             <div className="p-2 flex border-b bg-gray-50 justify-center shrink-0">
                 <div className="flex items-center gap-2 bg-white border rounded shadow-sm">
                     <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&lt;</button>
@@ -929,6 +942,7 @@ function AgendaWidget({ lang }) {
                     <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&gt;</button>
                 </div>
             </div>
+            
             <div className="flex-1 p-4 bg-white overflow-y-auto content-start">
                 {loading ? (
                     <div className="text-center text-xs font-bold text-blue-500 animate-pulse mt-10">Agenda synchroniseren...</div>
@@ -936,16 +950,16 @@ function AgendaWidget({ lang }) {
                     groupBy === 'time' ? (
                         <div className="grid grid-cols-2 gap-3">
                             {filteredItems.map((i, idx) => (
-                                <div key={idx} className={`p-3 border-l-4 ${getColor(i.p)} bg-gray-50 rounded flex flex-col shadow-sm h-fit`}>
-                                    <div className="flex justify-between items-start mb-1">
+                                <div key={idx} className={`p-3 border border-l-[5px] ${getColor(i.p)} bg-white rounded-lg flex flex-col shadow-sm h-fit`}>
+                                    <span className="font-bold text-[13px] leading-tight text-gray-900 mb-2">{i.t}</span>
+                                    <div className="flex justify-between items-center mt-auto">
                                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
                                             {view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)} ` : ''}{i.p}
                                         </span>
-                                        <span className="text-blue-600 font-bold font-mono text-[9px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">
+                                        <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">
                                             {i.time}{i.endTime ? ` - ${i.endTime}` : ''}
                                         </span>
                                     </div>
-                                    <span className="font-bold text-xs leading-tight">{i.t}</span>
                                 </div>
                             ))}
                         </div>
@@ -959,18 +973,18 @@ function AgendaWidget({ lang }) {
                                         <div className={`text-[10px] font-black uppercase text-gray-800 bg-gray-100 border-l-4 ${getColor(person)} px-3 py-1.5 mb-2 w-full`}>
                                             {person}
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2">
+                                        <div className="grid grid-cols-2 gap-3">
                                             {personItems.map((i, idx) => (
-                                                <div key={idx} className="p-2 border bg-white rounded flex flex-col shadow-sm">
-                                                    <div className="flex justify-between items-center mb-1">
+                                                <div key={idx} className={`p-3 border border-l-[5px] ${getColor(person)} bg-white rounded-lg flex flex-col shadow-sm h-fit`}>
+                                                    <span className="font-bold text-[13px] leading-tight text-gray-900 mb-2">{i.t}</span>
+                                                    <div className="flex justify-between items-center mt-auto">
                                                         <span className="text-[9px] font-black text-gray-400 uppercase">
                                                             {view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)}` : ''}
                                                         </span>
-                                                        <span className="text-blue-600 font-bold font-mono text-[9px]">
+                                                        <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">
                                                             {i.time}{i.endTime ? ` - ${i.endTime}` : ''}
                                                         </span>
                                                     </div>
-                                                    <span className="font-bold text-[11px] leading-tight">{i.t}</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -983,17 +997,11 @@ function AgendaWidget({ lang }) {
                     <div className="col-span-2 text-center text-xs text-gray-400 mt-10">Geen afspraken.</div>
                 )}
             </div>
-            <div className="bg-gray-100 border-t border-gray-200 p-2 shrink-0 flex items-center relative min-h-[36px]">
-                <div className="flex-1 flex justify-center gap-6 text-[9px] font-black uppercase tracking-widest text-gray-600">
+            <div className="bg-gray-100 border-t border-gray-200 p-2 shrink-0 flex items-center justify-center min-h-[36px]">
+                <div className="flex gap-6 text-[9px] font-black uppercase tracking-widest text-gray-600">
                     {sumRyan && <span>🎒 {sumRyan}</span>}
                     {sumYaron && <span>🎒 {sumYaron}</span>}
                 </div>
-                <button 
-                    onClick={() => setD(new Date().toISOString().split('T')[0])} 
-                    className="absolute right-2 px-2 py-1 bg-white border shadow-sm text-[9px] font-bold rounded uppercase text-blue-600 hover:text-blue-800 transition"
-                >
-                    Vandaag
-                </button>
             </div>
         </div>
     );
