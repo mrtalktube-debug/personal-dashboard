@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Dashboard - Michael</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/Ss6zrg7p/schaap.png">
+
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -56,7 +61,6 @@ const Ico = {
     Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
     Wea: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>,
     Loc: () => <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-    Sheep: ({className}) => <svg className={className || "w-5 h-5"} viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 5c-1.5 0-2.9.9-3.5 2.2-.6-1.3-2-2.2-3.5-2.2-2.2 0-4 1.8-4 4 0 .4.1.8.2 1.1C3.6 10.6 2 12.6 2 15c0 2.8 2.2 5 5 5 1.1 0 2.1-.4 2.9-1 .8.6 1.8 1 2.9 1s2.1-.4 2.9-1c.8.6 1.8 1 2.9 1 2.8 0 5-2.2 5-5 0-2.4-1.6-4.4-3.7-4.9.1-.3.2-.7.2-1.1 0-2.2-1.8-4-4-4zm-7 8.5c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm7 0c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z"/><circle cx="9" cy="14.5" r="1" fill="white"/><circle cx="15" cy="14.5" r="1" fill="white"/></svg>,
     Bot: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>,
     Cry: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
     Cal: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
@@ -77,7 +81,6 @@ function WeatherBar({ lang }) {
     const [c, setC] = useState(S.load('wcity', 'Zoetermeer'));
     const [w, setW] = useState(null);
     const [locLoading, setLocLoading] = useState(false);
-    
     const [autoGps, setAutoGps] = useState(S.load('auto_gps', true));
 
     useEffect(() => { 
@@ -121,11 +124,7 @@ function WeatherBar({ lang }) {
         });
     };
 
-    useEffect(() => {
-        if (autoGps) {
-            handleLocate(true);
-        }
-    }, []);
+    useEffect(() => { if (autoGps) handleLocate(true); }, []);
     
     useEffect(() => {
         if (!c) return;
@@ -141,13 +140,7 @@ function WeatherBar({ lang }) {
                     for(let i=ch; i<ch+12; i++) { 
                         if(wd.hourly && wd.hourly.precipitation_probability[i]>30){rf=i-ch;break;} 
                     } 
-                    setW({ 
-                        t: Math.round(wd.current.temperature_2m), 
-                        f: Math.round(wd.current.apparent_temperature), 
-                        code: wd.current.weathercode,
-                        rain: rf, 
-                        name 
-                    }); 
+                    setW({ t: Math.round(wd.current.temperature_2m), f: Math.round(wd.current.apparent_temperature), code: wd.current.weathercode, rain: rf, name }); 
                 });
             }
         });
@@ -166,10 +159,7 @@ function WeatherBar({ lang }) {
     const handleManualClick = () => {
         const n = prompt(lang === 'nl' ? "Voer stad in:" : "Enter city:", "");
         if(n && n.trim() !== "") {
-            setC(n.trim());
-            S.save('wcity', n.trim());
-            setAutoGps(false);
-            S.save('auto_gps', false);
+            setC(n.trim()); S.save('wcity', n.trim()); setAutoGps(false); S.save('auto_gps', false);
         }
     };
 
@@ -212,14 +202,12 @@ function WeatherBar({ lang }) {
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
     const [loading, setLoading] = useState(false);
-    
     const [attachedFile, setAttachedFile] = useState(null);
     const fileRef = useRef(null);
     const chatContainerRef = useRef(null);
     const lastUserMsgRef = useRef(null);
     const prevHistLen = useRef(0);
 
-    /* ── Chat Sessions ── */
     const defaultHist = []; 
     
     const [sessions, setSessions] = useState(() => {
@@ -240,7 +228,6 @@ function AIWidget({ lang }) {
     const [view, setView] = useState('chat');
     const [exp, setExp] = useState(false);
 
-    /* ── Auto-Sync Helper ── */
     const syncToCloud = () => {
         const cloudSettings = {};
         for (let i = 0; i < localStorage.length; i++) {
@@ -256,24 +243,19 @@ function AIWidget({ lang }) {
         }).catch(()=>{});
     };
 
-    /* ── Auto-scroll ── */
     useEffect(() => {
         if (exp && hist.length > prevHistLen.current) {
             setTimeout(() => {
                 if (chatContainerRef.current && lastUserMsgRef.current) {
                     const container = chatContainerRef.current;
                     const target = lastUserMsgRef.current;
-                    container.scrollTo({
-                        top: target.offsetTop - container.offsetTop - 16,
-                        behavior: 'smooth'
-                    });
+                    container.scrollTo({ top: target.offsetTop - container.offsetTop - 16, behavior: 'smooth' });
                 }
             }, 100);
         }
         prevHistLen.current = hist.length;
     }, [hist.length, exp]);
 
-    /* ── File handling ── */
     const handleFile = (e) => {
         const file = e.target.files[0]; if(!file) return;
         const isImg = file.type.startsWith('image/');
@@ -289,7 +271,6 @@ function AIWidget({ lang }) {
         syncToCloud();
     };
 
-    /* ── Session management ── */
     const saveCurrentSession = () => {
         if(hist.length <= 1) return;
         const title = hist.find(m=>m.r==='usr')?.t?.slice(0,40) || 'Chat';
@@ -316,18 +297,14 @@ function AIWidget({ lang }) {
         syncToCloud();
     };
 
-    /* ── Dashboard commands ── */
     const tryDashboardCommand = (input) => {
         const low = input.toLowerCase().replace(/[?!.,'"]/g, '');
         
         if(/\b(weer|weather|temperatuur|graden|locatie)\b/.test(low)) {
             let city = null;
             const match = low.match(/(?:naar|in|op|voor|van|to|for|at|of)\s+([a-zà-ÿ\s-]+)/i);
-            if (match && match[1]) {
-                city = match[1].replace(/\b(de|het|een|the|a|locatie|location)\b/gi, '').trim();
-            } else {
-                city = low.replace(/\b(pas|het|weer|aan|verander|toon|laat|zien|huidige|locatie|temperatuur|graden|wat|is|hoe|van|de|een)\b/gi, '').trim();
-            }
+            if (match && match[1]) { city = match[1].replace(/\b(de|het|een|the|a|locatie|location)\b/gi, '').trim(); } 
+            else { city = low.replace(/\b(pas|het|weer|aan|verander|toon|laat|zien|huidige|locatie|temperatuur|graden|wat|is|hoe|van|de|een)\b/gi, '').trim(); }
             if (city && city.length >= 2) {
                 const cleanCity = city.split(/\s+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                 emitCmd('SET_CITY', cleanCity);
@@ -352,7 +329,6 @@ function AIWidget({ lang }) {
         return null;
     };
 
-    /* ── Send message ── */
     const send = async () => {
         if(!msg.trim() && !attachedFile) return;
         let displayMsg = msg.trim();
@@ -428,7 +404,8 @@ function AIWidget({ lang }) {
         <div className={`widget ai-transition relative ${exp?'h-[450px]':'h-[72px]'} flex flex-col overflow-hidden`}>
             <div className="p-4 bg-white border-b flex justify-between items-center cursor-pointer shrink-0 z-20" onClick={()=>setExp(true)}>
                 <div className="flex items-center gap-2">
-                    <img src="https://i.postimg.cc/Ss6zrg7p/schaap.png" alt="AI Logo" className="w-8 h-8 rounded-lg shadow-sm object-contain bg-gray-50 border border-gray-100" />
+                    {/* Afbeelding zonder de border en grijze achtergrond classes, strakke object-contain */}
+                    <img src="https://i.postimg.cc/Ss6zrg7p/schaap.png" alt="AI Logo" className="w-8 h-8 object-contain" />
                 </div>
                 {exp ? (
                     <div className="flex items-center gap-2">
@@ -1575,6 +1552,9 @@ function App() {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lang, setLang] = useState('nl');
     
+    // Check of we in Standalone app-weergave zitten op iOS of Android
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    
     const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'sports'];
     const [layout, setLayout] = useState(defaultLayout);
 
@@ -1662,6 +1642,12 @@ function App() {
                     </h1>
                 </div>
                 <div className="flex gap-2 md:gap-3 items-center">
+                    {/* Alleen in Standalone weergave tonen we de verversknop */}
+                    {isStandalone && (
+                        <button onClick={() => window.location.reload()} className="w-10 h-10 flex items-center justify-center bg-white/10 text-white rounded hover:bg-white/20 transition" title="Ververs Dashboard">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        </button>
+                    )}
                     <button onClick={() => {const nL=lang==='nl'?'en':'nl'; setLang(nL); S.save('lang', nL)}} className="h-10 px-4 flex items-center justify-center bg-white/10 text-white rounded hover:bg-white/20 transition font-bold text-xs uppercase tracking-widest">
                         {lang === 'nl' ? 'NL / EN' : 'EN / NL'}
                     </button>
