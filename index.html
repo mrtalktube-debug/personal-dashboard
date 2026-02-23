@@ -864,12 +864,13 @@ function AgendaWidget({ lang }) {
     }, [JSON.stringify(rawCals)]);
 
     const getColor = (name) => {
-        const n = name.toLowerCase();
+        if (!name) return 'border-gray-400';
+        const n = String(name).toLowerCase();
         if (n.includes('ryan')) return 'border-red-500';
         if (n.includes('yaron')) return 'border-blue-500';
         if (n.includes('michael')) return 'border-green-500';
         if (n.includes('fam')) return 'border-orange-500';
-        return 'border-gray-400';
+        return 'border-purple-500';
     };
 
     const tEnd = new Date(d); 
