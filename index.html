@@ -918,7 +918,7 @@ function AgendaWidget({ lang }) {
                 </div>
             </div>
             <div className="flex border-b bg-white overflow-x-auto p-2 gap-2 hide-scroll shrink-0">
-                {cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-2 py-1.5 text-[9px] font-bold border rounded uppercase whitespace-nowrap ${f.includes(p)?'bg-[#0073b1] text-white border-[#0073b1]':'text-gray-400 bg-gray-50'}`}>{p}</button>)}
+                {cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-3 py-1.5 text-[9px] font-bold rounded uppercase whitespace-nowrap border-l-4 transition-all ${f.includes(p) ? `bg-gray-200 text-black ${getColor(p)} shadow-sm` : 'bg-gray-50 text-gray-400 border-transparent'}`}>{p}</button>)}
             </div>
             <div className="p-2 flex border-b bg-gray-50 justify-center shrink-0">
                 <div className="flex items-center gap-2 bg-white border rounded shadow-sm">
