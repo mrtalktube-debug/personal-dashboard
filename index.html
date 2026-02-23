@@ -1345,84 +1345,186 @@ function RadarWidget({ lang }) {
     );
 }
 
-function SportsWidget({ lang }) {
-    const [news, setNews] = useState([]);
+ffunction SportsWidget({ lang }) {
+    const [tab, setTab] = useState('lst'); // cal, lst, std
+    const [search, setSearch] = useState('');
+    const [golfTour, setGolfTour] = useState('PGA');
+    
+    const [f1Standings, setF1Standings] = useState([]);
+    const [f1Schedule, setF1Schedule] = useState([]);
+    const [f1Latest, setF1Latest] = useState({ title: 'Laden...', res: [] });
+    const [golfBoard, setGolfBoard] = useState({ title: 'Laden...', res: [] });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchRecentSports = async () => {
+        const fetchSports = async () => {
             setLoading(true);
             try {
-                // Gebruik actuele RSS feeds voor F1 en Golf (via rss2json proxy)
-                const feeds = [
-                    'https://www.motorsport.com/rss/f1/news/',
-                    'https://www.skysports.com/golf/news/rss.xml'
-                ];
+                // F1 Kalender
+                const cRes = await fetch('https://api.jolpi.ca/ergast/f1/2026.json');
+                const cData = await cRes.json();
+                setF1Schedule(cData.MRData.RaceTable.Races || []);
+
+                // F1 Stand (met fallback naar 0 punten voor seizoensstart)
+                const sRes = await fetch('https://api.jolpi.ca/ergast/f1/2026/driverStandings.json');
+                const sData = await sRes.json();
+                let standings = sData.MRData.StandingsTable.StandingsLists[0]?.DriverStandings || [];
                 
-                let allItems = [];
-                for (const url of feeds) {
-                    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
-                    const data = await res.json();
-                    if (data.items) allItems = [...allItems, ...data.items];
+                if (standings.length === 0 || standings[0].points === "0") {
+                    standings = [
+                        { position: '-', Driver: { familyName: 'Verstappen', nationality: 'Dutch' }, points: '0' },
+                        { position: '-', Driver: { familyName: 'Norris', nationality: 'British' }, points: '0' },
+                        { position: '-', Driver: { familyName: 'Leclerc', nationality: 'Monegasque' }, points: '0' },
+                        { position: '-', Driver: { familyName: 'Hamilton', nationality: 'British' }, points: '0' },
+                        { position: '-', Driver: { familyName: 'Russell', nationality: 'British' }, points: '0' },
+                        { position: '-', Driver: { familyName: 'Piastri', nationality: 'Australian' }, points: '0' }
+                    ];
+                }
+                setF1Standings(standings);
+
+                // F1 Laatste Race (Pakt automatisch de laatst verreden race)
+                const lRes = await fetch('https://api.jolpi.ca/ergast/f1/current/last/results.json');
+                const lData = await lRes.json();
+                const lastRace = lData.MRData.RaceTable.Races[0];
+                if (lastRace) {
+                    setF1Latest({
+                        title: lastRace.raceName,
+                        res: lastRace.Results.slice(0, 10).map(r => ({
+                            p: r.position,
+                            n: r.Driver.familyName,
+                            time: r.Time ? r.Time.time : r.status
+                        }))
+                    });
                 }
 
-                // STRIKTE FILTER: Alleen items van de laatste 48 uur
-                const fortyEightHoursAgo = new Date();
-                fortyEightHoursAgo.setHours(fortyEightHoursAgo.getHours() - 48);
-
-                const recentOnly = allItems
-                    .map(item => ({
-                        title: item.title,
-                        link: item.link,
-                        date: new Date(item.pubDate),
-                        source: item.link.includes('motorsport') ? 'F1 News' : 'Golf'
-                    }))
-                    .filter(item => item.date >= fortyEightHoursAgo)
-                    .sort((a, b) => b.date - a.date);
-
-                setNews(recentOnly);
-            } catch (e) { console.error("Sports Update Error:", e); }
+                // Golf via ESPN API (Zeer stabiel voor live leaderboards)
+                const tourCode = golfTour === 'PGA' ? 'pga' : 'eur';
+                const gRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=${tourCode}`);
+                const gData = await gRes.json();
+                const event = gData.events?.[0];
+                if (event) {
+                    const comps = event.competitions[0].competitors.slice(0, 5);
+                    setGolfBoard({
+                        title: event.shortName || event.name,
+                        res: comps.map(c => ({
+                            p: c.status.position || '-',
+                            n: c.athlete.lastName || c.athlete.displayName,
+                            time: c.statistics?.find(s => s.name === 'score')?.displayValue || c.score || 'E',
+                            nat: c.athlete.flag?.alt || 'US'
+                        }))
+                    });
+                } else {
+                    setGolfBoard({ title: 'Geen toernooi actief', res: [] });
+                }
+            } catch (e) { console.error("Sports API Error:", e); }
             setLoading(false);
         };
-        fetchRecentSports();
-    }, []);
+        fetchSports();
+    }, [golfTour]);
+
+    // Helper voor landcodes (omgezet naar NL, GB, etc zoals in je screenshot)
+    const getCountryCode = (nat) => {
+        const map = { 'Dutch':'NL', 'British':'GB', 'Monegasque':'MC', 'Spanish':'ES', 'Australian':'AU', 'Mexican':'MX', 'French':'FR', 'Canadian':'CA', 'Thai':'TH', 'Japanese':'JP', 'German':'DE' };
+        return map[nat] || nat?.slice(0,2).toUpperCase() || 'US';
+    };
+
+    const match = (s) => s.toLowerCase().includes(search.toLowerCase());
 
     return (
-        <div className="widget h-[450px] flex flex-col bg-white">
-            <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+        <div className="widget h-[450px] flex flex-col">
+            <div className="p-4 border-b bg-white flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-gray-500">
-                    <Ico.Trp /><h3 className="text-[10px] font-black uppercase tracking-widest">Live Sports (Last 48h)</h3>
+                    <Ico.Trp/><h3 className="text-[10px] font-black uppercase tracking-widest text-gray-700">Sport</h3>
                 </div>
-                <span className="text-[9px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold">LIVE SYNC</span>
+                <input type="text" placeholder="Zoek (bijv. Verstappen)" value={search} onChange={e=>setSearch(e.target.value)} className="w-1/2 px-3 py-1.5 text-[10px] border border-gray-200 rounded outline-none shadow-sm focus:border-blue-400" />
             </div>
-
-            <div className="flex-1 overflow-y-auto p-4 hide-scroll">
+            
+            <div className="flex border-b bg-white shrink-0">
+                <button onClick={() => setTab('cal')} className={`tab-btn ${tab === 'cal' ? 'active' : ''}`}>KALENDER</button>
+                <button onClick={() => setTab('lst')} className={`tab-btn ${tab === 'lst' ? 'active' : ''}`}>LAATSTE</button>
+                <button onClick={() => setTab('std')} className={`tab-btn ${tab === 'std' ? 'active' : ''}`}>STAND</button>
+            </div>
+            
+            <div className="p-4 flex-1 overflow-y-auto space-y-6 bg-white hide-scroll">
                 {loading ? (
-                    <div className="flex items-center justify-center h-full animate-pulse text-[10px] font-bold text-gray-400 uppercase">Controleren op updates...</div>
-                ) : news.length > 0 ? (
-                    <div className="space-y-3">
-                        {news.map((item, idx) => (
-                            <a href={item.link} target="_blank" key={idx} className="block p-3 border-l-4 border-blue-600 bg-gray-50 rounded shadow-sm hover:bg-blue-50 transition">
-                                <div className="text-[11px] font-bold text-gray-900 leading-tight mb-2">{item.title}</div>
-                                <div className="flex justify-between items-center text-[9px] font-black uppercase">
-                                    <span className={item.source === 'F1 News' ? 'text-red-600' : 'text-green-700'}>{item.source}</span>
-                                    <span className="text-gray-400">
-                                        {item.date.toLocaleTimeString('nl-NL', {hour: '2-digit', minute:'2-digit'})} 
-                                        {item.date.toLocaleDateString() === new Date().toLocaleDateString() ? ' - VANDAAG' : ' - GISTEREN'}
-                                    </span>
-                                </div>
-                            </a>
-                        ))}
-                    </div>
+                    <div className="flex justify-center items-center h-full text-[10px] font-bold text-blue-500 animate-pulse uppercase">Data synchroniseren...</div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-center space-y-2 opacity-50">
-                        <span className="text-2xl">⚡</span>
-                        <span className="text-[10px] font-black uppercase text-gray-400">Geen updates in de laatste 48 uur</span>
-                    </div>
+                    <>
+                        {/* F1 Sectie */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2">
+                                <span className="text-lg">🏁</span><span className="text-[11px] font-black uppercase text-[#0073b1]">F1</span>
+                            </div>
+                            
+                            {tab === 'cal' && (
+                                <div className="space-y-1">
+                                    {f1Schedule.filter(r => match(r.raceName)).map(r => (
+                                        <div key={r.round} className="flex justify-between items-center text-xs p-2.5 bg-gray-50/50 rounded border border-gray-100 mb-1">
+                                            <span className="font-bold text-gray-800">{r.raceName.toUpperCase()}</span>
+                                            <span className="font-mono text-blue-600 font-bold text-[10px]">{new Date(r.date).toLocaleDateString('nl-NL', {day:'2-digit', month:'short'})}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            
+                            {tab === 'std' && (
+                                <div className="space-y-1">
+                                    {f1Standings.filter(s => match(s.Driver.familyName)).map((s, i) => (
+                                        <div key={i} className="flex justify-between items-center text-xs p-3 border-b border-gray-100">
+                                            <div className="flex gap-4 items-center">
+                                                <span className="font-black text-gray-400 w-4 text-center">{s.position === '-' ? '🏅' : (s.position==='1'?'🥇':s.position==='2'?'🥈':s.position==='3'?'🥉':<span className="text-gray-500 bg-gray-100 rounded-full w-5 h-5 flex items-center justify-center text-[9px]">{s.position}</span>)}</span>
+                                                <span className="text-[10px] text-gray-500 font-mono w-4">{getCountryCode(s.Driver.nationality)}</span>
+                                                <span className="font-extrabold text-gray-900">{s.Driver.familyName.toUpperCase()}</span>
+                                            </div>
+                                            <span className="bg-[#1a202c] text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{s.points}</span>
+                                        </div>
+                                    ))}
+                                    <button className="w-full mt-3 py-2 border border-gray-200 rounded text-[9px] font-bold text-gray-500 uppercase hover:bg-gray-50 transition shadow-sm">Volledige Stand</button>
+                                </div>
+                            )}
+
+                            {tab === 'lst' && (
+                                <div className="flex flex-col gap-1">
+                                    <div className="bg-[#f4f7fb] text-[#0073b1] font-extrabold text-center py-2.5 rounded uppercase text-[9px] mb-2">{f1Latest.title}</div>
+                                    {f1Latest.res.filter(r => match(r.n)).map((r, i) => (
+                                        <div key={r.n} className={`flex justify-between items-center text-xs p-3 border-b border-gray-100 ${r.p==='1'?'bg-[#fffdeb] border-[#fde047] rounded':''}`}>
+                                            <div className="flex gap-4 items-center">
+                                                <span className="font-black w-4 text-center">{r.p==='1'?'🥇':r.p==='2'?'🥈':r.p==='3'?'🥉':<span className="text-gray-500 bg-gray-100 rounded-full w-5 h-5 flex items-center justify-center text-[9px]">{r.p}</span>}</span>
+                                                <span className="font-extrabold text-gray-900">{r.n.toUpperCase()}</span>
+                                            </div>
+                                            <span className="text-gray-500 font-mono text-[10px]">{r.time}</span>
+                                        </div>
+                                    ))}
+                                    <button className="w-full mt-3 py-2 border border-gray-200 rounded text-[9px] font-bold text-gray-500 uppercase hover:bg-gray-50 transition shadow-sm">Volledige Uitslag</button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Golf Sectie */}
+                        <div>
+                            <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2 mt-6">
+                                <div className="flex items-center gap-2"><span className="text-lg">🎯</span><span className="text-[11px] font-black uppercase text-[#0073b1]">GOLF</span></div>
+                                <div className="flex gap-1 bg-white border border-gray-200 p-0.5 rounded shadow-sm">
+                                    <button onClick={()=>setGolfTour('PGA')} className={`px-2.5 py-1 text-[9px] font-bold rounded ${golfTour==='PGA'?'bg-white shadow text-blue-700':'text-gray-500'}`}>PGA</button>
+                                    <button onClick={()=>setGolfTour('DP')} className={`px-2.5 py-1 text-[9px] font-bold rounded ${golfTour==='DP'?'bg-white shadow text-blue-700':'text-gray-500'}`}>DP</button>
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <div className="bg-[#f0fdf4] text-green-800 font-extrabold text-center py-2.5 rounded uppercase text-[9px] mb-2">{golfBoard.title}</div>
+                                {golfBoard.res.filter(r => match(r.n)).map((r, i) => (
+                                    <div key={i} className={`flex justify-between items-center text-xs p-3 border-b border-gray-100 ${r.p==='1'?'bg-[#f0fdf4] border-green-200 rounded':''}`}>
+                                        <div className="flex gap-4 items-center">
+                                            <span className="font-black w-4 text-center">{r.p==='1'?'🥇':r.p==='2'?'🥈':r.p==='3'?'🥉':<span className="text-gray-500 bg-gray-100 rounded-full w-5 h-5 flex items-center justify-center text-[9px]">{r.p}</span>}</span>
+                                            <span className="text-[10px] text-gray-500 font-mono w-4">{r.nat}</span>
+                                            <span className="font-extrabold text-gray-900">{r.n.toUpperCase()}</span>
+                                        </div>
+                                        <span className="bg-[#1a202c] text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{r.time}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </>
                 )}
-            </div>
-            <div className="p-2 bg-gray-100 text-[8px] text-center text-gray-400 font-bold uppercase border-t">
-                Check datum: {new Date().toLocaleString('nl-NL')}
             </div>
         </div>
     );
