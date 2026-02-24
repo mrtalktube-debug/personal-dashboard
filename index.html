@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Dashboard - Michael</title>
+    <title>Personal Dashboard - Michael - v4.10</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -50,7 +50,6 @@ const S = {
             const v = localStorage.getItem('d_'+k); 
             if (!v) return d;
             const p = JSON.parse(v);
-            // Veiligheidscheck: Als we een array verwachten, maar het opgeslagen item is corrupt, herstel dan naar default.
             if (Array.isArray(d)) return Array.isArray(p) ? p : d;
             if (typeof d === 'object' && d !== null) return (typeof p === 'object' && p !== null && !Array.isArray(p)) ? p : d;
             return p;
@@ -1349,7 +1348,7 @@ function RadarWidget({ lang }) {
 }
 
 function SportsWidget({ lang }) {
-    const [tab, setTab] = useState('lst'); // cal, lst, std
+    const [tab, setTab] = useState('lst'); 
     const [search, setSearch] = useState('');
     const [golfTour, setGolfTour] = useState('PGA');
     
@@ -1368,45 +1367,47 @@ function SportsWidget({ lang }) {
         const fetchSports = async () => {
             setLoading(true);
             try {
-                // --- F1 DATA ---
-                const f1CRes = await fetch('https://api.jolpi.ca/ergast/f1/2025.json');
-                const f1CData = await f1CRes.json();
-                setF1Schedule(f1CData?.MRData?.RaceTable?.Races || []);
+                // F1 Kalender
+                const cRes = await fetch('https://api.jolpi.ca/ergast/f1/2025.json');
+                const cData = await cRes.json();
+                setF1Schedule(cData?.MRData?.RaceTable?.Races || []);
 
-                const f1SRes = await fetch('https://api.jolpi.ca/ergast/f1/2025/driverStandings.json');
-                const f1SData = await f1SRes.json();
-                setF1Standings(f1SData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings || []);
+                // F1 Stand
+                const sRes = await fetch('https://api.jolpi.ca/ergast/f1/2025/driverStandings.json');
+                const sData = await sRes.json();
+                setF1Standings(sData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings || []);
 
-                const f1LRes = await fetch('https://api.jolpi.ca/ergast/f1/current/last/results.json');
-                const f1LData = await f1LRes.json();
-                const lastRace = f1LData?.MRData?.RaceTable?.Races?.[0];
+                // F1 Laatste Race
+                const lRes = await fetch('https://api.jolpi.ca/ergast/f1/current/last/results.json');
+                const lData = await lRes.json();
+                const lastRace = lData?.MRData?.RaceTable?.Races?.[0];
                 if (lastRace) {
                     setF1Latest({
-                        title: lastRace.raceName,
+                        title: lastRace.raceName || 'Race',
                         res: (lastRace.Results || []).map(r => ({
-                            p: parseInt(r.position),
-                            n: r.Driver?.familyName || '',
-                            time: r.Time ? r.Time.time : r.status
+                            p: parseInt(r.position) || '-',
+                            n: r.Driver?.familyName || '--',
+                            time: r.Time?.time || r.status || '--'
                         }))
                     });
                 } else {
                     setF1Latest({ title: 'Geen race data', res: [] });
                 }
 
-                // --- GOLF DATA (ESPN API) ---
+                // Golf via ESPN
                 const tourCode = golfTour === 'PGA' ? 'pga' : 'eur';
                 const gRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=${tourCode}`);
                 const gData = await gRes.json();
                 const event = gData?.events?.[0];
                 if (event) {
                     setGolfBoard({
-                        title: event.shortName || event.name,
+                        title: event.shortName || event.name || 'Toernooi',
                         res: (event.competitions?.[0]?.competitors || []).map(c => {
                             let nat = c.athlete?.flag?.alt || 'US';
                             if (nat.length > 3) nat = nat.slice(0, 2).toUpperCase();
                             return {
                                 p: parseInt(c.status?.position) || '-',
-                                n: c.athlete?.lastName || c.athlete?.displayName || '',
+                                n: c.athlete?.lastName || c.athlete?.displayName || '--',
                                 time: c.statistics?.find(s => s.name === 'score')?.displayValue || c.score || 'E',
                                 nat: nat,
                                 pt: c.statistics?.find(s => s.name === 'points')?.displayValue || '0'
@@ -1423,7 +1424,7 @@ function SportsWidget({ lang }) {
     }, [golfTour]);
 
     const getF1Country = (nat) => {
-        const map = { 'Dutch':'NL', 'British':'GB', 'Monegasque':'MC', 'Spanish':'ES', 'Australian':'AU', 'Mexican':'MX', 'French':'FR', 'Canadian':'CA', 'Thai':'TH', 'Japanese':'JP', 'German':'DE', 'Finnish':'FI', 'Danish':'DK', 'Chinese':'CN' };
+        const map = { 'Dutch':'NL', 'British':'GB', 'Monegasque':'MC', 'Spanish':'ES', 'Australian':'AU', 'Mexican':'MX', 'French':'FR', 'Canadian':'CA', 'Thai':'TH', 'Japanese':'JP', 'German':'DE', 'Finnish':'FI' };
         return map[nat] || nat?.slice(0,2).toUpperCase() || '--';
     };
 
@@ -1438,7 +1439,7 @@ function SportsWidget({ lang }) {
     const gLstMatch = fGlstRes.length > 0 || match(golfBoard.title);
 
     const MoreBtn = ({ e, setE, t1, e1 }) => (
-        <button onClick={() => setE(!e)} className="w-full mt-2 bg-gray-50 hover:bg-gray-100 border text-gray-500 text-[9px] font-bold py-1.5 rounded uppercase transition shadow-sm">
+        <button onClick={() => setE(!e)} className="w-full mt-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 text-[10px] font-black py-2.5 rounded uppercase transition shadow-sm">
             {e ? (lang==='nl'?'Minder tonen':'Show less') : (lang==='nl'?t1:e1)}
         </button>
     );
@@ -1447,125 +1448,130 @@ function SportsWidget({ lang }) {
         if (pos === 1) return '🥇';
         if (pos === 2) return '🥈';
         if (pos === 3) return '🥉';
-        return <span className="text-gray-500 bg-gray-100 rounded-full w-5 h-5 flex items-center justify-center text-[9px]">{pos}</span>;
+        return <span className="text-white bg-[#1a202c] rounded-full w-4 h-4 flex items-center justify-center text-[8px]">{pos}</span>;
     };
 
     return (
-        <div className="widget h-[450px]">
-            <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+        <div className="widget h-[450px] flex flex-col">
+            <div className="p-4 border-b bg-white flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-gray-500">
-                    <Ico.Trp/><h3 className="text-[10px] font-black uppercase tracking-widest">Sport</h3>
+                    <Ico.Trp/><h3 className="text-[10px] font-black uppercase tracking-widest text-gray-700">Sport</h3>
                 </div>
-                <input type="text" placeholder={lang==='nl'?"Zoek (bijv. Verstappen)":"Search..."} value={search} onChange={e=>setSearch(e.target.value)} className="w-1/2 px-2 py-1 text-[10px] border rounded outline-none focus:border-blue-500 shadow-sm" />
+                <input type="text" placeholder={lang==='nl'?"Zoek (bijv. Verstappen)":"Search..."} value={search} onChange={e=>setSearch(e.target.value)} className="w-1/2 px-3 py-1.5 text-[10px] border border-gray-200 rounded outline-none shadow-sm focus:border-blue-400" />
             </div>
+            
             <div className="flex border-b bg-white shrink-0">
-                {[ {id:'cal', l:T[lang]?.cal||'Kalender'}, {id:'lst', l:T[lang]?.lst||'Laatste'}, {id:'std', l:T[lang]?.std||'Stand'} ].map(t => <button key={t.id} onClick={() => setTab(t.id)} className={`tab-btn ${tab === t.id ? 'active' : ''}`}>{t.l}</button>)}
+                <button onClick={() => setTab('cal')} className={`tab-btn ${tab === 'cal' ? 'active' : ''}`}>KALENDER</button>
+                <button onClick={() => setTab('lst')} className={`tab-btn ${tab === 'lst' ? 'active' : ''}`}>LAATSTE</button>
+                <button onClick={() => setTab('std')} className={`tab-btn ${tab === 'std' ? 'active' : ''}`}>STAND</button>
             </div>
             
             <div className="p-4 flex-1 overflow-y-auto space-y-6 bg-white hide-scroll">
                 {loading ? (
-                    <div className="flex items-center justify-center h-full text-[10px] font-bold text-[#0073b1] animate-pulse uppercase">Live data ophalen...</div>
+                    <div className="flex justify-center items-center h-full text-[10px] font-bold text-blue-500 animate-pulse uppercase">Data synchroniseren...</div>
                 ) : (
                     <>
                         {/* F1 Sectie */}
-                        {((tab === 'cal' && fF1c.length>0) || (tab === 'std' && fF1s.length>0) || (tab === 'lst' && f1LstMatch)) && (
                         <div>
-                            <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2"><Ico.F1/><span className="text-[11px] font-black uppercase text-[#0073b1]">F1</span></div>
-                            <div className="space-y-1">
-                                {tab === 'cal' && fF1c.slice(0, eF1C ? fF1c.length : 3).map((r,i) => (
-                                    <div key={i} className="flex justify-between items-center text-xs p-3 bg-blue-50/30 rounded border border-blue-50 mb-1">
-                                        <div className="flex flex-col"><span className="font-extrabold text-blue-900 uppercase">{r.raceName.replace('Grand Prix', 'GP')}</span></div>
-                                        <span className="font-mono text-[#0073b1] font-bold">{new Date(r.date).toLocaleDateString('nl-NL', {day:'2-digit', month:'short'})}</span>
-                                    </div>
-                                ))}
-                                {tab === 'cal' && fF1c.length > 3 && <MoreBtn e={eF1C} setE={setEF1C} t1="Toon volledige kalender" e1="Show full calendar" />}
-                                
-                                {tab === 'std' && fF1s.slice(0, eF1S ? fF1s.length : 3).map((s,i) => (
-                                    <div key={i} className="flex justify-between items-center text-xs p-3 border-b border-gray-100">
-                                        <div className="flex gap-4 items-center">
-                                            <span className="font-black w-5 flex justify-center">{getMedal(parseInt(s.position))}</span>
-                                            <span className="text-[10px] text-gray-500 font-mono font-bold w-4">{getF1Country(s.Driver?.nationality)}</span>
-                                            <span className="font-extrabold text-gray-900">{s.Driver?.familyName?.toUpperCase()}</span>
-                                        </div>
-                                        <span className="bg-[#1a202c] text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{s.points}</span>
-                                    </div>
-                                ))}
-                                {tab === 'std' && fF1s.length > 3 && <MoreBtn e={eF1S} setE={setEF1S} t1="Volledige stand" e1="Full standings" />}
-
-                                {tab === 'lst' && f1LstMatch && (
-                                    <div className="flex flex-col gap-1">
-                                        <div className="bg-[#f0f4f9] text-[#0073b1] font-extrabold text-center py-2.5 rounded uppercase text-[9px] mb-2">{f1Latest.title}</div>
-                                        {fF1lstRes.slice(0, eF1L ? fF1lstRes.length : 3).map((r,i) => (
-                                            <div key={i} className={`flex justify-between items-center text-xs p-3 border-b border-gray-100 ${r.p===1?'bg-[#fffdeb] border-[#fde047] rounded':''}`}>
-                                                <div className="flex gap-4 items-center">
-                                                    <span className="font-black w-5 flex justify-center">{getMedal(r.p)}</span>
-                                                    <span className="font-extrabold text-gray-900">{r.n.toUpperCase()}</span>
-                                                </div>
-                                                <span className="text-gray-500 font-mono text-[10px] font-bold">{r.time}</span>
-                                            </div>
-                                        ))}
-                                        {fF1lstRes.length > 3 && <MoreBtn e={eF1L} setE={setEF1L} t1="Volledige uitslag" e1="Full results" />}
-                                    </div>
-                                )}
+                            <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2">
+                                <span className="text-lg">🏁</span><span className="text-[11px] font-black uppercase text-[#0073b1]">F1</span>
                             </div>
+                            
+                            {tab === 'cal' && (
+                                <div className="space-y-1">
+                                    {fF1c.slice(0, eF1C ? fF1c.length : 3).map((r, i) => (
+                                        <div key={i} className="flex justify-between items-center text-xs p-2.5 bg-gray-50/50 rounded border border-gray-100 mb-1">
+                                            <span className="font-bold text-gray-800">{(r.raceName||'').replace('Grand Prix', 'GP').toUpperCase()}</span>
+                                            <span className="font-mono text-blue-600 font-bold text-[10px]">{new Date(r.date||Date.now()).toLocaleDateString('nl-NL', {day:'2-digit', month:'short'})}</span>
+                                        </div>
+                                    ))}
+                                    {fF1c.length > 3 && <MoreBtn e={eF1C} setE={setEF1C} t1="Toon volledige kalender" e1="Show full calendar" />}
+                                </div>
+                            )}
+                            
+                            {tab === 'std' && (
+                                <div className="space-y-1">
+                                    {fF1s.slice(0, eF1S ? fF1s.length : 3).map((s, i) => (
+                                        <div key={i} className="flex justify-between items-center text-xs p-3 border-b border-gray-100">
+                                            <div className="flex gap-4 items-center">
+                                                <span className="font-black text-gray-400 w-4 flex justify-center">{getMedal(parseInt(s.position||0))}</span>
+                                                <span className="text-[10px] text-gray-500 font-mono font-bold w-4">{getF1Country(s.Driver?.nationality)}</span>
+                                                <span className="font-extrabold text-gray-900">{(s.Driver?.familyName || '').toUpperCase()}</span>
+                                            </div>
+                                            <span className="bg-[#1a202c] text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{s.points||'0'}</span>
+                                        </div>
+                                    ))}
+                                    {fF1s.length > 3 && <MoreBtn e={eF1S} setE={setEF1S} t1="Volledige stand" e1="Full standings" />}
+                                </div>
+                            )}
+
+                            {tab === 'lst' && (
+                                <div className="flex flex-col gap-1">
+                                    <div className="bg-[#f4f7fb] text-[#0073b1] font-extrabold text-center py-2.5 rounded uppercase text-[9px] mb-2">{(f1Latest.title || '').toUpperCase()}</div>
+                                    {fF1lstRes.slice(0, eF1L ? fF1lstRes.length : 3).map((r, i) => (
+                                        <div key={i} className={`flex justify-between items-center text-xs p-3 border-b border-gray-100 ${r.p===1?'bg-[#fffdeb] border-[#fde047] rounded':''}`}>
+                                            <div className="flex gap-4 items-center">
+                                                <span className="font-black w-4 flex justify-center">{getMedal(r.p)}</span>
+                                                <span className="font-extrabold text-gray-900">{(r.n || '').toUpperCase()}</span>
+                                            </div>
+                                            <span className="text-gray-500 font-mono text-[10px] font-bold">{r.time}</span>
+                                        </div>
+                                    ))}
+                                    {fF1lstRes.length > 3 && <MoreBtn e={eF1L} setE={setEF1L} t1="Volledige Uitslag" e1="Full results" />}
+                                </div>
+                            )}
                         </div>
-                        )}
 
                         {/* Golf Sectie */}
-                        {((tab === 'lst' && gLstMatch) || (tab === 'std')) && (
-                        <div className="mt-6">
-                            <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
-                                <div className="flex items-center gap-2"><Ico.Glf/><span className="text-[11px] font-black uppercase text-[#0073b1]">GOLF</span></div>
+                        <div>
+                            <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2 mt-6">
+                                <div className="flex items-center gap-2"><span className="text-lg">🎯</span><span className="text-[11px] font-black uppercase text-[#0073b1]">GOLF</span></div>
                                 <div className="flex gap-1 bg-white border border-gray-200 p-0.5 rounded shadow-sm">
-                                    <button onClick={()=>setGolfTour('PGA')} className={`px-2.5 py-1 text-[9px] font-bold rounded uppercase ${golfTour==='PGA'?'bg-white shadow text-[#0073b1]':'text-gray-500'}`}>PGA</button>
-                                    <button onClick={()=>setGolfTour('DP')} className={`px-2.5 py-1 text-[9px] font-bold rounded uppercase ${golfTour==='DP'?'bg-white shadow text-[#0073b1]':'text-gray-500'}`}>DP</button>
+                                    <button onClick={()=>setGolfTour('PGA')} className={`px-2.5 py-1 text-[9px] font-bold rounded ${golfTour==='PGA'?'bg-white shadow text-blue-700':'text-gray-500'}`}>PGA</button>
+                                    <button onClick={()=>setGolfTour('DP')} className={`px-2.5 py-1 text-[9px] font-bold rounded ${golfTour==='DP'?'bg-white shadow text-blue-700':'text-gray-500'}`}>DP</button>
                                 </div>
                             </div>
-                            <div className="space-y-1">
-                                {tab === 'lst' && gLstMatch && (
-                                    <div className="flex flex-col gap-1">
-                                        <div className="bg-[#f0fdf4] text-green-800 font-extrabold text-center py-2.5 rounded uppercase text-[10px] mb-2">{golfBoard.title}</div>
-                                        {fGlstRes.slice(0, eGL ? fGlstRes.length : 3).map((r, i) => (
-                                            <div key={i} className={`flex justify-between items-center text-xs p-3 border-b border-gray-100 ${r.p===1?'bg-[#f0fdf4] border-green-200 rounded':''}`}>
-                                                <div className="flex gap-4 items-center">
-                                                    <span className="font-black w-5 flex justify-center">{getMedal(r.p)}</span>
-                                                    <span className="font-extrabold text-gray-900">{r.n.toUpperCase()}</span>
-                                                </div>
-                                                <span className="text-gray-500 font-mono text-[10px] font-bold">{r.time}</span>
-                                            </div>
-                                        ))}
-                                        {fGlstRes.length > 3 && <MoreBtn e={eGL} setE={setEGL} t1="Volledig Leaderboard" e1="Full Leaderboard" />}
+                            
+                            {tab === 'lst' && (
+                            <div className="flex flex-col gap-1">
+                                <div className="bg-[#f0fdf4] text-green-800 font-extrabold text-center py-2.5 rounded uppercase text-[9px] mb-2">{(golfBoard.title || '').toUpperCase()}</div>
+                                {fGlstRes.slice(0, eGL ? fGlstRes.length : 3).map((r, i) => (
+                                    <div key={i} className={`flex justify-between items-center text-xs p-3 border-b border-gray-100 ${r.p===1?'bg-[#f0fdf4] border-green-200 rounded':''}`}>
+                                        <div className="flex gap-4 items-center">
+                                            <span className="font-black w-4 flex justify-center">{getMedal(r.p)}</span>
+                                            <span className="text-[10px] text-gray-500 font-mono font-bold w-4">{r.nat}</span>
+                                            <span className="font-extrabold text-gray-900">{(r.n || '').toUpperCase()}</span>
+                                        </div>
+                                        <span className="bg-[#1a202c] text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{r.time}</span>
                                     </div>
-                                )}
-
-                                {tab === 'std' && (
-                                    <div className="flex flex-col gap-1">
-                                        {fGlstRes.slice(0, eGL ? fGlstRes.length : 3).map((r, i) => (
-                                            <div key={i} className="flex justify-between items-center text-xs p-3 border-b border-gray-100">
-                                                <div className="flex gap-4 items-center">
-                                                    <span className="font-black w-5 flex justify-center">{getMedal(r.p)}</span>
-                                                    <span className="text-[10px] text-gray-500 font-mono font-bold w-4">{r.nat}</span>
-                                                    <span className="font-extrabold text-gray-900">{r.n.toUpperCase()}</span>
-                                                </div>
-                                                <span className="bg-[#1a202c] text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{r.pt}</span>
-                                            </div>
-                                        ))}
-                                        {fGlstRes.length > 3 && <MoreBtn e={eGL} setE={setEGL} t1="Volledige stand" e1="Full standings" />}
-                                    </div>
-                                )}
+                                ))}
+                                {fGlstRes.length > 3 && <MoreBtn e={eGL} setE={setEGL} t1="Volledig Leaderboard" e1="Full Leaderboard" />}
                             </div>
+                            )}
+
+                            {tab === 'std' && (
+                            <div className="flex flex-col gap-1">
+                                {fGlstRes.slice(0, eGL ? fGlstRes.length : 3).map((r, i) => (
+                                    <div key={i} className="flex justify-between items-center text-xs p-3 border-b border-gray-100">
+                                        <div className="flex gap-4 items-center">
+                                            <span className="font-black w-4 flex justify-center">{getMedal(r.p)}</span>
+                                            <span className="text-[10px] text-gray-500 font-mono font-bold w-4">{r.nat}</span>
+                                            <span className="font-extrabold text-gray-900">{(r.n || '').toUpperCase()}</span>
+                                        </div>
+                                        <span className="bg-[#1a202c] text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{r.pt}</span>
+                                    </div>
+                                ))}
+                                {fGlstRes.length > 3 && <MoreBtn e={eGL} setE={setEGL} t1="Volledige stand" e1="Full standings" />}
+                            </div>
+                            )}
                         </div>
-                        )}
-                        
-                        {search && fF1c.length===0 && fF1s.length===0 && !f1LstMatch && !gLstMatch && (
-                            <div className="text-center text-gray-400 text-[10px] font-bold py-10 uppercase">Geen resultaten voor '{search}'</div>
-                        )}
                     </>
                 )}
             </div>
         </div>
     );
 }
+
 function Settings({ isOpen, onClose, layout, setLayout }) {
     const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
     const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'Groq', val: ''}]));
@@ -1748,7 +1754,7 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.9'}</p>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.10'}</p>
                     {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
