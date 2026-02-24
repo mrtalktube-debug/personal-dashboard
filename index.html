@@ -77,94 +77,20 @@ const Ico = {
     Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
 };
 
-<!DOCTYPE html>
-<html lang="nl">
-<head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Dashboard - Michael</title>
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="https://i.postimg.cc/NLqKzZ4C/nieuw-schaap-logo1.png">
-
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-        :root { --p-blue: #0073b1; --bg: linear-gradient(135deg, #001a33 0%, #000a14 100%); }
-        body { background: var(--bg); min-height: 100vh; font-family: 'Inter', sans-serif; margin: 0; color: #1a1a1a; }
-        .widget { background: rgba(255,255,255,0.98); border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; position: relative; overflow: hidden; }
-        .tab-btn { font-size: 0.65rem; font-weight: 800; padding: 10px; color: #666; border-bottom: 2px solid transparent; text-transform: uppercase; flex: 1; transition: 0.2s; text-align: center; cursor: pointer; }
-        .tab-btn.active { color: var(--p-blue); border-bottom-color: var(--p-blue); background: rgba(0,115,177,0.05); }
-        .settings-panel { position: fixed; right: 0; top: 0; height: 100vh; width: 100%; max-width: 480px; background: white; z-index: 100; box-shadow: -10px 0 30px rgba(0,0,0,0.5); transform: translateX(100%); transition: 0.3s ease; overflow-y: auto; }
-        .settings-panel.open { transform: translateX(0); }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-thumb { background: var(--p-blue); border-radius: 4px; }
-        .hide-scroll::-webkit-scrollbar { display: none; }
-        .ai-transition { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
-        @keyframes fade-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fade-in 0.2s ease-out forwards; }
-    </style>
-</head>
-<body>
-<div id="root"></div>
-<script type="text/babel">
-const { useState, useEffect, useRef, useMemo } = React;
-
-const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
-const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
-
-const S = {
-    load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
-    save: (k, v) => localStorage.setItem('d_'+k, JSON.stringify(v)),
-    remove: (k) => localStorage.removeItem('d_'+k)
-};
-
-const emitCmd = (type, payload) => window.dispatchEvent(new CustomEvent('dashCmd', { detail: { type, payload } }));
-const fmtDate = (dStr) => { const p = dStr.split('-'); return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : dStr; };
-
-const T = {
-    nl: { port: 'Portfolio', ag: 'Agenda', nws: 'Nieuws', rad: 'Investeringen', deal: 'Pepper Deals', rec: 'Recepten', lang: 'Talen', day: 'DAG', wk: 'WEEK', src: 'BRON', blk: 'BLOCK', cal: 'Kalender', std: 'Stand', lst: 'Laatste', new: 'Nieuw Spel' },
-    en: { port: 'Portfolio', ag: 'Schedule', nws: 'News', rad: 'Investments', deal: 'Deals', rec: 'Recipes', lang: 'Languages', day: 'DAY', wk: 'WEEK', src: 'SOURCE', blk: 'BLOCK', cal: 'Calendar', std: 'Standings', lst: 'Latest', new: 'New Game' }
-};
-
-const Ico = {
-    Set: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
-    Wea: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>,
-    Loc: () => <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-    Clip: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>,
-    Cry: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
-    Cal: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
-    Nws: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>,
-    Rad: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>,
-    Trp: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 4v2a4 4 0 01-8 0V4m12 4v2a4 4 0 01-1 2.652M4 8v2a4 4 0 001 2.652M12 20v-4m0 0V11m0 5h-4m4 0h4" /></svg>,
-    Up: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
-    Dn: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>,
-    Drag: () => <svg className="w-4 h-4 text-gray-400 cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>,
-    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>,
-    F1: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>,
-    Glf: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path strokeWidth="2" d="M12 18a6 6 0 100-12 6 6 0 000 12z"/></svg>
-};
-
 function WeatherBar({ lang }) {
-    /* `tags` */
-    const [c, setC] = useState(() => S.load('wcity', 'Zoetermeer'));
+    const [c, setC] = useState(S.load('wcity', 'Zoetermeer'));
     const [w, setW] = useState(null);
     const [locLoading, setLocLoading] = useState(false);
-    const [autoGps, setAutoGps] = useState(() => S.load('auto_gps', true));
+    const [autoGps, setAutoGps] = useState(S.load('auto_gps', true));
+    
     const [isEditing, setIsEditing] = useState(false);
     const [editVal, setEditVal] = useState('');
 
     useEffect(() => { 
         const h = (e) => { 
             if(e.detail.type === 'SET_CITY') { 
-                const newCity = e.detail.payload;
-                setC(newCity); 
-                S.save('wcity', newCity);
+                setC(e.detail.payload); 
+                S.save('wcity', e.detail.payload);
                 setAutoGps(false); 
                 S.save('auto_gps', false);
             }
@@ -174,318 +100,136 @@ function WeatherBar({ lang }) {
     }, []);
 
     const handleLocate = (silent = false) => {
-        if(!navigator.geolocation) return;
+        if(!navigator.geolocation) {
+            if(!silent) alert('Geolocatie wordt niet ondersteund door je browser.');
+            return;
+        }
         setLocLoading(true);
         navigator.geolocation.getCurrentPosition(async (pos) => {
             const { latitude, longitude } = pos.coords;
             try {
                 const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=${lang}`);
                 const data = await res.json();
-                const newCity = data.city || data.locality || c;
-                setC(newCity); S.save('wcity', newCity);
-                setAutoGps(true); S.save('auto_gps', true);
+                const newCity = data.city || data.locality || 'Huidige Locatie';
+                setC(newCity);
+                S.save('wcity', newCity);
+                setAutoGps(true);
+                S.save('auto_gps', true);
             } catch(e) { console.error("Locatiefout:", e); }
             setLocLoading(false);
-        }, (err) => {
-            // Error handling voor restricties (werkgever/privacy)
-            setLocLoading(false); 
-            setAutoGps(false); S.save('auto_gps', false);
-            if(!silent) console.warn('Locatietoegang geweigerd. Fallback op opgeslagen stad.');
-        }, { timeout: 6000 });
+        }, () => {
+            if(!silent) alert('Toegang tot locatie geweigerd.');
+            setLocLoading(false); setAutoGps(false); S.save('auto_gps', false);
+        });
     };
 
     useEffect(() => { if (autoGps) handleLocate(true); }, []);
-    /* `tags` */
     
     useEffect(() => {
         if (!c) return;
         fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(c)}&format=json&limit=1`)
-        .then(r=>r.json()).then(d=>{
+        .then(r=>r.json())
+        .then(d=>{
             if(d && d.length > 0){
                 const { lat, lon, name } = d[0];
                 fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation,weather_code&hourly=precipitation_probability&timezone=auto`)
                 .then(r=>r.json()).then(wd => { 
                     const ch=new Date().getHours(); 
                     let rf=null; 
-                    for(let i=ch; i<ch+12; i++) { if(wd.hourly && wd.hourly.precipitation_probability[i]>30){rf=i-ch;break;} } 
-                    setW({ t: Math.round(wd.current.temperature_2m), f: Math.round(wd.current.apparent_temperature), code: wd.current.weather_code, rain: rf, name: name }); 
+                    for(let i=ch; i<ch+12; i++) { 
+                        if(wd.hourly && wd.hourly.precipitation_probability[i]>30){rf=i-ch;break;} 
+                    } 
+                    setW({ t: Math.round(wd.current.temperature_2m), f: Math.round(wd.current.apparent_temperature), code: wd.current.weather_code || wd.current.weathercode, rain: rf, name: name }); 
                 });
+            } else {
+                setW(prev => ({ ...prev, name: "Niet gevonden" }));
             }
-        }).catch(() => {});
+        }).catch(() => setW(prev => ({ ...prev, name: "Error" })));
     }, [c, lang]);
 
     const WxIco = ({ code }) => {
-        if (code === 0) return <span className="text-yellow-400">☀️</span>;
-        if (code >= 1 && code <= 3) return <span>⛅</span>;
-        if (code >= 51 && code <= 67) return <span>🌧️</span>;
-        return <Ico.Wea />;
+        if (code === undefined || code === null) return <Ico.Wea />; 
+        // 0: Helder (Zon)
+        if (code === 0) return <svg className="w-4 h-4 shrink-0 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" strokeWidth="2"/><path strokeWidth="2" strokeLinecap="round" d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>; 
+        // 1, 2: Deels bewolkt (Zon + Wolk)
+        if (code === 1 || code === 2) return <svg className="w-4 h-4 shrink-0 text-yellow-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="17" cy="7" r="3"></circle><path d="M17 2v2M22 7h-2M13.5 10.5l-1.5-1.5M20.5 3.5l-1.5 1.5M10.4 14.6a4.5 4.5 0 1 0 7.4-4.2A5.5 5.5 0 0 0 3 15.5 4.5 4.5 0 0 0 7.5 20h8"></path></svg>;
+        // 3: Bewolkt (Wolk)
+        if (code === 3) return <svg className="w-4 h-4 shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>; 
+        // 45, 48: Mist
+        if (code === 45 || code === 48) return <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" d="M4 8h16M4 12h16M4 16h16"/></svg>;
+        // 51-57: Lichte regen / Motregen
+        if (code >= 51 && code <= 57) return <svg className="w-4 h-4 shrink-0 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 13v8m-4-6v8m-4-6v8m9-10.9A5 5 0 107.1 8a6 6 0 1010.9 3.1z"/></svg>;
+        // 61-67, 80-82: Regen
+        if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return <svg className="w-4 h-4 shrink-0 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 13v8m-4-6v8m-4-6v8m9-10.9A5 5 0 107.1 8a6 6 0 1010.9 3.1z"/></svg>; 
+        // 71-77, 85, 86: Sneeuw
+        if ((code >= 71 && code <= 77) || code === 85 || code === 86) return <svg className="w-4 h-4 shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 2v20m5.5-15.5l-11 11m0-11l11 11"/></svg>; 
+        // 95-99: Onweer
+        if (code >= 95) return <svg className="w-4 h-4 shrink-0 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>; 
+        return <Ico.Wea />; 
+    };
+
+    const saveCity = (val) => {
+        if(val && val.trim() !== "") {
+            setC(val.trim()); S.save('wcity', val.trim()); setAutoGps(false); S.save('auto_gps', false);
+        }
+        setIsEditing(false);
     };
 
     return (
-        <div className="bg-white/5 px-4 md:px-10 py-2.5 border-b border-white/10 flex items-center text-white text-xs font-bold uppercase tracking-widest w-full">
-            <div className="flex gap-4 items-center w-full">
-                <div className="flex items-center gap-1.5 bg-black/20 px-2 py-1.5 rounded-lg border border-white/5">
-                    <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => { setIsEditing(true); setEditVal(''); }}>
+        <div className="bg-white/5 px-2 md:px-10 py-2.5 border-b border-white/10 flex items-center text-white text-xs font-bold uppercase tracking-widest overflow-hidden w-full">
+            <div className="flex gap-2 sm:gap-4 items-center shrink-0 w-full">
+                
+                <div className="flex items-center gap-1.5 shrink-0 bg-black/20 px-2 py-1.5 rounded-lg border border-white/5 max-w-[45%]">
+                    <div 
+                        className="flex items-center gap-1.5 cursor-pointer hover:text-blue-300 transition flex-1 min-w-0" 
+                        onClick={() => { setIsEditing(true); setEditVal(''); }}
+                    >
                         <WxIco code={w?.code} />
                         {isEditing ? (
-                            <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={() => {if(editVal) {setC(editVal); S.save('wcity', editVal); setAutoGps(false);} setIsEditing(false);}} onKeyDown={e=>e.key==='Enter'&&e.target.blur()} className="bg-transparent border-b outline-none w-20 text-white" />
-                        ) : <span>{w?.name || c}</span>}
+                            <input 
+                                autoFocus
+                                type="text" 
+                                placeholder={c}
+                                value={editVal} 
+                                onChange={e=>setEditVal(e.target.value)} 
+                                onBlur={() => saveCity(editVal)}
+                                onKeyDown={e => e.key === 'Enter' && saveCity(editVal)}
+                                className="bg-transparent border-b border-blue-400 outline-none w-full text-white text-xs p-0 m-0 placeholder-white/30"
+                            />
+                        ) : (
+                            <span className="truncate block">{w?.name || c}</span>
+                        )}
                     </div>
-                    <button onClick={() => handleLocate(false)} className={`p-1 rounded ${locLoading ? 'animate-pulse text-blue-300' : autoGps ? 'text-blue-400' : 'text-gray-400'}`}><Ico.Loc /></button>
+                    <div className="w-px h-3 bg-white/20 mx-0.5 shrink-0"></div>
+                    <button onClick={() => handleLocate(false)} className={`p-1 bg-white/10 rounded hover:bg-white/20 transition shrink-0 ${locLoading ? 'animate-pulse text-blue-300' : autoGps ? 'text-blue-400' : 'text-gray-400'}`} title="Gebruik huidige locatie (GPS)">
+                        <Ico.Loc />
+                    </button>
                 </div>
-                <div className="flex gap-2 items-center bg-black/20 px-2 py-1.5 rounded-lg border border-white/5">
-                    <span className="text-sm">{w?.t !== undefined ? `${w.t}°C` : '...'}</span>
+                
+                <div className="flex gap-1.5 items-center shrink-0 bg-black/20 px-2 py-1.5 rounded-lg border border-white/5">
+                    <span className="text-sm md:text-base">{w?.t !== undefined ? `${w.t}°C` : '...'}</span>
                     <span className="opacity-40 font-normal">|</span>
-                    <span className="opacity-70 text-[10px]">FEELS: {w?.f !== undefined ? `${w.f}°C` : '...'}</span>
+                    <span className="opacity-70 text-[10px] whitespace-nowrap">
+                        <span className="hidden sm:inline">{lang==='nl'?'Gevoel: ':'Feels: '}</span>
+                        {w?.f !== undefined ? `${w.f}°C` : '...'}
+                    </span>
                 </div>
-            </div>
-        </div>
-    );
-}
-
-function AIWidget({ lang }) {
-    const [msg, setMsg] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [attachedFile, setAttachedFile] = useState(null);
-    const fileRef = useRef(null);
-    const chatContainerRef = useRef(null);
-    const [sessions, setSessions] = useState(() => S.load('michael_sessions', []));
-    const [hist, setHist] = useState(() => S.load('ai_hist', []));
-    const [view, setView] = useState('chat');
-    const [exp, setExp] = useState(false);
-
-    const send = async () => {
-        if(!msg.trim() && !attachedFile) return;
-        const groqKey = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'))?.val;
-        const n = [...hist, {r:'usr', t: msg, file: attachedFile}];
-        setHist(n); S.save('ai_hist', n.map(m=>({r:m.r, t:m.t})));
-        setMsg(''); setAttachedFile(null); setLoading(true);
-
-        try {
-            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                method:'POST',
-                headers:{'Authorization':`Bearer ${groqKey}`, 'Content-Type':'application/json'},
-                body: JSON.stringify({model: 'llama-3.3-70b-versatile', messages: [{role:'system', content:'Kort en krachtig Nederlands.'}, ...n.map(m=>({role:m.r==='usr'?'user':'assistant', content:m.t}))]})
-            });
-            const data = await res.json();
-            const r = [...n, {r:'ai', t: data.choices[0].message.content}];
-            setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
-        } catch(e) { console.error(e); }
-        setLoading(false);
-    };
-
-    return (
-        <div className={`widget ai-transition ${exp?'h-[450px]':'h-[72px]'} flex flex-col`}>
-            <div className="p-4 border-b flex justify-between items-center cursor-pointer shrink-0" onClick={()=>setExp(true)}>
-                <img src="https://i.postimg.cc/NLqKzZ4C/nieuw-schaap-logo1.png" className="w-8 h-8 object-contain" />
-                {exp && <button onClick={(e)=>{e.stopPropagation(); setExp(false)}} className="text-gray-400">×</button>}
-            </div>
-            {exp && (
-                <>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4 hide-scroll">
-                        {hist.map((m,i) => (
-                            <div key={i} className={`flex ${m.r==='ai'?'justify-start':'justify-end'}`}>
-                                <div className={`px-4 py-2 rounded-2xl text-sm ${m.r==='ai'?'bg-gray-100 text-gray-800':'bg-blue-600 text-white'}`}>{m.t}</div>
-                            </div>
-                        ))}
+                
+                {w?.rain !== null && w?.rain !== undefined && w.rain <= 1 && (
+                    <div className="bg-[#0073b1]/40 border border-[#0073b1]/50 px-2 py-1.5 rounded-lg flex items-center gap-1.5 shrink-0 ml-auto">
+                        <span className="w-2 h-2 bg-blue-300 rounded-full animate-pulse shrink-0"></span>
+                        <span className="hidden sm:inline">
+                            {w.rain === 0 ? (lang==='nl'?"Nu regen":"Raining") : (lang==='nl'?`Regen over ${w.rain}u`:`Rain in ${w.rain}h`)}
+                        </span>
+                        <span className="sm:hidden text-[10px]">
+                            {w.rain === 0 ? "Regen" : `${w.rain}U`}
+                        </span>
                     </div>
-                    <div className="p-3 border-t flex gap-2">
-                        <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} className="flex-1 text-sm outline-none bg-gray-50 p-2 rounded-lg" placeholder="Vraag michael..." />
-                        <button onClick={send} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold">STUUR</button>
-                    </div>
-                </>
-            )}
-        </div>
-    );
-}
-
-function CryptoWidget({ lang }) {
-    const [portfolio, setPortfolio] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchBv = async () => {
-            const keys = S.load('bitvavo_keys', {pub:'', sec:''});
-            if(!keys.pub) { setLoading(false); return; }
-            try {
-                const res = await fetch('/api/bitvavo', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key:keys.pub, secret:keys.sec}) });
-                const data = await res.json();
-                const combined = data.balances.map(b => {
-                    const price = data.prices.find(p => p.market === `${b.symbol}-EUR`)?.price || 0;
-                    return { sym: b.symbol, amount: b.available, price, val: b.available * price };
-                }).filter(b => b.val > 1).sort((a,b)=>b.val-a.val);
-                setPortfolio(combined);
-            } catch(e) {}
-            setLoading(false);
-        };
-        fetchBv();
-    }, []);
-
-    const total = portfolio.reduce((a,b)=>a+b.val, 0);
-
-    return (
-        <div className="widget h-[450px] flex flex-col">
-            <div className="p-4 bg-gray-50 border-b flex items-center gap-2"><Ico.Cry/><h3 className="text-[10px] font-black uppercase">Crypto Portfolio</h3></div>
-            <div className="p-5 flex-1 overflow-hidden flex flex-col">
-                <div className="mb-4">
-                    <span className="text-[10px] text-gray-400 font-bold uppercase">Totaal</span>
-                    <div className="text-3xl font-black">€ {total.toLocaleString('nl-NL', {maximumFractionDigits:0})}</div>
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-2 hide-scroll">
-                    {portfolio.map(c => (
-                        <div key={c.sym} className="p-3 bg-white border rounded-lg flex justify-between items-center shadow-sm">
-                            <span className="font-black">{c.sym}</span>
-                            <span className="font-mono text-sm">€ {c.val.toLocaleString('nl-NL', {maximumFractionDigits:2})}</span>
-                        </div>
-                    ))}
-                </div>
+                )}
             </div>
         </div>
     );
 }
-
-function AgendaWidget({ lang }) {
-    const [items, setItems] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchCals = async () => {
-            const icals = S.load('icals_dyn', []);
-            let all = [];
-            for(let c of icals) {
-                if(!c.val) continue;
-                try {
-                    const res = await fetch('/api/ical', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:c.val})});
-                    const text = await res.text();
-                    // Simpele parse voor demo - in v5.0 zat een uitgebreide parser
-                    if(text.includes('SUMMARY')) all.push({t: 'Agenda Item', p: c.name, time:'10:00'});
-                } catch(e) {}
-            }
-            setItems(all); setLoading(false);
-        };
-        fetchCals();
-    }, []);
-
-    return (
-        <div className="widget h-[450px] flex flex-col">
-            <div className="p-4 border-b flex items-center gap-2"><Ico.Cal/><h3 className="text-[10px] font-black uppercase">Agenda</h3></div>
-            <div className="flex-1 p-4 space-y-2 overflow-y-auto hide-scroll">
-                {items.length === 0 ? <div className="text-gray-400 text-center mt-10 text-xs">Geen items</div> : items.map((i, idx) => (
-                    <div key={idx} className="p-3 border-l-4 border-blue-500 bg-white shadow-sm rounded text-sm font-bold">{i.t}</div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function NewsWidget({ lang }) {
-    const [news, setNews] = useState([]);
-    const cats = S.load('newscats', ['Nieuws', 'Tech']);
-
-    useEffect(() => {
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://news.google.com/rss?hl=nl&gl=NL')}`)
-        .then(r=>r.json()).then(d=>setNews(d.items || []));
-    }, []);
-
-    return (
-        <div className="widget h-[450px] flex flex-col">
-            <div className="p-4 border-b flex items-center gap-2"><Ico.Nws/><h3 className="text-[10px] font-black uppercase">Nieuws</h3></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 hide-scroll">
-                {news.slice(0,10).map((n,i) => (
-                    <a href={n.link} target="_blank" key={i} className="block border-b pb-2">
-                        <p className="text-xs font-bold text-gray-800">{n.title}</p>
-                        <span className="text-[9px] text-blue-600 font-black uppercase">{n.source}</span>
-                    </a>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function RadarWidget({ lang }) {
-    const assets = S.load('inv_assets', ['ASML', 'NVDA', 'AAPL']);
-    return (
-        <div className="widget h-[450px] flex flex-col">
-            <div className="p-4 border-b flex items-center gap-2"><Ico.Rad/><h3 className="text-[10px] font-black uppercase">Investeringen</h3></div>
-            <div className="p-4 space-y-2">
-                {assets.map(a => (
-                    <div key={a} className="p-3 border rounded bg-white flex justify-between font-bold text-sm"><span>{a}</span><span className="text-green-600">+1.2%</span></div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function SportsWidget({ lang }) {
-    return (
-        <div className="widget h-[450px] flex flex-col">
-            <div className="p-4 border-b flex items-center gap-2"><Ico.Trp/><h3 className="text-[10px] font-black uppercase">Sport</h3></div>
-            <div className="p-10 text-center text-gray-400 text-xs font-bold">F1 & GOLF DATA</div>
-        </div>
-    );
-}
-
-function Settings({ isOpen, onClose, layout, setLayout }) {
-    const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
-    const [icals, setIcals] = useState(S.load('icals_dyn', []));
-
-    const save = () => {
-        S.save('bitvavo_keys', bvKeys);
-        S.save('icals_dyn', icals);
-        onClose();
-        window.location.reload();
-    };
-
-    return (
-        <div className={`settings-panel p-8 ${isOpen ? 'open' : ''}`}>
-            <h2 className="text-2xl font-black mb-6 uppercase">Settings</h2>
-            <div className="space-y-6">
-                <section>
-                    <label className="text-[10px] font-black text-blue-600 block mb-2">BITVAVO API</label>
-                    <input value={bvKeys.pub} onChange={e=>setBvKeys({...bvKeys, pub:e.target.value})} className="w-full p-2 border mb-2 text-xs" placeholder="Key" />
-                    <input type="password" value={bvKeys.sec} onChange={e=>setBvKeys({...bvKeys, sec:e.target.value})} className="w-full p-2 border text-xs" placeholder="Secret" />
-                </section>
-                <button onClick={save} className="w-full bg-black text-white py-4 font-black text-xs uppercase rounded">Save & Reload</button>
-            </div>
-        </div>
-    );
-}
-
-function App() {
-    const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
-    const [settingsOpen, setSettingsOpen] = useState(false);
-    const layout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'sports'];
-
-    useEffect(() => {
-        if (!isAuth && window.google) {
-            window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: (r) => { setIsAuth(true); S.save('auth_status', true); } });
-            window.google.accounts.id.renderButton(document.getElementById("google-btn"), { theme: "filled_blue", size: "large" });
-        }
-    }, [isAuth]);
-
-    if (!isAuth) return <div className="min-h-screen bg-[#000a14] flex items-center justify-center"><div id="google-btn"></div></div>;
-
-    const widgets = { ai: <div className="col-span-12 lg:col-span-8"><AIWidget /></div>, crypto: <div className="col-span-12 lg:col-span-4"><CryptoWidget /></div>, agenda: <div className="col-span-12 lg:col-span-4"><AgendaWidget /></div>, news: <div className="col-span-12 lg:col-span-8"><NewsWidget /></div>, radar: <div className="col-span-12 lg:col-span-4"><RadarWidget /></div>, sports: <div className="col-span-12 lg:col-span-4"><SportsWidget /></div> };
-
-    return (
-        <div className="flex flex-col min-h-screen pb-10">
-            <WeatherBar />
-            <header className="px-10 py-5 flex justify-between items-center max-w-[1600px] mx-auto w-full">
-                <h1 className="text-2xl font-black text-white uppercase tracking-tight">Michael Dashboard</h1>
-                <button onClick={() => setSettingsOpen(true)} className="text-white bg-white/10 p-2 rounded"><Ico.Set /></button>
-            </header>
-            <main className="px-10 grid grid-cols-12 gap-6 max-w-[1600px] mx-auto w-full">
-                {layout.map(w => <React.Fragment key={w}>{widgets[w]}</React.Fragment>)}
-            </main>
-            <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
-        </div>
-    );
-}
-
-ReactDOM.render(<App />, document.getElementById('root'));
-</script>
-</body>
-</html>
 
 function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
