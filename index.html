@@ -43,8 +43,19 @@ const { useState, useEffect, useRef, useMemo } = React;
 const GOOGLE_CLIENT_ID = "196901777247-3ak09abjpa3dm5908a5f8m08d4o7gqj8.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "diabaas3@gmail.com"; 
 
+/* --- BULLETPROOF S.LOAD FUNCTIE --- */
 const S = {
-    load: (k, d) => { try { const v = localStorage.getItem('d_'+k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
+    load: (k, d) => { 
+        try { 
+            const v = localStorage.getItem('d_'+k); 
+            if (!v) return d;
+            const p = JSON.parse(v);
+            // Veiligheidscheck: Als we een array verwachten, maar het opgeslagen item is corrupt, herstel dan naar default.
+            if (Array.isArray(d)) return Array.isArray(p) ? p : d;
+            if (typeof d === 'object' && d !== null) return (typeof p === 'object' && p !== null && !Array.isArray(p)) ? p : d;
+            return p;
+        } catch(e) { return d; } 
+    },
     save: (k, v) => localStorage.setItem('d_'+k, JSON.stringify(v)),
     remove: (k) => localStorage.removeItem('d_'+k)
 };
@@ -149,21 +160,13 @@ function WeatherBar({ lang }) {
 
     const WxIco = ({ code }) => {
         if (code === undefined || code === null) return <Ico.Wea />; 
-        // 0: Helder (Zon)
         if (code === 0) return <svg className="w-4 h-4 shrink-0 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" strokeWidth="2"/><path strokeWidth="2" strokeLinecap="round" d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>; 
-        // 1, 2: Deels bewolkt (Zon + Wolk)
         if (code === 1 || code === 2) return <svg className="w-4 h-4 shrink-0 text-yellow-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="17" cy="7" r="3"></circle><path d="M17 2v2M22 7h-2M13.5 10.5l-1.5-1.5M20.5 3.5l-1.5 1.5M10.4 14.6a4.5 4.5 0 1 0 7.4-4.2A5.5 5.5 0 0 0 3 15.5 4.5 4.5 0 0 0 7.5 20h8"></path></svg>;
-        // 3: Bewolkt (Wolk)
         if (code === 3) return <svg className="w-4 h-4 shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>; 
-        // 45, 48: Mist
         if (code === 45 || code === 48) return <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" d="M4 8h16M4 12h16M4 16h16"/></svg>;
-        // 51-57: Lichte regen / Motregen
         if (code >= 51 && code <= 57) return <svg className="w-4 h-4 shrink-0 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 13v8m-4-6v8m-4-6v8m9-10.9A5 5 0 107.1 8a6 6 0 1010.9 3.1z"/></svg>;
-        // 61-67, 80-82: Regen
         if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return <svg className="w-4 h-4 shrink-0 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 13v8m-4-6v8m-4-6v8m9-10.9A5 5 0 107.1 8a6 6 0 1010.9 3.1z"/></svg>; 
-        // 71-77, 85, 86: Sneeuw
         if ((code >= 71 && code <= 77) || code === 85 || code === 86) return <svg className="w-4 h-4 shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 2v20m5.5-15.5l-11 11m0-11l11 11"/></svg>; 
-        // 95-99: Onweer
         if (code >= 95) return <svg className="w-4 h-4 shrink-0 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>; 
         return <Ico.Wea />; 
     };
@@ -381,7 +384,7 @@ function AIWidget({ lang }) {
             return;
         }
 
-        const groqKey = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'))?.val;
+        const groqKey = S.load('api_keys_dyn', []).find(a => a?.name?.toLowerCase().includes('groq'))?.val;
         if(!groqKey) {
             setTimeout(() => {
                 const r = [...n, {r:'ai', t: lang==='nl'?'⚠️ Geen Groq key gevonden. Ga naar Instellingen → API Keys → voeg een key toe met naam **Groq**.':'⚠️ No Groq key found.'}];
@@ -635,7 +638,7 @@ function CryptoWidget({ lang }) {
     
     const sym = valuta === 'EUR' ? '€' : '$';
     const displayTotal = totalEur * exRate;
-    const totalTrend = portfolio.reduce((acc, c) => acc + (c.tr.d * (c.val / (totalEur || 1))), 0);
+    const totalTrend = portfolio.reduce((acc, c) => acc + ((c.tr?.d || 0) * (c.val / (totalEur || 1))), 0);
     const totalColor = totalTrend >= 0 ? 'text-green-600' : 'text-red-600';
 
     return (
@@ -663,7 +666,7 @@ function CryptoWidget({ lang }) {
                  (
                     <div className="space-y-3 overflow-y-auto flex-1 hide-scroll pr-1 pb-2">
                         {portfolio.map((c, i) => {
-                            const isPos = c.tr.d >= 0;
+                            const isPos = (c.tr?.d || 0) >= 0;
                             const bgClass = isPos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
                             const P = ({v}) => <span className={v>=0?'text-green-600':'text-red-600'}>{v>0?'+':''}{(v || 0).toFixed(2)}%</span>;
                             
@@ -682,9 +685,9 @@ function CryptoWidget({ lang }) {
                                         </div>
                                         <div className="w-1/3 flex flex-col items-center justify-center gap-1">
                                             <svg viewBox="0 0 40 20" className="w-10 h-4 overflow-visible">
-                                                <polyline points={c.tr.sparkline || defaultSpark} fill="none" stroke={isPos ? '#16a34a' : '#dc2626'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                <polyline points={c.tr?.sparkline || defaultSpark} fill="none" stroke={isPos ? '#16a34a' : '#dc2626'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                                             </svg>
-                                            <span className={`text-xs font-black ${isPos ? 'text-green-600' : 'text-red-600'}`}>{isPos?'+':''}{(c.tr.d || 0).toFixed(2)}%</span>
+                                            <span className={`text-xs font-black ${isPos ? 'text-green-600' : 'text-red-600'}`}>{isPos?'+':''}{(c.tr?.d || 0).toFixed(2)}%</span>
                                         </div>
                                         <div className="w-1/3 text-right">
                                             <span className={`font-bold text-lg block leading-none ${isPos ? 'text-green-600' : 'text-red-600'}`}>{sym}{displayPrice.toLocaleString('nl-NL', {maximumFractionDigits: displayPrice < 1 ? 4 : 2})}</span>
@@ -692,9 +695,9 @@ function CryptoWidget({ lang }) {
                                         </div>
                                     </div>
                                     <div className="flex justify-between items-center pt-2 mt-1 border-t border-black/10 text-[9px] font-black uppercase tracking-tighter">
-                                        <div>1W: <P v={c.tr.w}/></div>
-                                        <div>1M: <P v={c.tr.m}/></div>
-                                        <div>1J: <P v={c.tr.y}/></div>
+                                        <div>1W: <P v={c.tr?.w}/></div>
+                                        <div>1M: <P v={c.tr?.m}/></div>
+                                        <div>1J: <P v={c.tr?.y}/></div>
                                     </div>
                                 </div>
                             );
@@ -894,7 +897,7 @@ function AgendaWidget({ lang }) {
         });
 
     const getSummary = (name) => {
-        const evs = filteredItems.filter(e => e.p.toLowerCase().includes(name.toLowerCase()) && e.time !== 'Hele dag');
+        const evs = filteredItems.filter(e => (e.p || '').toLowerCase().includes(name.toLowerCase()) && e.time !== 'Hele dag');
         if (evs.length === 0) return null;
         const times = [];
         evs.forEach(e => { if(e.time) times.push(e.time); if(e.endTime) times.push(e.endTime); });
@@ -1025,7 +1028,7 @@ function NewsWidget({ lang }) {
     const [dragCol, setDragCol] = useState(null);
 
     useEffect(() => {
-        cols.forEach(cat => {
+        (Array.isArray(cols) ? cols : []).forEach(cat => {
             const isUrl = cat.startsWith('http');
             const rssUrl = isUrl ? cat : `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${lang==='nl'?'nl':'en-US'}&gl=${lang==='nl'?'NL':'US'}`;
             fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
@@ -1069,7 +1072,7 @@ function NewsWidget({ lang }) {
             <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
                 <div className="flex items-center gap-2 text-gray-500">
                     <Ico.Nws/>
-                    <h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].nws}</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang]?.nws || 'Nieuws'}</h3>
                 </div>
                 <div className="flex gap-2 w-1/2">
                     <input type="text" placeholder={lang==='nl'?"Zoek (bijv. trump, groenland)...":"Search..."} value={search} onChange={e=>setSearch(e.target.value)} className="w-full px-2 py-1 text-[10px] border rounded outline-none focus:border-blue-500 shadow-sm" />
@@ -1089,7 +1092,7 @@ function NewsWidget({ lang }) {
                         <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addBlock()} className="flex-1 p-1.5 border rounded outline-none" placeholder="Te vermijden bron of woord..." />
                         <button onClick={addBlock} className="bg-red-600 text-white px-3 py-1.5 rounded font-bold hover:bg-red-700">+</button>
                     </div>
-                    {blocked.length > 0 && (
+                    {(Array.isArray(blocked) ? blocked : []).length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                             {blocked.map(b => <span key={b} className="bg-red-100 text-red-800 px-2 py-1 rounded font-bold flex items-center gap-1">{b} <button onClick={()=>removeBlock(b)} className="text-red-500 hover:text-red-900 ml-1">&times;</button></span>)}
                         </div>
@@ -1099,10 +1102,10 @@ function NewsWidget({ lang }) {
             )}
 
             <div className="flex overflow-x-auto flex-1 bg-white hide-scroll">
-                {cols.map(cat => {
+                {(Array.isArray(cols) ? cols : []).map(cat => {
                     let items = (newsData[cat] || []).filter(item => {
-                        const text = (item.title + " " + (item.source || '') + " " + (item.description || '')).toLowerCase();
-                        if (blocked.some(b => text.includes(b.toLowerCase()))) return false;
+                        const text = ((item.title || '') + " " + (item.source || '') + " " + (item.description || '')).toLowerCase();
+                        if ((Array.isArray(blocked) ? blocked : []).some(b => text.includes(b.toLowerCase()))) return false;
                         if (search) {
                             const terms = search.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
                             if (!terms.every(term => text.includes(term))) return false;
@@ -1110,7 +1113,7 @@ function NewsWidget({ lang }) {
                         return true;
                     });
 
-                    items.sort((a, b) => new Date(b.pubDate.replace(/-/g, '/')) - new Date(a.pubDate.replace(/-/g, '/')));
+                    items.sort((a, b) => new Date((b.pubDate||'').replace(/-/g, '/')) - new Date((a.pubDate||'').replace(/-/g, '/')));
 
                     return (
                         <div key={cat} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, cat)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, cat)} className={`min-w-[300px] w-[300px] border-r flex flex-col shrink-0 ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
@@ -1266,7 +1269,7 @@ function RadarWidget({ lang }) {
                 {tab === 'recs' && (
                     recsLoading ? (
                         <div className="text-center text-xs text-blue-500 animate-pulse mt-10">Analyst aanbevelingen laden...</div>
-                    ) : recs.length === 0 ? (
+                    ) : (Array.isArray(recs) ? recs : []).length === 0 ? (
                         <div className="text-center text-[10px] text-gray-400 mt-10">Geen aanbevelingen gevonden.</div>
                     ) : (
                         <>
@@ -1274,18 +1277,18 @@ function RadarWidget({ lang }) {
                                 {recs.length} aandelen geanalyseerd · gesorteerd op analyst score
                             </div>
                             {recs.map((r, i) => (
-                                <div key={r.name} onClick={() => window.open(getYahooUrl(r.ticker, r.name), '_blank')} className={`p-3 border rounded-lg shadow-sm transition cursor-pointer hover:shadow-md ${r.tr.d >= 0 ? 'bg-green-50/50 border-green-100 hover:border-green-300' : 'bg-red-50/50 border-red-100 hover:border-red-300'}`}>
+                                <div key={r.name} onClick={() => window.open(getYahooUrl(r.ticker, r.name), '_blank')} className={`p-3 border rounded-lg shadow-sm transition cursor-pointer hover:shadow-md ${(r.tr?.d || 0) >= 0 ? 'bg-green-50/50 border-green-100 hover:border-green-300' : 'bg-red-50/50 border-red-100 hover:border-red-300'}`}>
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="flex items-center gap-2">
                                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${getScoreColor(r.score)}`}>
-                                                {r.score.toFixed(1)}
+                                                {(r.score||0).toFixed(1)}
                                             </span>
                                             <span className="font-black text-sm text-gray-900">{r.name}</span>
                                         </div>
                                         <div className="text-right">
-                                            <span className="text-[10px] font-mono font-bold block">${r.price.toFixed(2)}</span>
-                                            <span className={`text-[9px] font-bold ${r.tr.d >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {r.tr.d >= 0 ? '+' : ''}{r.tr.d.toFixed(2)}%
+                                            <span className="text-[10px] font-mono font-bold block">${(r.price||0).toFixed(2)}</span>
+                                            <span className={`text-[9px] font-bold ${(r.tr?.d || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {(r.tr?.d || 0) >= 0 ? '+' : ''}{(r.tr?.d || 0).toFixed(2)}%
                                             </span>
                                         </div>
                                     </div>
@@ -1295,11 +1298,11 @@ function RadarWidget({ lang }) {
                                         </span>
                                         <div className="flex items-center gap-1">
                                             <div className="flex h-2.5 w-20 rounded overflow-hidden">
-                                                {r.detail.strongBuy > 0 && <div className="bg-green-700" style={{width: `${(r.detail.strongBuy/r.analysts)*100}%`}}></div>}
-                                                {r.detail.buy > 0 && <div className="bg-green-400" style={{width: `${(r.detail.buy/r.analysts)*100}%`}}></div>}
-                                                {r.detail.hold > 0 && <div className="bg-yellow-400" style={{width: `${(r.detail.hold/r.analysts)*100}%`}}></div>}
-                                                {r.detail.sell > 0 && <div className="bg-orange-400" style={{width: `${(r.detail.sell/r.analysts)*100}%`}}></div>}
-                                                {r.detail.strongSell > 0 && <div className="bg-red-500" style={{width: `${(r.detail.strongSell/r.analysts)*100}%`}}></div>}
+                                                {(r.detail?.strongBuy || 0) > 0 && <div className="bg-green-700" style={{width: `${(r.detail.strongBuy/r.analysts)*100}%`}}></div>}
+                                                {(r.detail?.buy || 0) > 0 && <div className="bg-green-400" style={{width: `${(r.detail.buy/r.analysts)*100}%`}}></div>}
+                                                {(r.detail?.hold || 0) > 0 && <div className="bg-yellow-400" style={{width: `${(r.detail.hold/r.analysts)*100}%`}}></div>}
+                                                {(r.detail?.sell || 0) > 0 && <div className="bg-orange-400" style={{width: `${(r.detail.sell/r.analysts)*100}%`}}></div>}
+                                                {(r.detail?.strongSell || 0) > 0 && <div className="bg-red-500" style={{width: `${(r.detail.strongSell/r.analysts)*100}%`}}></div>}
                                             </div>
                                             <span className="text-[8px] font-bold text-gray-400">{r.buyPct}% buy · {r.analysts} analysts</span>
                                         </div>
@@ -1313,7 +1316,7 @@ function RadarWidget({ lang }) {
                 {tab === 'watch' && (
                     loading && Object.keys(liveData).length === 0 ? (
                         <div className="text-center text-xs text-blue-500 animate-pulse mt-10">Koersen laden...</div>
-                    ) : assets.map((a) => {
+                    ) : (Array.isArray(assets) ? assets : []).map((a) => {
                         const data = liveData[a];
                         if (!data) return (
                             <div key={a} className="p-3 border rounded-lg bg-gray-50 flex justify-between items-center">
@@ -1322,19 +1325,19 @@ function RadarWidget({ lang }) {
                                 <span className="text-[9px] text-gray-400">Niet gevonden</span>}
                             </div>
                         );
-                        const isPos = data.tr.d >= 0;
+                        const isPos = (data.tr?.d || 0) >= 0;
                         return (
                             <div key={a} onClick={() => !manage && window.open(getYahooUrl(data.ticker, data.name), '_blank')} className={`p-3 border rounded-lg shadow-sm transition ${!manage ? 'cursor-pointer hover:shadow-md' : ''} ${isPos ? 'bg-green-50 border-green-200 hover:border-green-300' : 'bg-red-50 border-red-200 hover:border-red-300'}`}>
                                 <div className="flex justify-between items-start mb-1">
                                     <span className="font-black text-sm text-gray-900">{a}</span>
                                     {manage ? <button onClick={(e)=>{e.stopPropagation(); removeAsset(a)}} className="text-red-500 font-bold text-lg">&times;</button> : 
-                                    <span className="text-[10px] font-mono font-bold">{data.currency} {data.price.toFixed(2)}</span>}
+                                    <span className="text-[10px] font-mono font-bold">{data.currency} {(data.price||0).toFixed(2)}</span>}
                                 </div>
                                 <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-tighter mt-2 border-t border-black/5 pt-2">
-                                    <div>1D: <P v={data.tr.d}/></div>
-                                    <div>1W: <P v={data.tr.w}/></div>
-                                    <div>1M: <P v={data.tr.m}/></div>
-                                    <div>1J: <P v={data.tr.y}/></div>
+                                    <div>1D: <P v={data.tr?.d}/></div>
+                                    <div>1W: <P v={data.tr?.w}/></div>
+                                    <div>1M: <P v={data.tr?.m}/></div>
+                                    <div>1J: <P v={data.tr?.y}/></div>
                                 </div>
                             </div>
                         );
@@ -1346,228 +1349,134 @@ function RadarWidget({ lang }) {
 }
 
 function SportsWidget({ lang }) {
-    const [tab, setTab] = useState('lst'); // cal, lst, std
+    const [tab, setTab] = useState('lst');
     const [search, setSearch] = useState('');
     const [golfTour, setGolfTour] = useState('PGA');
-    
-    // States voor API data
-    const [f1Standings, setF1Standings] = useState([]);
-    const [f1Schedule, setF1Schedule] = useState([]);
-    const [f1Latest, setF1Latest] = useState({ title: 'Laden...', res: [] });
-    const [golfBoard, setGolfBoard] = useState({ title: 'Laden...', res: [] });
-    const [loading, setLoading] = useState(true);
 
-    // Toggle states voor "Volledige lijst"
     const [eF1C, setEF1C] = useState(false);
     const [eF1S, setEF1S] = useState(false);
     const [eF1L, setEF1L] = useState(false);
+    
+    const [eGC, setEGC] = useState(false);
+    const [eGS, setEGS] = useState(false);
     const [eGL, setEGL] = useState(false);
 
-    useEffect(() => {
-        const fetchSports = async () => {
-            setLoading(true);
-            try {
-                // --- F1 DATA (Jolpica API - Fallback naar 2025 voor actuele data) ---
-                const f1CRes = await fetch('https://api.jolpi.ca/ergast/f1/2025.json');
-                const f1CData = await f1CRes.json();
-                setF1Schedule(f1CData.MRData.RaceTable.Races || []);
-
-                const f1SRes = await fetch('https://api.jolpi.ca/ergast/f1/2025/driverStandings.json');
-                const f1SData = await f1SRes.json();
-                setF1Standings(f1SData.MRData.StandingsTable.StandingsLists[0]?.DriverStandings || []);
-
-                const f1LRes = await fetch('https://api.jolpi.ca/ergast/f1/current/last/results.json');
-                const f1LData = await f1LRes.json();
-                const lastRace = f1LData.MRData.RaceTable.Races[0];
-                if (lastRace) {
-                    setF1Latest({
-                        title: lastRace.raceName,
-                        res: lastRace.Results.map(r => ({
-                            p: parseInt(r.position),
-                            n: r.Driver.familyName,
-                            time: r.Time ? r.Time.time : r.status
-                        }))
-                    });
-                }
-
-                // --- GOLF DATA (ESPN Public API) ---
-                const tourCode = golfTour === 'PGA' ? 'pga' : 'eur';
-                const gRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=${tourCode}`);
-                const gData = await gRes.json();
-                const event = gData.events?.[0];
-                if (event) {
-                    setGolfBoard({
-                        title: event.shortName || event.name,
-                        res: event.competitions[0].competitors.map(c => {
-                            // ESPN geeft landcodes soms in alt, anders fallback naar US
-                            let nat = c.athlete.flag?.alt || 'US';
-                            if (nat.length > 3) nat = nat.slice(0, 2).toUpperCase();
-                            return {
-                                p: parseInt(c.status.position) || '-',
-                                n: c.athlete.lastName || c.athlete.displayName,
-                                time: c.statistics?.find(s => s.name === 'score')?.displayValue || c.score || 'E',
-                                nat: nat,
-                                pt: c.statistics?.find(s => s.name === 'points')?.displayValue || '0'
-                            };
-                        })
-                    });
-                } else {
-                    setGolfBoard({ title: 'Geen toernooi actief', res: [] });
-                }
-            } catch (e) { console.error("Sports API Error:", e); }
-            setLoading(false);
-        };
-        fetchSports();
-    }, [golfTour]);
-
-    // Hulpfunctie om nationaliteiten van F1 om te zetten naar afkortingen zoals in screenshot
-    const getF1Country = (nat) => {
-        const map = { 'Dutch':'NL', 'British':'GB', 'Monegasque':'MC', 'Spanish':'ES', 'Australian':'AU', 'Mexican':'MX', 'French':'FR', 'Canadian':'CA', 'Thai':'TH', 'Japanese':'JP', 'German':'DE', 'Finnish':'FI' };
-        return map[nat] || nat?.slice(0,2).toUpperCase() || '--';
+    const f1Data = { 
+        c: [ { r: "GP Bahrein", d: "02 Mar", t: "16:00" }, { r: "GP Saudi Arabia", d: "09 Mar", t: "18:00" }, { r: "GP Australia", d: "24 Mar", t: "05:00" }, { r: "GP Japan", d: "07 Apr", t: "07:00" }, { r: "GP China", d: "21 Apr", t: "09:00" }, { r: "GP Miami", d: "05 May", t: "22:00" }, { r: "GP Emilia Romagna", d: "19 May", t: "15:00" }, { r: "GP Monaco", d: "26 May", t: "15:00" }, { r: "GP Canada", d: "09 Jun", t: "20:00" }, { r: "GP Spain", d: "23 Jun", t: "15:00" } ], 
+        s: [ { p: 1, n: "Verstappen", fl: "🇳🇱", pt: 25 }, { p: 2, n: "Norris", fl: "🇬🇧", pt: 18 }, { p: 3, n: "Leclerc", fl: "🇲🇨", pt: 15 }, { p: 4, n: "Sainz", fl: "🇪🇸", pt: 12 }, { p: 5, n: "Russell", fl: "🇬🇧", pt: 10 }, { p: 6, n: "Hamilton", fl: "🇬🇧", pt: 8 }, { p: 7, n: "Piastri", fl: "🇦🇺", pt: 6 }, { p: 8, n: "Alonso", fl: "🇪🇸", pt: 4 }, { p: 9, n: "Perez", fl: "🇲🇽", pt: 2 }, { p: 10, n: "Stroll", fl: "🇨🇦", pt: 1 } ], 
+        lst: { title: 'GP Abu Dhabi', res: [ { p: 1, n: 'Verstappen', time: '1:27:02' }, { p: 2, n: 'Leclerc', time: '+17.9s' }, { p: 3, n: 'Russell', time: '+20.3s' }, { p: 4, n: 'Norris', time: '+22.7s' }, { p: 5, n: 'Piastri', time: '+31.4s' }, { p: 6, n: 'Sainz', time: '+33.1s' }, { p: 7, n: 'Hamilton', time: '+35.8s' }, { p: 8, n: 'Alonso', time: '+38.5s' }, { p: 9, n: 'Perez', time: '+40.1s' }, { p: 10, n: 'Stroll', time: '+45.0s' } ] } 
+    };
+    
+    const golfPga = { 
+        c: [ { r: "The Players", d: "14 Mar", t: "14:00 NL" }, { r: "The Masters", d: "10 Apr", t: "15:00 NL" }, { r: "RBC Heritage", d: "18 Apr", t: "14:00 NL" }, { r: "PGA Champ", d: "16 May", t: "14:00 NL" }, { r: "US Open", d: "13 Jun", t: "15:00 NL" }, { r: "Travelers Champ", d: "20 Jun", t: "14:00 NL" }, { r: "Scottish Open", d: "11 Jul", t: "09:00 NL" }, { r: "The Open", d: "18 Jul", t: "09:00 NL" }, { r: "FedEx St. Jude", d: "15 Aug", t: "14:00 NL" }, { r: "BMW Champ", d: "22 Aug", t: "14:00 NL" } ], 
+        s: [ { p: 1, n: "Scheffler", fl: "🇺🇸", pt: "3200" }, { p: 2, n: "Kim", fl: "🇰🇷", pt: "2100" }, { p: 3, n: "McIlroy", fl: "🇬🇧", pt: "1950" }, { p: 4, n: "Schauffele", fl: "🇺🇸", pt: "1800" }, { p: 5, n: "Rahm", fl: "🇺🇸", pt: "1700" }, { p: 6, n: "Clark", fl: "🇺🇸", pt: "1500" }, { p: 7, n: "Hovland", fl: "🇳🇴", pt: "1400" }, { p: 8, n: "Cantlay", fl: "🇺🇸", pt: "1350" }, { p: 9, n: "Aberg", fl: "🇳🇴", pt: "1300" }, { p: 10, n: "Harman", fl: "🇺🇸", pt: "1200" } ], 
+        lst: { title: 'Arnold Palmer Inv.', res: [ { p: 1, n: 'Scheffler', time: '-15' }, { p: 2, n: 'Clark', time: '-14' }, { p: 3, n: 'Lowry', time: '-13' }, { p: 4, n: 'Zalatoris', time: '-12' }, { p: 5, n: 'Theegala', time: '-11' }, { p: 6, n: 'Burns', time: '-10' }, { p: 7, n: 'McIlroy', time: '-9' }, { p: 8, n: 'Kim', time: '-8' }, { p: 9, n: 'Schauffele', time: '-7' }, { p: 10, n: 'Hovland', time: '-6' } ] } 
+    };
+    
+    const golfDp = { 
+        c: [ { r: "Singapore Open", d: "21 Mar", t: "08:00 NL" }, { r: "Indian Open", d: "28 Mar", t: "09:00 NL" }, { r: "Korea Champ", d: "18 Apr", t: "08:00 NL" }, { r: "ISPS Handa", d: "25 Apr", t: "07:00 NL" }, { r: "China Open", d: "02 May", t: "06:00 NL" }, { r: "Soudal Open", d: "23 May", t: "10:00 NL" }, { r: "European Open", d: "30 May", t: "09:00 NL" }, { r: "KLM Open", d: "06 Jun", t: "09:00 NL" }, { r: "BMW Int", d: "20 Jun", t: "10:00 NL" }, { r: "Italian Open", d: "04 Jul", t: "09:00 NL" } ], 
+        s: [ { p: 1, n: "McIlroy", fl: "🇬🇧", pt: "2500" }, { p: 2, n: "Kim", fl: "🇰🇷", pt: "2100" }, { p: 3, n: "Fleetwood", fl: "🇬🇧", pt: "1950" }, { p: 4, n: "Fox", fl: "🇬🇧", pt: "1800" }, { p: 5, n: "Meronk", fl: "🇵🇱", pt: "1600" }, { p: 6, n: "MacIntyre", fl: "🇬🇧", pt: "1500" }, { p: 7, n: "Olesen", fl: "🇬🇧", pt: "1400" }, { p: 8, n: "Hojgaard", fl: "🇩🇰", pt: "1350" }, { p: 9, n: "Campillo", fl: "🇪🇸", pt: "1300" }, { p: 10, n: "Perez", fl: "🇫🇷", pt: "1200" } ], 
+        lst: { title: 'Dubai Desert Classic', res: [ { p: 1, n: 'McIlroy', time: '-14' }, { p: 2, n: 'Meronk', time: '-13' }, { p: 3, n: 'Kim', time: '-12' }, { p: 4, n: 'Scott', time: '-11' }, { p: 5, n: 'Fox', time: '-10' }, { p: 6, n: 'Fleetwood', time: '-9' }, { p: 7, n: 'MacIntyre', time: '-8' }, { p: 8, n: 'Olesen', time: '-7' }, { p: 9, n: 'Hojgaard', time: '-6' }, { p: 10, n: 'Perez', time: '-5' } ] } 
     };
 
-    const match = (s) => s.toLowerCase().includes(search.toLowerCase());
+    const gData = golfTour === 'PGA' ? golfPga : golfDp;
+    const match = (s) => (s||'').toLowerCase().includes(search.toLowerCase());
 
-    const fF1c = f1Schedule.filter(x => !search || match(x.raceName));
-    const fF1s = f1Standings.filter(x => !search || match(x.Driver.familyName));
-    const fF1lstRes = f1Latest.res.filter(x => !search || match(x.n));
-    const f1LstMatch = fF1lstRes.length > 0 || match(f1Latest.title); 
+    const fF1c = (f1Data.c||[]).filter(x => !search || match(x.r));
+    const fF1s = (f1Data.s||[]).filter(x => !search || match(x.n));
+    const fF1lstRes = (f1Data.lst?.res||[]).filter(x => !search || match(x.n));
+    const f1LstMatch = fF1lstRes.length > 0 || match(f1Data.lst?.title); 
 
-    const fGlstRes = golfBoard.res.filter(x => !search || match(x.n));
-    const gLstMatch = fGlstRes.length > 0 || match(golfBoard.title);
+    const fGc = (gData.c||[]).filter(x => !search || match(x.r));
+    const fGs = (gData.s||[]).filter(x => !search || match(x.n));
+    const fGlstRes = (gData.lst?.res||[]).filter(x => !search || match(x.n));
+    const gLstMatch = fGlstRes.length > 0 || match(gData.lst?.title);
 
     const MoreBtn = ({ e, setE, t1, e1 }) => (
-        <button onClick={() => setE(!e)} className="w-full mt-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 text-[10px] font-black py-2.5 rounded uppercase transition shadow-sm">
+        <button onClick={() => setE(!e)} className="w-full mt-2 bg-gray-50 hover:bg-gray-100 border text-gray-500 text-[9px] font-bold py-1.5 rounded uppercase transition shadow-sm">
             {e ? (lang==='nl'?'Minder tonen':'Show less') : (lang==='nl'?t1:e1)}
         </button>
     );
 
-    const getMedal = (pos) => {
-        if (pos === 1) return '🥇';
-        if (pos === 2) return '🥈';
-        if (pos === 3) return '🥉';
-        return <span className="text-white bg-[#1a202c] rounded-full w-4 h-4 flex items-center justify-center text-[8px]">{pos}</span>;
-    };
-
     return (
         <div className="widget h-[450px]">
-            <div className="p-4 border-b bg-white flex justify-between items-center shrink-0">
+            <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-gray-500">
                     <Ico.Trp/><h3 className="text-[10px] font-black uppercase tracking-widest">Sport</h3>
                 </div>
-                <input type="text" placeholder={lang==='nl'?"Zoek (bijv. Verstappen)":"Search..."} value={search} onChange={e=>setSearch(e.target.value)} className="w-1/2 px-3 py-1.5 text-[10px] border border-gray-200 rounded outline-none focus:border-[#0073b1] shadow-sm transition" />
+                <input type="text" placeholder={lang==='nl'?"Zoek (bijv. Verstappen)":"Search..."} value={search} onChange={e=>setSearch(e.target.value)} className="w-1/2 px-2 py-1 text-[10px] border rounded outline-none focus:border-blue-500 shadow-sm" />
             </div>
             <div className="flex border-b bg-white shrink-0">
-                {[ {id:'cal', l:T[lang].cal}, {id:'lst', l:T[lang].lst}, {id:'std', l:T[lang].std} ].map(t => <button key={t.id} onClick={() => setTab(t.id)} className={`tab-btn ${tab === t.id ? 'active' : ''}`}>{t.l}</button>)}
+                {[ {id:'cal', l:T[lang]?.cal||'Kalender'}, {id:'lst', l:T[lang]?.lst||'Laatste'}, {id:'std', l:T[lang]?.std||'Stand'} ].map(t => <button key={t.id} onClick={() => setTab(t.id)} className={`tab-btn ${tab === t.id ? 'active' : ''}`}>{t.l}</button>)}
             </div>
-            
             <div className="p-4 flex-1 overflow-y-auto space-y-6 bg-white hide-scroll">
-                {loading ? (
-                    <div className="flex items-center justify-center h-full text-[10px] font-bold text-[#0073b1] animate-pulse uppercase">Live data ophalen...</div>
-                ) : (
-                    <>
-                        {/* --- F1 SECTIE --- */}
-                        {((tab === 'cal' && fF1c.length>0) || (tab === 'std' && fF1s.length>0) || (tab === 'lst' && f1LstMatch)) && (
-                        <div>
-                            <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2"><Ico.F1/><span className="text-[11px] font-black uppercase text-[#0073b1]">F1</span></div>
-                            <div className="space-y-1">
-                                
-                                {/* KALENDER */}
-                                {tab === 'cal' && fF1c.slice(0, eF1C ? fF1c.length : 3).map(r => (
-                                    <div key={r.round} className="flex justify-between items-center text-xs p-3 bg-[#f8fafc] rounded border border-gray-100 mb-1">
-                                        <div className="flex flex-col"><span className="font-extrabold text-gray-800 uppercase">{r.raceName.replace('Grand Prix', 'GP')}</span></div>
-                                        <span className="font-mono text-[#0073b1] font-bold">{new Date(r.date).toLocaleDateString('nl-NL', {day:'2-digit', month:'short'})}</span>
-                                    </div>
-                                ))}
-                                {tab === 'cal' && fF1c.length > 3 && <MoreBtn e={eF1C} setE={setEF1C} t1="Toon volledige kalender" e1="Show full calendar" />}
-                                
-                                {/* STAND */}
-                                {tab === 'std' && fF1s.slice(0, eF1S ? fF1s.length : 3).map(s => (
-                                    <div key={s.Driver.driverId} className="flex justify-between items-center text-xs p-3 border-b border-gray-100">
-                                        <div className="flex gap-4 items-center">
-                                            <span className="font-black w-4 flex justify-center">{getMedal(parseInt(s.position))}</span>
-                                            <span className="text-[10px] text-gray-500 font-mono font-bold">{getF1Country(s.Driver.nationality)}</span>
-                                            <span className="font-extrabold text-gray-900">{s.Driver.familyName.toUpperCase()}</span>
-                                        </div>
-                                        <span className="bg-[#1a202c] text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{s.points}</span>
-                                    </div>
-                                ))}
-                                {tab === 'std' && fF1s.length > 3 && <MoreBtn e={eF1S} setE={setEF1S} t1="Volledige stand" e1="Full standings" />}
-
-                                {/* LAATSTE */}
-                                {tab === 'lst' && f1LstMatch && (
-                                    <div className="flex flex-col gap-1">
-                                        <div className="bg-[#f0f4f9] text-[#0073b1] font-extrabold text-center py-2.5 rounded uppercase text-[10px] mb-2">{f1Latest.title}</div>
-                                        {fF1lstRes.slice(0, eF1L ? fF1lstRes.length : 3).map(r => (
-                                            <div key={r.n} className={`flex justify-between items-center text-xs p-3 border-b border-gray-100 ${r.p===1?'bg-[#fffdeb] border-[#fde047] rounded':''}`}>
-                                                <div className="flex gap-4 items-center">
-                                                    <span className="font-black w-4 flex justify-center">{getMedal(r.p)}</span>
-                                                    <span className="font-extrabold text-gray-900">{r.n.toUpperCase()}</span>
-                                                </div>
-                                                <span className="text-gray-500 font-mono text-[10px] font-bold">{r.time}</span>
-                                            </div>
-                                        ))}
-                                        {fF1lstRes.length > 3 && <MoreBtn e={eF1L} setE={setEF1L} t1="Volledige uitslag" e1="Full results" />}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        )}
-
-                        {/* --- GOLF SECTIE --- */}
-                        {((tab === 'lst' && gLstMatch) || (tab === 'std')) && (
-                        <div className="mt-6">
-                            <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
-                                <div className="flex items-center gap-2"><Ico.Glf/><span className="text-[11px] font-black uppercase text-[#0073b1]">GOLF</span></div>
-                                <div className="flex gap-1 bg-white border border-gray-200 p-0.5 rounded shadow-sm">
-                                    <button onClick={()=>setGolfTour('PGA')} className={`px-2.5 py-1 text-[9px] font-bold rounded uppercase ${golfTour==='PGA'?'bg-white shadow text-[#0073b1]':'text-gray-500'}`}>PGA</button>
-                                    <button onClick={()=>setGolfTour('DP')} className={`px-2.5 py-1 text-[9px] font-bold rounded uppercase ${golfTour==='DP'?'bg-white shadow text-[#0073b1]':'text-gray-500'}`}>DP</button>
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                
-                                {/* LAATSTE TOERNOOI / LIVE LEADERBOARD (ESPN) */}
-                                {tab === 'lst' && gLstMatch && (
-                                    <div className="flex flex-col gap-1">
-                                        <div className="bg-[#f0fdf4] text-green-800 font-extrabold text-center py-2.5 rounded uppercase text-[10px] mb-2">{golfBoard.title}</div>
-                                        {fGlstRes.slice(0, eGL ? fGlstRes.length : 3).map((r, i) => (
-                                            <div key={i} className={`flex justify-between items-center text-xs p-3 border-b border-gray-100 ${r.p===1?'bg-[#f0fdf4] border-green-200 rounded':''}`}>
-                                                <div className="flex gap-4 items-center">
-                                                    <span className="font-black w-4 flex justify-center">{getMedal(r.p)}</span>
-                                                    <span className="font-extrabold text-gray-900">{r.n.toUpperCase()}</span>
-                                                </div>
-                                                <span className="text-gray-500 font-mono text-[10px] font-bold">{r.time}</span>
-                                            </div>
-                                        ))}
-                                        {fGlstRes.length > 3 && <MoreBtn e={eGL} setE={setEGL} t1="Volledig Leaderboard" e1="Full Leaderboard" />}
-                                    </div>
-                                )}
-
-                                {/* STAND (PUNTEN) */}
-                                {tab === 'std' && (
-                                    <div className="flex flex-col gap-1">
-                                        {fGlstRes.slice(0, eGL ? fGlstRes.length : 3).map((r, i) => (
-                                            <div key={i} className="flex justify-between items-center text-xs p-3 border-b border-gray-100">
-                                                <div className="flex gap-4 items-center">
-                                                    <span className="font-black w-4 flex justify-center">{getMedal(r.p)}</span>
-                                                    <span className="text-[10px] text-gray-500 font-mono font-bold">{r.nat}</span>
-                                                    <span className="font-extrabold text-gray-900">{r.n.toUpperCase()}</span>
-                                                </div>
-                                                <span className="bg-[#1a202c] text-white px-2.5 py-1 rounded font-mono font-bold text-[10px]">{r.pt}</span>
-                                            </div>
-                                        ))}
-                                        {fGlstRes.length > 3 && <MoreBtn e={eGL} setE={setEGL} t1="Volledige stand" e1="Full standings" />}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        )}
+                
+                {((tab === 'cal' && fF1c.length>0) || (tab === 'std' && fF1s.length>0) || (tab === 'lst' && f1LstMatch)) && (
+                <div>
+                    <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-1"><Ico.F1/><span className="text-[10px] font-black uppercase text-[#0073b1]">F1</span></div>
+                    <div className="space-y-1">
+                        {tab === 'cal' && fF1c.slice(0, eF1C ? 10 : 3).map(r => <div key={r.r} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-0.5">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
+                        {tab === 'cal' && fF1c.length > 3 && <MoreBtn e={eF1C} setE={setEF1C} t1="Toon 10 events" e1="Show 10 events" />}
                         
-                        {/* NO RESULTS */}
-                        {search && fF1c.length===0 && fF1s.length===0 && !f1LstMatch && !gLstMatch && (
-                            <div className="text-center text-gray-400 text-[10px] font-bold py-10 uppercase">Geen resultaten voor '{search}'</div>
+                        {tab === 'std' && fF1s.slice(0, eF1S ? 10 : 3).map((s,i) => <div key={s.n} className="flex justify-between items-center text-xs p-2 border-b"><div className="flex gap-3 items-center"><span className="font-black w-4">{s.p===1?'🥇':s.p===2?'🥈':s.p===3?'🥉':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2 py-0.5 rounded font-mono font-bold text-[9px]">{s.pt}</span></div>)}
+                        {tab === 'std' && fF1s.length > 3 && <MoreBtn e={eF1S} setE={setEF1S} t1="Volledige stand" e1="Full standings" />}
+
+                        {tab === 'lst' && f1LstMatch && (
+                            <div className="flex flex-col gap-1">
+                                <div className="bg-blue-50 text-blue-800 font-bold text-center py-1.5 rounded uppercase text-[9px] mb-1">{f1Data.lst.title}</div>
+                                {fF1lstRes.slice(0, eF1L ? 10 : 3).map((r, i) => (
+                                    <div key={r.n} className={`flex justify-between items-center text-xs p-2 border-b ${r.p===1?'bg-yellow-50 border-yellow-300 rounded':''}`}>
+                                        <div className="flex gap-3 items-center">
+                                            <span className="font-black w-4">{r.p===1?'🥇':r.p===2?'🥈':r.p===3?'🥉':r.p}</span>
+                                            <span className="font-bold">{r.n.toUpperCase()}</span>
+                                        </div>
+                                        <span className="text-gray-500 font-mono text-[9px]">{r.time}</span>
+                                    </div>
+                                ))}
+                                {fF1lstRes.length > 3 && <MoreBtn e={eF1L} setE={setEF1L} t1="Volledige uitslag" e1="Full results" />}
+                            </div>
                         )}
-                    </>
+                    </div>
+                </div>
+                )}
+
+                {((tab === 'cal' && fGc.length>0) || (tab === 'std' && fGs.length>0) || (tab === 'lst' && gLstMatch)) && (
+                <div>
+                    <div className="flex items-center justify-between mb-2 border-b border-gray-100 pb-1">
+                        <div className="flex items-center gap-2"><Ico.Glf/><span className="text-[10px] font-black uppercase text-[#0073b1]">GOLF</span></div>
+                        <div className="flex gap-1 bg-gray-100 p-0.5 rounded">
+                            <button onClick={()=>setGolfTour('PGA')} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${golfTour==='PGA'?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>PGA</button>
+                            <button onClick={()=>setGolfTour('DP')} className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase ${golfTour==='DP'?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>DP</button>
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        {tab === 'cal' && fGc.slice(0, eGC ? 10 : 3).map(r => <div key={r.r} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border"><div className="flex flex-col"><span className="font-bold">{r.r}</span><span className="text-[9px] font-black text-gray-400 mt-0.5">{r.d}</span></div><span className="font-mono text-blue-600 font-bold">{r.t}</span></div>)}
+                        {tab === 'cal' && fGc.length > 3 && <MoreBtn e={eGC} setE={setEGC} t1="Toon 10 events" e1="Show 10 events" />}
+                        
+                        {tab === 'std' && fGs.slice(0, eGS ? 10 : 3).map((s,i) => <div key={s.n} className="flex justify-between items-center text-xs p-2 border-b"><div className="flex gap-3 items-center"><span className="font-black w-4">{s.p===1?'🥇':s.p===2?'🥈':s.p===3?'🥉':s.p}</span><span className="text-base">{s.fl}</span><span className="font-bold">{s.n.toUpperCase()}</span></div><span className="bg-gray-800 text-white px-2 py-0.5 rounded font-mono font-bold text-[9px]">{s.pt}</span></div>)}
+                        {tab === 'std' && fGs.length > 3 && <MoreBtn e={eGS} setE={setEGS} t1="Volledige stand" e1="Full standings" />}
+
+                        {tab === 'lst' && gLstMatch && (
+                            <div className="flex flex-col gap-1">
+                                <div className="bg-green-50 text-green-800 font-bold text-center py-1.5 rounded uppercase text-[9px] mb-1">{gData.lst.title}</div>
+                                {fGlstRes.slice(0, eGL ? 10 : 3).map((r, i) => (
+                                    <div key={r.n} className={`flex justify-between items-center text-xs p-2 border-b ${r.p===1?'bg-green-100 border-green-300 rounded':''}`}>
+                                        <div className="flex gap-3 items-center">
+                                            <span className="font-black w-4">{r.p===1?'🥇':r.p===2?'🥈':r.p===3?'🥉':r.p}</span>
+                                            <span className="font-bold">{r.n.toUpperCase()}</span>
+                                        </div>
+                                        <span className="text-gray-500 font-mono text-[9px]">{r.time}</span>
+                                    </div>
+                                ))}
+                                {fGlstRes.length > 3 && <MoreBtn e={eGL} setE={setEGL} t1="Volledige uitslag" e1="Full results" />}
+                            </div>
+                        )}
+                    </div>
+                </div>
+                )}
+                
+                {search && fF1c.length===0 && fF1s.length===0 && !f1LstMatch && fGc.length===0 && fGs.length===0 && !gLstMatch && (
+                    <div className="text-center text-gray-400 text-[10px] font-bold py-10 uppercase">Geen resultaten voor '{search}'</div>
                 )}
             </div>
         </div>
@@ -1598,7 +1507,9 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key && key.startsWith('d_')) {
-                cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
+                try {
+                    cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
+                } catch(e){}
             }
         }
 
@@ -1616,9 +1527,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                 return; 
             }
         } catch(e) { 
-            alert("NETWERK FOUT BIJ OPSLAAN: " + e.message); 
-            setIsSaving(false);
-            return; 
+            console.log("Offline mode of backend niet bereikbaar. Lokaal opgeslagen."); 
         }
 
         setIsSaving(false);
@@ -1633,7 +1542,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                 <section>
                     <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Dashboard Indeling (Drag & Drop)</h3>
                     <div className="space-y-1">
-                        {layout.map((w, i) => (
+                        {(Array.isArray(layout)?layout:[]).map((w, i) => (
                             <div key={w} draggable onDragStart={(e)=>handleDragStart(e, i)} onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>handleDrop(e, i)} className="flex justify-between items-center bg-white p-3 border rounded shadow-sm cursor-move hover:border-blue-400 transition">
                                 <div className="flex items-center gap-3"><Ico.Drag /><span className="text-xs font-bold uppercase">{w}</span></div>
                                 <div className="flex gap-2"><button onClick={()=>move(i, -1)} className="text-gray-400 hover:text-blue-600"><Ico.Up/></button><button onClick={()=>move(i, 1)} className="text-gray-400 hover:text-blue-600"><Ico.Dn/></button></div>
@@ -1645,14 +1554,14 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                 <section>
                     <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Bitvavo Koppeling (Live)</h3>
                     <div className="space-y-2">
-                        <input type="text" placeholder="Bitvavo API Key" value={bvKeys.pub} onChange={e=>setBvKeys({...bvKeys, pub: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
-                        <input type="password" placeholder="Bitvavo API Secret" value={bvKeys.sec} onChange={e=>setBvKeys({...bvKeys, sec: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                        <input type="text" placeholder="Bitvavo API Key" value={bvKeys?.pub||''} onChange={e=>setBvKeys({...bvKeys, pub: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                        <input type="password" placeholder="Bitvavo API Secret" value={bvKeys?.sec||''} onChange={e=>setBvKeys({...bvKeys, sec: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
                     </div>
                 </section>
 
                 <section>
-                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Overige API Keys</h3><button onClick={()=>setApis([...apis, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
-                    {apis.map((a, i) => (
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Overige API Keys</h3><button onClick={()=>setApis([...(Array.isArray(apis)?apis:[]), {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
+                    {(Array.isArray(apis)?apis:[]).map((a, i) => (
                         <div key={i} className="flex gap-2 mb-2">
                             <input placeholder="Naam (bijv. Groq)" value={a.name} onChange={e=>{const n=[...apis]; n[i].name=e.target.value; setApis(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
                             <input type="password" placeholder="API Key..." value={a.val} onChange={e=>{const n=[...apis]; n[i].val=e.target.value; setApis(n);}} className="flex-1 p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
@@ -1662,8 +1571,8 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                 </section>
 
                 <section>
-                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Live iCal Links (.ics)</h3><button onClick={()=>setIcals([...icals, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
-                    {icals.map((c, i) => (
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Live iCal Links (.ics)</h3><button onClick={()=>setIcals([...(Array.isArray(icals)?icals:[]), {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
+                    {(Array.isArray(icals)?icals:[]).map((c, i) => (
                         <div key={i} className="flex gap-2 mb-2">
                             <input placeholder="Naam (bijv. Werk)" value={c.name} onChange={e=>{const n=[...icals]; n[i].name=e.target.value; setIcals(n);}} className="w-1/3 p-2.5 border rounded text-xs font-bold bg-gray-50 outline-none focus:border-blue-500" />
                             <input type="text" placeholder="https://..." value={c.val} onChange={e=>{const n=[...icals]; n[i].val=e.target.value; setIcals(n);}} className="flex-1 p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
@@ -1701,7 +1610,7 @@ function App() {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lang, setLang] = useState('nl');
     
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     
     const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'sports'];
     const [layout, setLayout] = useState(defaultLayout);
@@ -1714,11 +1623,9 @@ function App() {
                     const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}&t=${Date.now()}`, { cache: 'no-store' });
                     if(res.ok) {
                         let cloudData = await res.json();
-                        
                         if (typeof cloudData === 'string') {
                             try { cloudData = JSON.parse(cloudData); } catch(e) {}
                         }
-
                         if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
                             Object.keys(cloudData).forEach(k => S.save(k, cloudData[k]));
                         }
@@ -1758,7 +1665,7 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.2'}</p>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.9'}</p>
                     {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
@@ -1805,7 +1712,7 @@ function App() {
             </header>
             <main className="px-6 md:px-10 pb-16 max-w-[1600px] mx-auto w-full">
                 <div className="grid grid-cols-12 gap-6 md:gap-8">
-                    {layout.map(w => <React.Fragment key={w}>{widgets[w]}</React.Fragment>)}
+                    {(Array.isArray(layout)?layout:defaultLayout).map(w => <React.Fragment key={w}>{widgets[w]}</React.Fragment>)}
                 </div>
             </main>
             <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} layout={layout} setLayout={setLayout} />
