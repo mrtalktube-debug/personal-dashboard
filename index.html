@@ -862,16 +862,22 @@ function AgendaWidget({ lang }) {
             </div>
             
             <div className="p-2.5 flex border-b border-gray-200 bg-gray-50 items-center justify-between shrink-0 gap-2">
-                <div className="relative flex items-center bg-white border border-gray-200 p-1.5 px-2 rounded shadow-sm hover:bg-gray-100 transition cursor-pointer shrink-0">
+                <div 
+                    className="relative flex items-center bg-white border border-gray-200 p-1.5 px-2 rounded shadow-sm hover:bg-gray-100 transition cursor-pointer shrink-0"
+                    onClick={(e) => {
+                        const input = e.currentTarget.querySelector('input');
+                        if (input && typeof input.showPicker === 'function') input.showPicker();
+                    }}
+                >
                     <span className="text-xs pointer-events-none">📅</span>
                     <span className="text-[10px] font-black text-gray-700 ml-1.5 pointer-events-none">{safeD.slice(8,10)}</span>
-                    <input type="date" value={safeD} onChange={(e)=>setD(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                    <input type="date" value={safeD} onChange={(e)=>setD(e.target.value)} className="absolute opacity-0 w-0 h-0" />
                 </div>
                 
                 <div className="flex-1 flex items-center justify-between bg-white border border-gray-200 rounded shadow-sm px-1 overflow-hidden min-w-[140px] max-w-[220px]">
                     <button onClick={()=>{const nd=new Date(safeD);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(getLocalYYYYMMDD(nd))}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500 transition">&lt;</button>
-                    <span className="text-[10px] font-black text-center uppercase tracking-widest text-gray-700 whitespace-nowrap px-1">
-                        <span className="text-blue-600">WK {getWeekNumber(safeD)}</span> <span className="opacity-30">|</span> {navDateText}
+                    <span className="text-[10px] font-black text-center uppercase tracking-widest text-blue-600 whitespace-nowrap px-1">
+                        WK {getWeekNumber(safeD)} <span className="opacity-30 text-gray-400">|</span> <span className="text-gray-700">{navDateText}</span>
                     </span>
                     <button onClick={()=>{const nd=new Date(safeD);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(getLocalYYYYMMDD(nd))}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500 transition">&gt;</button>
                 </div>
@@ -886,11 +892,11 @@ function AgendaWidget({ lang }) {
                     groupBy === 'time' ? (
                         <div className="grid grid-cols-2 gap-3">
                             {filteredItems.map((i, idx) => (
-                                <div key={idx} className="p-3 bg-white border border-gray-200 border-l-[5px] rounded-lg flex flex-col shadow-sm h-fit transition-shadow hover:shadow-md" style={{ borderLeftColor: getColorHex(i.p) }}>
-                                    <span className="font-bold text-[13px] leading-tight text-gray-900 mb-2">{i.t||''}</span>
+                                <div key={idx} className="p-3 bg-white border border-gray-200 border-l-[4px] rounded-lg flex flex-col shadow-sm h-fit transition-shadow hover:shadow-md" style={{ borderLeftColor: getColorHex(i.p) }}>
+                                    <span className="font-bold text-[12px] leading-tight text-gray-900 mb-2">{i.t||''}</span>
                                     <div className="flex justify-between items-center mt-auto">
                                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)} ` : ''}{i.p||''}</span>
-                                        <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">{i.time||''}{i.endTime ? ` - ${i.endTime}` : ''}</span>
+                                        <span className="text-blue-600 font-bold font-mono text-[9px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">{i.time||''}{i.endTime ? ` - ${i.endTime}` : ''}</span>
                                     </div>
                                 </div>
                             ))}
@@ -902,16 +908,16 @@ function AgendaWidget({ lang }) {
                                 if (personItems.length === 0) return null;
                                 return (
                                     <div key={person} className="flex flex-col">
-                                        <div className="text-[10px] font-black uppercase text-gray-800 bg-gray-100 border border-gray-200 border-l-[4px] rounded-sm px-3 py-1.5 mb-2.5 w-full" style={{ borderLeftColor: getColorHex(person) }}>
+                                        <div className="text-[10px] font-black uppercase text-gray-800 bg-gray-50 border border-gray-200 border-l-[4px] rounded-sm px-3 py-1.5 mb-2 w-full" style={{ borderLeftColor: getColorHex(person) }}>
                                             {person}
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             {personItems.map((i, idx) => (
-                                                <div key={idx} className="p-3 bg-white border border-gray-200 border-l-[5px] rounded-lg flex flex-col shadow-sm h-fit transition-shadow hover:shadow-md" style={{ borderLeftColor: getColorHex(person) }}>
-                                                    <span className="font-bold text-[13px] leading-tight text-gray-900 mb-2">{i.t||''}</span>
+                                                <div key={idx} className="p-3 bg-white border border-gray-200 border-l-[4px] rounded-lg flex flex-col shadow-sm h-fit transition-shadow hover:shadow-md" style={{ borderLeftColor: getColorHex(person) }}>
+                                                    <span className="font-bold text-[12px] leading-tight text-gray-900 mb-2">{i.t||''}</span>
                                                     <div className="flex justify-between items-center mt-auto">
                                                         <span className="text-[9px] font-black text-gray-400 uppercase">{view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)}` : ''}</span>
-                                                        <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">{i.time||''}{i.endTime ? ` - ${i.endTime}` : ''}</span>
+                                                        <span className="text-blue-600 font-bold font-mono text-[9px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">{i.time||''}{i.endTime ? ` - ${i.endTime}` : ''}</span>
                                                     </div>
                                                 </div>
                                             ))}
