@@ -968,7 +968,12 @@ function NewsWidget({ lang }) {
     const [cols, setCols] = useState(() => S.load('newscats', defaultCols)); 
     const [manage, setManage] = useState(false);
     const [newsData, setNewsData] = useState({});
+    
+    // Zoek states
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
     
     const [blocked, setBlocked] = useState(() => S.load('news_blocked', []));
     const [priority, setPriority] = useState(() => S.load('news_priority', []));
@@ -977,7 +982,6 @@ function NewsWidget({ lang }) {
     const [newCol, setNewCol] = useState('');
     const [newBlock, setNewBlock] = useState('');
     const [newPriority, setNewPriority] = useState(''); 
-    
     const [dragCol, setDragCol] = useState(null);
 
     const getGoogleNewsUrl = (cat, language) => {
@@ -990,6 +994,7 @@ function NewsWidget({ lang }) {
         return `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`;
     };
 
+    // Standaard kolommen inladen
     useEffect(() => {
         cols.forEach(cat => {
             const rssUrl = getGoogleNewsUrl(cat, lang);
@@ -1003,12 +1008,47 @@ function NewsWidget({ lang }) {
         });
     }, [cols, lang]);
 
+    // Debounce voor de zoekbalk (voorkomt API blokkade tijdens typen)
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearch(search.trim());
+        }, 600);
+        return () => clearTimeout(handler);
+    }, [search]);
+
+    // Live zoekopdracht uitvoeren voor kolom 2
+    useEffect(() => {
+        if (!debouncedSearch) {
+            setSearchResults([]);
+            return;
+        }
+        setIsSearching(true);
+        const h = lang === 'nl' ? 'nl' : 'en-US';
+        const g = lang === 'nl' ? 'NL' : 'US';
+        // when:30d dwingt Google om maximaal 30 dagen terug te zoeken
+        const query = `${debouncedSearch} when:30d`;
+        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${h}&gl=${g}`;
+        
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
+        .then(r=>r.json()).then(d => { 
+            if(d.items && Array.isArray(d.items)) {
+                setSearchResults(d.items); 
+            } else {
+                setSearchResults([]);
+            }
+            setIsSearching(false);
+        })
+        .catch(e => {
+            console.error("Zoek API fout", e);
+            setSearchResults([]);
+            setIsSearching(false);
+        });
+    }, [debouncedSearch, lang]);
+
     const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n = [...cols, newCol.toUpperCase()]; setCols(n); S.save('newscats', n); setNewCol(''); } };
     const removeCol = (c) => { const n = cols.filter(x => x !== c); setCols(n); S.save('newscats', n); };
-    
     const addBlock = () => { if(newBlock && !blocked.includes(newBlock.toLowerCase())) { const n = [...blocked, newBlock.toLowerCase()]; setBlocked(n); S.save('news_blocked', n); setNewBlock(''); } };
     const removeBlock = (b) => { const n = blocked.filter(x => x !== b); setBlocked(n); S.save('news_blocked', n); };
-
     const addPriority = () => { if(newPriority && !priority.includes(newPriority.toLowerCase())) { const n = [...priority, newPriority.toLowerCase()]; setPriority(n); S.save('news_priority', n); setNewPriority(''); } };
     const removePriority = (p) => { const n = priority.filter(x => x !== p); setPriority(n); S.save('news_priority', n); };
 
@@ -1043,7 +1083,6 @@ function NewsWidget({ lang }) {
         return colors[Math.abs(hash) % colors.length];
     };
 
-    // Helpt om overbodige dubbele samenvattingen eruit te filteren
     const isDescriptionRedundant = (title, desc) => {
         if (!desc) return true;
         const t = title.toLowerCase().trim();
@@ -1053,7 +1092,6 @@ function NewsWidget({ lang }) {
         return false;
     };
 
-    // Aggregeer en ontdubbel alle items voor de "ALLE NIEUWS" kolom
     const allNewsMap = new Map();
     Object.values(newsData).forEach(catItems => {
         catItems.forEach(item => {
@@ -1068,20 +1106,14 @@ function NewsWidget({ lang }) {
         let filtered = itemsList.filter(item => {
             const text = (item.title + " " + (item.source || '') + " " + (item.description || '')).toLowerCase();
             if (blocked.some(b => text.includes(b))) return false;
-            if (search) {
-                const terms = search.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
-                if (!terms.every(term => text.includes(term))) return false;
-            }
-            return true;
+            return true; // Lokale search block is verwijderd: filtert niet meer de andere kolommen
         });
 
         filtered.sort((a, b) => {
             const timeA = new Date(a.pubDate.replace(/-/g, '/')).getTime();
             const timeB = new Date(b.pubDate.replace(/-/g, '/')).getTime();
             
-            if (sortMode === 'nieuwste') {
-                return timeB - timeA;
-            }
+            if (sortMode === 'nieuwste') return timeB - timeA;
 
             const dayA = new Date(timeA).setHours(0,0,0,0);
             const dayB = new Date(timeB).setHours(0,0,0,0);
@@ -1093,9 +1125,7 @@ function NewsWidget({ lang }) {
             const isPriA = priority.some(p => srcA.includes(p)) ? 1 : 0;
             const isPriB = priority.some(p => srcB.includes(p)) ? 1 : 0;
             
-            if (isPriA !== isPriB) {
-                return isPriB - isPriA; 
-            }
+            if (isPriA !== isPriB) return isPriB - isPriA; 
             
             return timeB - timeA;
         });
@@ -1119,7 +1149,6 @@ function NewsWidget({ lang }) {
         const srcRegex = new RegExp(`[\\-\\|]?\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
         cleanDesc = cleanDesc.replace(srcRegex, '').trim();
 
-        // Check of de beschrijving dubbel is aan de titel
         if (isDescriptionRedundant(displayTitle, cleanDesc)) {
             cleanDesc = '';
         }
@@ -1131,13 +1160,11 @@ function NewsWidget({ lang }) {
                 <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition">
                     {displayTitle}
                 </p>
-                
                 {cleanDesc && (
                     <p className="text-[#0b57d0] font-semibold text-[11px] line-clamp-2 mt-1.5 leading-snug">
                         {cleanDesc}
                     </p>
                 )}
-                
                 <div className="flex justify-between items-end mt-3">
                     <span className="text-[10px] font-black uppercase tracking-wider truncate max-w-[60%] flex items-center gap-1" style={{ color: getSourceColor(sourceName) }}>
                         {isPriorityItem && <span title="Voorrang bron">⭐</span>}
@@ -1165,7 +1192,7 @@ function NewsWidget({ lang }) {
 
                     <input 
                         type="text" 
-                        placeholder="Search..." 
+                        placeholder="Live nieuws zoeken..." 
                         value={search} 
                         onChange={e=>setSearch(e.target.value)} 
                         className="w-1/2 min-w-[120px] px-3 py-1.5 text-[11px] font-medium border border-gray-200 rounded-md outline-none focus:border-blue-500 shadow-sm transition" 
@@ -1214,23 +1241,37 @@ function NewsWidget({ lang }) {
 
             <div className="flex overflow-x-auto flex-1 bg-white hide-scroll">
                 
-                {/* Vaste 'ALLE NIEUWS' Master Kolom */}
-                <div className="min-w-[320px] w-[320px] border-r-[3px] border-gray-100 flex flex-col shrink-0 bg-gray-50/50">
-                    <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-gray-50 sticky top-0 z-10 shadow-sm">
+                {/* 1. Vaste 'ALLE NIEUWS' Master Kolom */}
+                <div className="min-w-[320px] w-[320px] border-r border-gray-200 flex flex-col shrink-0">
+                    <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
                         <h4 className="text-[12px] font-black text-gray-900 uppercase tracking-wide truncate pr-2">
                             ALLE NIEUWS
                         </h4>
                     </div>
-                    <div className="flex-1 overflow-y-auto hide-scroll p-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto hide-scroll p-4 space-y-4 bg-gray-50/30">
                         {filterAndSortItems(allNewsRaw).slice(0, 30).map((item, i) => renderItemCard(item, i))}
                         {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen...</div>}
                     </div>
                 </div>
 
-                {/* Dynamische Categorie Kolommen */}
+                {/* 2. Vaste 'ZOEKEN (LIVE)' Kolom (Reageert puur op zoekveld) */}
+                <div className="min-w-[320px] w-[320px] border-r-[3px] border-blue-100 flex flex-col shrink-0 bg-blue-50/10">
+                    <div className="flex justify-between items-center px-4 py-3 border-b border-blue-100 bg-white sticky top-0 z-10">
+                        <h4 className="text-[12px] font-black text-blue-600 uppercase tracking-wide truncate pr-2">
+                            {debouncedSearch ? `ZOEKEN: ${debouncedSearch}` : 'ZOEKEN (LIVE)'}
+                        </h4>
+                    </div>
+                    <div className="flex-1 overflow-y-auto hide-scroll p-4 space-y-4">
+                        {!debouncedSearch && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Typ een zoekterm in de balk hierboven om wereldwijd actueel nieuws (tot 30 dagen) op te halen.</div>}
+                        {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Nieuws ophalen...</div>}
+                        {!isSearching && debouncedSearch && searchResults.length === 0 && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Geen resultaten gevonden voor "{debouncedSearch}".</div>}
+                        {!isSearching && filterAndSortItems(searchResults).slice(0, 30).map((item, i) => renderItemCard(item, i))}
+                    </div>
+                </div>
+
+                {/* 3. Dynamische Categorie Kolommen */}
                 {cols.map(cat => {
                     const items = filterAndSortItems(newsData[cat] || []);
-
                     return (
                         <div key={cat} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, cat)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, cat)} className={`min-w-[320px] w-[320px] border-r border-gray-200 flex flex-col shrink-0 ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                             <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
