@@ -972,8 +972,6 @@ function NewsWidget({ lang }) {
     
     const [blocked, setBlocked] = useState(() => S.load('news_blocked', []));
     const [priority, setPriority] = useState(() => S.load('news_priority', []));
-    
-    // Nieuwe state voor globale sortering
     const [sortMode, setSortMode] = useState(() => S.load('news_sort', 'bron'));
     
     const [newCol, setNewCol] = useState('');
@@ -987,10 +985,8 @@ function NewsWidget({ lang }) {
         const h = language === 'nl' ? 'nl' : 'en-US';
         const g = language === 'nl' ? 'NL' : 'US';
         const c = cat.toLowerCase();
-        
         if (c === 'top nieuws' || c === 'headlines') return `https://news.google.com/rss?hl=${h}&gl=${g}`;
         if (c === 'wereld' || c === 'europa' || c === 'usa') return `https://news.google.com/rss/headlines/section/topic/WORLD?hl=${h}&gl=${g}&q=${encodeURIComponent(cat)}`;
-        
         return `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`;
     };
 
@@ -1029,12 +1025,6 @@ function NewsWidget({ lang }) {
         setDragCol(null);
     };
 
-    const toggleSortMode = () => {
-        const nextMode = sortMode === 'nieuwste' ? 'bron' : 'nieuwste';
-        setSortMode(nextMode);
-        S.save('news_sort', nextMode);
-    };
-
     const formatDate = (pubDate) => {
         if (!pubDate) return '';
         try {
@@ -1053,6 +1043,114 @@ function NewsWidget({ lang }) {
         return colors[Math.abs(hash) % colors.length];
     };
 
+    // Helpt om overbodige dubbele samenvattingen eruit te filteren
+    const isDescriptionRedundant = (title, desc) => {
+        if (!desc) return true;
+        const t = title.toLowerCase().trim();
+        const d = desc.toLowerCase().trim();
+        if (t === d) return true;
+        if (d.startsWith(t.substring(0, Math.floor(t.length * 0.8)))) return true;
+        return false;
+    };
+
+    // Aggregeer en ontdubbel alle items voor de "ALLE NIEUWS" kolom
+    const allNewsMap = new Map();
+    Object.values(newsData).forEach(catItems => {
+        catItems.forEach(item => {
+            if (!allNewsMap.has(item.link)) {
+                allNewsMap.set(item.link, item);
+            }
+        });
+    });
+    const allNewsRaw = Array.from(allNewsMap.values());
+
+    const filterAndSortItems = (itemsList) => {
+        let filtered = itemsList.filter(item => {
+            const text = (item.title + " " + (item.source || '') + " " + (item.description || '')).toLowerCase();
+            if (blocked.some(b => text.includes(b))) return false;
+            if (search) {
+                const terms = search.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
+                if (!terms.every(term => text.includes(term))) return false;
+            }
+            return true;
+        });
+
+        filtered.sort((a, b) => {
+            const timeA = new Date(a.pubDate.replace(/-/g, '/')).getTime();
+            const timeB = new Date(b.pubDate.replace(/-/g, '/')).getTime();
+            
+            if (sortMode === 'nieuwste') {
+                return timeB - timeA;
+            }
+
+            const dayA = new Date(timeA).setHours(0,0,0,0);
+            const dayB = new Date(timeB).setHours(0,0,0,0);
+
+            if (dayA !== dayB) return dayB - dayA;
+
+            const srcA = (a.source || a.title || '').toLowerCase();
+            const srcB = (b.source || b.title || '').toLowerCase();
+            const isPriA = priority.some(p => srcA.includes(p)) ? 1 : 0;
+            const isPriB = priority.some(p => srcB.includes(p)) ? 1 : 0;
+            
+            if (isPriA !== isPriB) {
+                return isPriB - isPriA; 
+            }
+            
+            return timeB - timeA;
+        });
+
+        return filtered;
+    };
+
+    const renderItemCard = (item, i) => {
+        let displayTitle = item.title || '';
+        let sourceName = item.source || '';
+        
+        const titleParts = displayTitle.split(' - ');
+        if (titleParts.length > 1) {
+            const possibleSource = titleParts.pop().trim();
+            displayTitle = titleParts.join(' - ');
+            if (!sourceName || sourceName === 'RSS') sourceName = possibleSource;
+        }
+        if (!sourceName || sourceName === 'RSS') sourceName = 'NIEUWSBRON';
+
+        let cleanDesc = item.description?.replace(/<[^>]+>/g, '').trim() || '';
+        const srcRegex = new RegExp(`[\\-\\|]?\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+        cleanDesc = cleanDesc.replace(srcRegex, '').trim();
+
+        // Check of de beschrijving dubbel is aan de titel
+        if (isDescriptionRedundant(displayTitle, cleanDesc)) {
+            cleanDesc = '';
+        }
+
+        const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
+
+        return (
+            <a href={item.link} target="_blank" key={i} className={`block border-b border-gray-100 pb-4 hover:bg-gray-50 transition group ${isPriorityItem && sortMode === 'bron' ? 'bg-green-50/30 -mx-2 px-2 pt-2 rounded' : ''}`}>
+                <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition">
+                    {displayTitle}
+                </p>
+                
+                {cleanDesc && (
+                    <p className="text-[#0b57d0] font-semibold text-[11px] line-clamp-2 mt-1.5 leading-snug">
+                        {cleanDesc}
+                    </p>
+                )}
+                
+                <div className="flex justify-between items-end mt-3">
+                    <span className="text-[10px] font-black uppercase tracking-wider truncate max-w-[60%] flex items-center gap-1" style={{ color: getSourceColor(sourceName) }}>
+                        {isPriorityItem && <span title="Voorrang bron">⭐</span>}
+                        {sourceName}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-400 shrink-0">
+                        {formatDate(item.pubDate)}
+                    </span>
+                </div>
+            </a>
+        );
+    };
+
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
             <div className="p-3 bg-[#f8f9fa] border-b border-gray-200 flex justify-between items-center shrink-0">
@@ -1060,7 +1158,6 @@ function NewsWidget({ lang }) {
                     <Ico.Nws/> NEWS
                 </div>
                 <div className="flex gap-2 flex-1 max-w-[500px] justify-end">
-                    {/* Nieuwe Sorteerknop */}
                     <div className="flex bg-[#eef0f2] p-1 rounded-md border border-gray-200 shrink-0">
                         <button onClick={() => {setSortMode('nieuwste'); S.save('news_sort', 'nieuwste');}} className={`px-3 py-1 text-[9px] font-bold rounded ${sortMode === 'nieuwste' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500'}`}>Nieuwste</button>
                         <button onClick={() => {setSortMode('bron'); S.save('news_sort', 'bron');}} className={`px-3 py-1 text-[9px] font-bold rounded ${sortMode === 'bron' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500'}`}>Voorrang</button>
@@ -1092,7 +1189,7 @@ function NewsWidget({ lang }) {
                     
                     <div className="flex gap-2 items-center">
                         <span className="font-bold w-20 text-green-700">Voorrang bron:</span>
-                        <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addPriority()} className="flex-1 p-2 border rounded-md outline-none focus:border-green-500" placeholder="Bron die bovenaan moet staan (bijv. Tweakers)..." />
+                        <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addPriority()} className="flex-1 p-2 border rounded-md outline-none focus:border-green-500" placeholder="Bron (bijv. Tweakers)..." />
                         <button onClick={addPriority} className="bg-green-600 text-white px-4 py-2 rounded-md font-bold hover:bg-green-700 transition">+</button>
                     </div>
                     {priority.length > 0 && (
@@ -1116,46 +1213,23 @@ function NewsWidget({ lang }) {
             )}
 
             <div className="flex overflow-x-auto flex-1 bg-white hide-scroll">
+                
+                {/* Vaste 'ALLE NIEUWS' Master Kolom */}
+                <div className="min-w-[320px] w-[320px] border-r-[3px] border-gray-100 flex flex-col shrink-0 bg-gray-50/50">
+                    <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-gray-50 sticky top-0 z-10 shadow-sm">
+                        <h4 className="text-[12px] font-black text-gray-900 uppercase tracking-wide truncate pr-2">
+                            ALLE NIEUWS
+                        </h4>
+                    </div>
+                    <div className="flex-1 overflow-y-auto hide-scroll p-4 space-y-4">
+                        {filterAndSortItems(allNewsRaw).slice(0, 30).map((item, i) => renderItemCard(item, i))}
+                        {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen...</div>}
+                    </div>
+                </div>
+
+                {/* Dynamische Categorie Kolommen */}
                 {cols.map(cat => {
-                    let items = (newsData[cat] || []).filter(item => {
-                        const text = (item.title + " " + (item.source || '') + " " + (item.description || '')).toLowerCase();
-                        if (blocked.some(b => text.includes(b))) return false;
-                        if (search) {
-                            const terms = search.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
-                            if (!terms.every(term => text.includes(term))) return false;
-                        }
-                        return true;
-                    });
-
-                    // Nieuw sorteeralgoritme: Dag -> Bron -> Tijd (of puur op Tijd)
-                    items.sort((a, b) => {
-                        const timeA = new Date(a.pubDate.replace(/-/g, '/')).getTime();
-                        const timeB = new Date(b.pubDate.replace(/-/g, '/')).getTime();
-                        
-                        if (sortMode === 'nieuwste') {
-                            return timeB - timeA;
-                        }
-
-                        // Sortering voor 'bron' (Voorrang):
-                        const dayA = new Date(timeA).setHours(0,0,0,0);
-                        const dayB = new Date(timeB).setHours(0,0,0,0);
-
-                        // Stap 1: Zelfde kalenderdag? Nee = nieuwste dag bovenaan
-                        if (dayA !== dayB) return dayB - dayA;
-
-                        // Stap 2: Zelfde dag. Heeft er één prioriteit?
-                        const srcA = (a.source || a.title || '').toLowerCase();
-                        const srcB = (b.source || b.title || '').toLowerCase();
-                        const isPriA = priority.some(p => srcA.includes(p)) ? 1 : 0;
-                        const isPriB = priority.some(p => srcB.includes(p)) ? 1 : 0;
-                        
-                        if (isPriA !== isPriB) {
-                            return isPriB - isPriA; // Prioriteit (1) staat boven Normaal (0)
-                        }
-                        
-                        // Stap 3: Zelfde dag, zelfde prioriteit -> sorteer op exacte tijd
-                        return timeB - timeA;
-                    });
+                    const items = filterAndSortItems(newsData[cat] || []);
 
                     return (
                         <div key={cat} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, cat)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, cat)} className={`min-w-[320px] w-[320px] border-r border-gray-200 flex flex-col shrink-0 ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
@@ -1167,51 +1241,9 @@ function NewsWidget({ lang }) {
                             </div>
                             
                             <div className="flex-1 overflow-y-auto hide-scroll p-4 space-y-4">
-                                {items.slice(0, 20).map((item, i) => {
-                                    let displayTitle = item.title || '';
-                                    let sourceName = item.source || '';
-                                    
-                                    const titleParts = displayTitle.split(' - ');
-                                    if (titleParts.length > 1) {
-                                        const possibleSource = titleParts.pop().trim();
-                                        displayTitle = titleParts.join(' - ');
-                                        if (!sourceName || sourceName === 'RSS') sourceName = possibleSource;
-                                    }
-                                    if (!sourceName || sourceName === 'RSS') sourceName = 'NIEUWSBRON';
-
-                                    let cleanDesc = item.description?.replace(/<[^>]+>/g, '').trim() || '';
-                                    const srcRegex = new RegExp(`[\\-\\|]?\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
-                                    cleanDesc = cleanDesc.replace(srcRegex, '').trim();
-
-                                    const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
-
-                                    return (
-                                        <a href={item.link} target="_blank" key={i} className={`block border-b border-gray-100 pb-4 hover:bg-gray-50 transition group ${isPriorityItem && sortMode === 'bron' ? 'bg-green-50/30 -mx-2 px-2 pt-2 rounded' : ''}`}>
-                                            <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition">
-                                                {displayTitle}
-                                            </p>
-                                            
-                                            {cleanDesc && (
-                                                <p className="text-[#0b57d0] font-semibold text-[11px] line-clamp-2 mt-1.5 leading-snug">
-                                                    {cleanDesc}
-                                                </p>
-                                            )}
-                                            
-                                            <div className="flex justify-between items-end mt-3">
-                                                <span className="text-[10px] font-black uppercase tracking-wider truncate max-w-[60%] flex items-center gap-1" style={{ color: getSourceColor(sourceName) }}>
-                                                    {isPriorityItem && <span title="Voorrang bron">⭐</span>}
-                                                    {sourceName}
-                                                </span>
-                                                <span className="text-[10px] font-bold text-gray-400 shrink-0">
-                                                    {formatDate(item.pubDate)}
-                                                </span>
-                                            </div>
-                                        </a>
-                                    )
-                                })}
-                                
-                                {(!newsData[cat]) && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Ophalen via Google Nieuws...</div>}
-                                {(newsData[cat] && items.length === 0) && <div className="text-[11px] text-gray-400 font-medium text-center mt-10">Geen nieuws gevonden.</div>}
+                                {items.slice(0, 20).map((item, i) => renderItemCard(item, i))}
+                                {(!newsData[cat]) && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Laden...</div>}
+                                {(newsData[cat] && items.length === 0) && <div className="text-[11px] text-gray-400 font-medium text-center mt-10">Geen resultaten.</div>}
                             </div>
                         </div>
                     )
@@ -1220,6 +1252,7 @@ function NewsWidget({ lang }) {
         </div>
     );
 }
+    
 function RadarWidget({ lang }) {
     const [assets, setAssets] = useState(S.load('inv_assets', ['ASML', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'META', 'AAPL', 'NVO']));
     const [manage, setManage] = useState(false);
