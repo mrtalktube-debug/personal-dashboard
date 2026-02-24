@@ -969,13 +969,13 @@ function NewsWidget({ lang }) {
     const [manage, setManage] = useState(false);
     const [newsData, setNewsData] = useState({});
     
-    // Zoek states voor de 2e kolom
+    // Zoek states
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     
-    // Zwarte lijst, prioriteit en globale sortering (3-weg)
+    // Zwarte lijst, prioriteit en globale sortering
     const [blocked, setBlocked] = useState(() => S.load('news_blocked', []));
     const [priority, setPriority] = useState(() => S.load('news_priority', []));
     const [sortMode, setSortMode] = useState(() => S.load('news_sort', 'tijd')); 
@@ -998,7 +998,6 @@ function NewsWidget({ lang }) {
         return `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`;
     };
 
-    // Laad standaard onderwerpen
     useEffect(() => {
         cols.forEach(cat => {
             const rssUrl = getGoogleNewsUrl(cat, lang);
@@ -1013,13 +1012,11 @@ function NewsWidget({ lang }) {
         });
     }, [cols, lang]);
 
-    // Zoekbalk vertraging
     useEffect(() => {
         const handler = setTimeout(() => setDebouncedSearch(search.trim()), 600);
         return () => clearTimeout(handler);
     }, [search]);
 
-    // Live Web Search voor Kolom 2
     useEffect(() => {
         if (!debouncedSearch) { setSearchResults([]); return; }
         setIsSearching(true);
@@ -1040,7 +1037,6 @@ function NewsWidget({ lang }) {
         }).catch(e => { setSearchResults([]); setIsSearching(false); });
     }, [debouncedSearch, lang]);
 
-    // Beheer Functies
     const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n = [...cols, newCol.toUpperCase()]; setCols(n); S.save('newscats', n); setNewCol(''); } };
     const removeCol = (c) => { const n = cols.filter(x => x !== c); setCols(n); S.save('newscats', n); };
     const addBlock = () => { if(newBlock && !blocked.includes(newBlock.toLowerCase())) { const n = [...blocked, newBlock.toLowerCase()]; setBlocked(n); S.save('news_blocked', n); setNewBlock(''); } };
@@ -1048,7 +1044,6 @@ function NewsWidget({ lang }) {
     const addPriority = () => { if(newPriority && !priority.includes(newPriority.toLowerCase())) { const n = [...priority, newPriority.toLowerCase()]; setPriority(n); S.save('news_priority', n); setNewPriority(''); } };
     const removePriority = (p) => { const n = priority.filter(x => x !== p); setPriority(n); S.save('news_priority', n); };
 
-    // Drag & Drop Handlers voor Badges
     const handleDragStart = (e, item, type) => { setDragItem(item); setDragType(type); e.dataTransfer.effectAllowed = "move"; };
     const handleDrop = (e, targetItem, type) => {
         e.preventDefault();
@@ -1296,40 +1291,34 @@ function NewsWidget({ lang }) {
                 </div>
             )}
 
-            {/* Content: Dynamische Kolommen Setup (100% breed op PC, 100% lang op Mobiel) */}
-            <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-y-hidden overflow-x-hidden md:overflow-x-auto hide-scroll md:snap-x md:snap-mandatory">
-                
-                {/* Kolom 1: ALLE NIEUWS (De Master Feed) */}
-                <div className="w-full md:min-w-full md:h-full flex flex-col shrink-0 md:snap-start">
-                    <div className="flex justify-between items-center px-4 py-2 border-b border-gray-200 bg-gray-50 sticky top-0 z-10 shadow-sm">
-                        <h4 className="text-[12px] font-black text-gray-900 uppercase tracking-wide truncate pr-2">
-                            ALLE NIEUWS
-                        </h4>
-                    </div>
-                    {/* Binnenste container scrolt op PC */}
-                    <div className="flex-1 md:overflow-y-auto hide-scroll p-4">
-                        {filterAndSortItems(allNewsRaw).slice(0, 50).map((item, i) => renderItemCard(item, i))}
-                        {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen...</div>}
-                    </div>
-                </div>
-
-                {/* Kolom 2: ZOEKEN (LIVE) - Verschijnt alleen als er gezocht wordt */}
-                {search.trim() !== '' && (
-                    <div className="w-full md:min-w-full md:h-full flex flex-col shrink-0 md:snap-start border-t-4 md:border-t-0 md:border-l border-gray-200 bg-blue-50/10">
-                        <div className="flex justify-between items-center px-4 py-2 border-b border-blue-100 bg-white sticky top-0 z-10 shadow-sm">
-                            <h4 className="text-[12px] font-black text-blue-600 uppercase tracking-wide truncate pr-2">
-                                {debouncedSearch ? `ZOEKEN: ${debouncedSearch}` : 'LIVE ZOEKEN'}
+            {/* Enkele Kolom Weergave: Toggles naadloos tussen Alle Nieuws en Zoeken */}
+            <div className="flex-1 overflow-y-auto hide-scroll p-4 bg-gray-50/30">
+                {!debouncedSearch ? (
+                    <div className="w-full flex flex-col">
+                        <div className="flex justify-between items-center pb-2 mb-4 border-b border-gray-200 sticky top-0 bg-gray-50/90 backdrop-blur-sm z-10">
+                            <h4 className="text-[12px] font-black text-gray-900 uppercase tracking-wide truncate">
+                                ALLE NIEUWS
                             </h4>
                         </div>
-                        {/* Binnenste container scrolt op PC */}
-                        <div className="flex-1 md:overflow-y-auto hide-scroll p-4">
+                        <div className="space-y-4">
+                            {filterAndSortItems(allNewsRaw).slice(0, 50).map((item, i) => renderItemCard(item, i))}
+                            {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen...</div>}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="w-full flex flex-col">
+                        <div className="flex justify-between items-center pb-2 mb-4 border-b border-blue-200 sticky top-0 bg-gray-50/90 backdrop-blur-sm z-10">
+                            <h4 className="text-[12px] font-black text-blue-600 uppercase tracking-wide truncate">
+                                ZOEKEN: {debouncedSearch}
+                            </h4>
+                        </div>
+                        <div className="space-y-4">
                             {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Nieuws ophalen...</div>}
-                            {!isSearching && debouncedSearch && searchResults.length === 0 && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Geen resultaten gevonden voor "{debouncedSearch}".</div>}
+                            {!isSearching && searchResults.length === 0 && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Geen resultaten gevonden voor "{debouncedSearch}".</div>}
                             {!isSearching && filterAndSortItems(searchResults).slice(0, 30).map((item, i) => renderItemCard(item, i))}
                         </div>
                     </div>
                 )}
-
             </div>
         </div>
     );
