@@ -78,10 +78,11 @@ const Ico = {
 };
 
 function WeatherBar({ lang }) {
-    const [c, setC] = useState(S.load('wcity', 'Zoetermeer'));
+    /* Wijziging: standaardwaarde geoptimaliseerd naar de laatst opgeslagen locatie, fallback naar Den Haag i.p.v. leeg/Amsterdam */
+    const [c, setC] = useState(() => S.load('wcity', 'Den Haag'));
     const [w, setW] = useState(null);
     const [locLoading, setLocLoading] = useState(false);
-    const [autoGps, setAutoGps] = useState(S.load('auto_gps', true));
+    const [autoGps, setAutoGps] = useState(() => S.load('auto_gps', true));
     
     const [isEditing, setIsEditing] = useState(false);
     const [editVal, setEditVal] = useState('');
@@ -110,16 +111,22 @@ function WeatherBar({ lang }) {
             try {
                 const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=${lang}`);
                 const data = await res.json();
-                const newCity = data.city || data.locality || 'Huidige Locatie';
-                setC(newCity);
-                S.save('wcity', newCity);
+                /* Wijziging: Huidige Locatie string verwijderd, we pakken alleen geldige steden of skippen het */
+                const newCity = data.city || data.locality;
+                if(newCity) {
+                    setC(newCity);
+                    S.save('wcity', newCity);
+                }
                 setAutoGps(true);
                 S.save('auto_gps', true);
             } catch(e) { console.error("Locatiefout:", e); }
             setLocLoading(false);
         }, () => {
-            if(!silent) alert('Toegang tot locatie geweigerd.');
-            setLocLoading(false); setAutoGps(false); S.save('auto_gps', false);
+            /* Wijziging: Als GPS faalt door werkgever permissies, behouden we in stilte de laatst bekende stad (geen Huidige Locatie fallback meer) */
+            if(!silent) alert('Toegang tot locatie geweigerd. Laatst gekozen locatie wordt behouden.');
+            setLocLoading(false); 
+            setAutoGps(false); 
+            S.save('auto_gps', false);
         });
     };
 
@@ -149,21 +156,13 @@ function WeatherBar({ lang }) {
 
     const WxIco = ({ code }) => {
         if (code === undefined || code === null) return <Ico.Wea />; 
-        // 0: Helder (Zon)
         if (code === 0) return <svg className="w-4 h-4 shrink-0 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" strokeWidth="2"/><path strokeWidth="2" strokeLinecap="round" d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>; 
-        // 1, 2: Deels bewolkt (Zon + Wolk)
         if (code === 1 || code === 2) return <svg className="w-4 h-4 shrink-0 text-yellow-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="17" cy="7" r="3"></circle><path d="M17 2v2M22 7h-2M13.5 10.5l-1.5-1.5M20.5 3.5l-1.5 1.5M10.4 14.6a4.5 4.5 0 1 0 7.4-4.2A5.5 5.5 0 0 0 3 15.5 4.5 4.5 0 0 0 7.5 20h8"></path></svg>;
-        // 3: Bewolkt (Wolk)
         if (code === 3) return <svg className="w-4 h-4 shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>; 
-        // 45, 48: Mist
         if (code === 45 || code === 48) return <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" d="M4 8h16M4 12h16M4 16h16"/></svg>;
-        // 51-57: Lichte regen / Motregen
         if (code >= 51 && code <= 57) return <svg className="w-4 h-4 shrink-0 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 13v8m-4-6v8m-4-6v8m9-10.9A5 5 0 107.1 8a6 6 0 1010.9 3.1z"/></svg>;
-        // 61-67, 80-82: Regen
         if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return <svg className="w-4 h-4 shrink-0 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 13v8m-4-6v8m-4-6v8m9-10.9A5 5 0 107.1 8a6 6 0 1010.9 3.1z"/></svg>; 
-        // 71-77, 85, 86: Sneeuw
         if ((code >= 71 && code <= 77) || code === 85 || code === 86) return <svg className="w-4 h-4 shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 2v20m5.5-15.5l-11 11m0-11l11 11"/></svg>; 
-        // 95-99: Onweer
         if (code >= 95) return <svg className="w-4 h-4 shrink-0 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>; 
         return <Ico.Wea />; 
     };
