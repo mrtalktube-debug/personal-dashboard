@@ -984,9 +984,25 @@ function NewsWidget({ lang }) {
     const [newBlock, setNewBlock] = useState('');
     const [newPriority, setNewPriority] = useState(''); 
     
-    // Unified Drag & Drop state
+    // Drag & Drop state
     const [dragItem, setDragItem] = useState(null);
     const [dragType, setDragType] = useState(null);
+
+    // Cloud Synchronisatie Functie
+    const syncNewsSettings = () => {
+        const cloudSettings = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('d_')) {
+                cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
+            }
+        }
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings })
+        }).catch(()=>{});
+    };
 
     const getGoogleNewsUrl = (cat, language) => {
         if (cat.startsWith('http')) return cat;
@@ -1037,12 +1053,13 @@ function NewsWidget({ lang }) {
         }).catch(e => { setSearchResults([]); setIsSearching(false); });
     }, [debouncedSearch, lang]);
 
-    const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n = [...cols, newCol.toUpperCase()]; setCols(n); S.save('newscats', n); setNewCol(''); } };
-    const removeCol = (c) => { const n = cols.filter(x => x !== c); setCols(n); S.save('newscats', n); };
-    const addBlock = () => { if(newBlock && !blocked.includes(newBlock.toLowerCase())) { const n = [...blocked, newBlock.toLowerCase()]; setBlocked(n); S.save('news_blocked', n); setNewBlock(''); } };
-    const removeBlock = (b) => { const n = blocked.filter(x => x !== b); setBlocked(n); S.save('news_blocked', n); };
-    const addPriority = () => { if(newPriority && !priority.includes(newPriority.toLowerCase())) { const n = [...priority, newPriority.toLowerCase()]; setPriority(n); S.save('news_priority', n); setNewPriority(''); } };
-    const removePriority = (p) => { const n = priority.filter(x => x !== p); setPriority(n); S.save('news_priority', n); };
+    // Beheer Functies met directe Cloud Sync
+    const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n = [...cols, newCol.toUpperCase()]; setCols(n); S.save('newscats', n); syncNewsSettings(); setNewCol(''); } };
+    const removeCol = (c) => { const n = cols.filter(x => x !== c); setCols(n); S.save('newscats', n); syncNewsSettings(); };
+    const addBlock = () => { if(newBlock && !blocked.includes(newBlock.toLowerCase())) { const n = [...blocked, newBlock.toLowerCase()]; setBlocked(n); S.save('news_blocked', n); syncNewsSettings(); setNewBlock(''); } };
+    const removeBlock = (b) => { const n = blocked.filter(x => x !== b); setBlocked(n); S.save('news_blocked', n); syncNewsSettings(); };
+    const addPriority = () => { if(newPriority && !priority.includes(newPriority.toLowerCase())) { const n = [...priority, newPriority.toLowerCase()]; setPriority(n); S.save('news_priority', n); syncNewsSettings(); setNewPriority(''); } };
+    const removePriority = (p) => { const n = priority.filter(x => x !== p); setPriority(n); S.save('news_priority', n); syncNewsSettings(); };
 
     const handleDragStart = (e, item, type) => { setDragItem(item); setDragType(type); e.dataTransfer.effectAllowed = "move"; };
     const handleDrop = (e, targetItem, type) => {
@@ -1054,14 +1071,14 @@ function NewsWidget({ lang }) {
             const dropIdx = newCols.indexOf(targetItem);
             newCols.splice(dragIdx, 1);
             newCols.splice(dropIdx, 0, dragItem);
-            setCols(newCols); S.save('newscats', newCols);
+            setCols(newCols); S.save('newscats', newCols); syncNewsSettings();
         } else if (type === 'pri') {
             const newPri = [...priority];
             const dragIdx = newPri.indexOf(dragItem);
             const dropIdx = newPri.indexOf(targetItem);
             newPri.splice(dragIdx, 1);
             newPri.splice(dropIdx, 0, dragItem);
-            setPriority(newPri); S.save('news_priority', newPri);
+            setPriority(newPri); S.save('news_priority', newPri); syncNewsSettings();
         }
         setDragItem(null); setDragType(null);
     };
@@ -1180,7 +1197,6 @@ function NewsWidget({ lang }) {
                     </p>
                 )}
                 
-                {/* Dynamische 3-delige Footer */}
                 <div className="flex justify-between items-start mt-3 flex-wrap gap-2">
                     <div className="flex items-center gap-1.5 max-w-[70%] flex-wrap">
                         {item._feedCategory && (
@@ -1201,6 +1217,12 @@ function NewsWidget({ lang }) {
         );
     };
 
+    const handleSortChange = (m) => {
+        setSortMode(m); 
+        S.save('news_sort', m); 
+        syncNewsSettings();
+    };
+
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
             <div className="p-3 bg-[#f8f9fa] border-b border-gray-200 flex justify-between items-center shrink-0">
@@ -1210,7 +1232,7 @@ function NewsWidget({ lang }) {
                 <div className="flex gap-2 flex-1 justify-end items-center">
                     <div className="hidden sm:flex bg-[#eef0f2] p-1 rounded-md border border-gray-200 shrink-0">
                         {['tijd', 'bron', 'onderwerp'].map(m => (
-                            <button key={m} onClick={() => {setSortMode(m); S.save('news_sort', m);}} className={`px-3 py-1 text-[9px] font-bold rounded uppercase transition ${sortMode === m ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:bg-gray-200'}`}>
+                            <button key={m} onClick={() => handleSortChange(m)} className={`px-3 py-1 text-[9px] font-bold rounded uppercase transition ${sortMode === m ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:bg-gray-200'}`}>
                                 {m}
                             </button>
                         ))}
@@ -1234,7 +1256,7 @@ function NewsWidget({ lang }) {
             
             <div className="sm:hidden flex bg-[#f8f9fa] border-b border-gray-200 p-2 justify-center gap-1 shrink-0">
                 {['tijd', 'bron', 'onderwerp'].map(m => (
-                    <button key={m} onClick={() => {setSortMode(m); S.save('news_sort', m);}} className={`flex-1 px-3 py-1.5 text-[9px] font-bold rounded uppercase transition ${sortMode === m ? 'bg-white shadow-sm text-blue-700 border border-gray-200' : 'text-gray-500'}`}>
+                    <button key={m} onClick={() => handleSortChange(m)} className={`flex-1 px-3 py-1.5 text-[9px] font-bold rounded uppercase transition ${sortMode === m ? 'bg-white shadow-sm text-blue-700 border border-gray-200' : 'text-gray-500'}`}>
                         {m}
                     </button>
                 ))}
@@ -1291,7 +1313,6 @@ function NewsWidget({ lang }) {
                 </div>
             )}
 
-            {/* Enkele Kolom Weergave: Toggles naadloos tussen Alle Nieuws en Zoeken */}
             <div className="flex-1 overflow-y-auto hide-scroll p-4 bg-gray-50/30">
                 {!debouncedSearch ? (
                     <div className="w-full flex flex-col">
@@ -1301,7 +1322,8 @@ function NewsWidget({ lang }) {
                             </h4>
                         </div>
                         <div className="space-y-4">
-                            {filterAndSortItems(allNewsRaw).slice(0, 50).map((item, i) => renderItemCard(item, i))}
+                            {/* Verhoogd naar 150 items voor een langere feed */}
+                            {filterAndSortItems(allNewsRaw).slice(0, 150).map((item, i) => renderItemCard(item, i))}
                             {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen...</div>}
                         </div>
                     </div>
@@ -1315,7 +1337,8 @@ function NewsWidget({ lang }) {
                         <div className="space-y-4">
                             {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Nieuws ophalen...</div>}
                             {!isSearching && searchResults.length === 0 && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Geen resultaten gevonden voor "{debouncedSearch}".</div>}
-                            {!isSearching && filterAndSortItems(searchResults).slice(0, 30).map((item, i) => renderItemCard(item, i))}
+                            {/* Verhoogd naar 100 items voor zoekresultaten */}
+                            {!isSearching && filterAndSortItems(searchResults).slice(0, 100).map((item, i) => renderItemCard(item, i))}
                         </div>
                     </div>
                 )}
