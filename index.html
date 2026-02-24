@@ -984,6 +984,7 @@ function NewsWidget({ lang }) {
     const [priority, setPriority] = useState(() => S.load('news_priority', []));
     const [sortMode, setSortMode] = useState(() => S.load('news_sort', 'tijd')); 
     
+    // `NIEUW: GNews API key state`
     const [gnewsKey, setGnewsKey] = useState(() => S.load('news_gnews_key', ''));
     
     const [newCol, setNewCol] = useState('');
@@ -1009,12 +1010,13 @@ function NewsWidget({ lang }) {
         }).catch(()=>{});
     };
 
+    // `NIEUW: Tijdfilter die checkt of een datum Vandaag of Gisteren is`
     const isRecent = (dateString) => {
         if (!dateString) return false;
         try {
+            // Repareer datum opmaak voor Safari/iOS comptabiliteit
             const cleanDate = dateString.replace(/-/g, '/').replace('T', ' ').replace('Z', '');
             const articleTime = new Date(cleanDate).getTime();
-            if (isNaN(articleTime)) return false;
             
             const today = new Date();
             today.setHours(0,0,0,0);
@@ -1026,21 +1028,6 @@ function NewsWidget({ lang }) {
         } catch(e) { 
             return false; 
         }
-    };
-
-    const formatDate = (pubDate) => {
-        if (!pubDate) return '';
-        try {
-            const cleanDate = pubDate.replace(/-/g, '/').replace('T', ' ').replace('Z', '');
-            const d = new Date(cleanDate);
-            if (isNaN(d.getTime())) return pubDate; 
-            const dd = String(d.getDate()).padStart(2, '0');
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const yyyy = d.getFullYear();
-            const hh = String(d.getHours()).padStart(2, '0');
-            const mins = String(d.getMinutes()).padStart(2, '0');
-            return `${dd}-${mm}-${yyyy} | ${hh}:${mins}`;
-        } catch(e) { return pubDate; }
     };
 
     const getGoogleNewsUrl = (cat, language) => {
@@ -1055,26 +1042,30 @@ function NewsWidget({ lang }) {
 
     useEffect(() => {
         cols.forEach(cat => {
+            // 1. Haal data op via RSS2JSON (Standaard Google News of Custom RSS)
             const rssUrl = getGoogleNewsUrl(cat, lang);
-            
-            // STABIELE VERBINDING HERSTELD
             fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
             .then(r=>r.json()).then(d => { 
                 if(d.items && Array.isArray(d.items)) {
                     const taggedItems = d.items.map(item => ({...item, _feedCategory: cat}));
                     setNewsData(p => ({...p, [cat + '_rss']: taggedItems})); 
                 }
-            })
-            .catch(e => console.error("Nieuws API fout voor", cat, e));
+            }).catch(e => console.error("Nieuws API fout voor", cat, e));
 
+            // `NIEUW: 2. Optioneel data ophalen via GNews (als key is ingevuld en het geen custom http link is)`
             if (gnewsKey && !cat.startsWith('http')) {
                 const gnewsLang = lang === 'nl' ? 'nl' : 'en';
-                fetch(`https://gnews.io/api/v4/search?q=${encodeURIComponent(cat)}&apikey=${gnewsKey}&lang=${gnewsLang}&max=15`)
+                fetch(`https://gnews.io/api/v4/search?q=${encodeURIComponent(cat)}&apikey=${gnewsKey}&lang=${gnewsLang}&max=10`)
                 .then(r=>r.json()).then(d => {
                     if (d.articles && Array.isArray(d.articles)) {
                         const mappedGnews = d.articles.map(a => ({
-                            title: a.title, link: a.url, pubDate: a.publishedAt,
-                            source: a.source?.name || 'GNews', description: a.description, imageUrl: a.image, _feedCategory: cat
+                            title: a.title,
+                            link: a.url,
+                            pubDate: a.publishedAt.replace('T', ' ').replace('Z', ''),
+                            source: a.source?.name || 'GNews',
+                            description: a.description,
+                            imageUrl: a.image, // GNews levert direct plaatjes
+                            _feedCategory: cat
                         }));
                         setNewsData(p => ({...p, [cat + '_gnews']: mappedGnews}));
                     }
@@ -1096,6 +1087,7 @@ function NewsWidget({ lang }) {
         setIsSearching(true);
         const h = lang === 'nl' ? 'nl' : 'en-US';
         const g = lang === 'nl' ? 'NL' : 'US';
+        const query = `${debouncedSearch} when:2d`; // Restrict search directly to 2 days
         
         let combinedSearch = [];
         let fetchedCount = 0;
@@ -1106,8 +1098,8 @@ function NewsWidget({ lang }) {
             }
         };
 
-        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(debouncedSearch)}&hl=${h}&gl=${g}`;
-        
+        // RSS2JSON Search
+        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${h}&gl=${g}`;
         fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
         .then(r=>r.json()).then(d => { 
             if (d.items && Array.isArray(d.items)) {
@@ -1116,13 +1108,14 @@ function NewsWidget({ lang }) {
             fetchedCount++; checkDone();
         }).catch(e => { fetchedCount++; checkDone(); });
 
+        // GNews Search
         if (gnewsKey) {
             const gnewsLang = lang === 'nl' ? 'nl' : 'en';
-            fetch(`https://gnews.io/api/v4/search?q=${encodeURIComponent(debouncedSearch)}&apikey=${gnewsKey}&lang=${gnewsLang}&max=15`)
+            fetch(`https://gnews.io/api/v4/search?q=${encodeURIComponent(debouncedSearch)}&apikey=${gnewsKey}&lang=${gnewsLang}&max=20`)
             .then(r=>r.json()).then(d => {
                 if (d.articles && Array.isArray(d.articles)) {
                     const mapped = d.articles.map(a => ({
-                        title: a.title, link: a.url, pubDate: a.publishedAt,
+                        title: a.title, link: a.url, pubDate: a.publishedAt.replace('T', ' ').replace('Z', ''),
                         source: a.source?.name || 'GNews', description: a.description, imageUrl: a.image, _feedCategory: 'ZOEKEN'
                     }));
                     combinedSearch = [...combinedSearch, ...mapped];
@@ -1159,6 +1152,17 @@ function NewsWidget({ lang }) {
         setDragItem(null); setDragType(null);
     };
 
+    const formatDate = (pubDate) => {
+        if (!pubDate) return '';
+        try {
+            const [datePart, timePart] = pubDate.split(' ');
+            if (!datePart || !timePart) return pubDate;
+            const [y, m, d] = datePart.split('-');
+            const [h, min] = timePart.split(':');
+            return `${d}-${m}-${y} | ${h}:${min}`;
+        } catch(e) { return pubDate; }
+    };
+
     const getSourceColor = (src) => {
         const colors = ['#c586c0', '#d16b92', '#b278a9', '#9a73b5', '#e27b64', '#e2a864', '#4a90e2'];
         let hash = 0;
@@ -1175,6 +1179,7 @@ function NewsWidget({ lang }) {
         return false;
     };
 
+    // `NIEUW: Strengere ontdubbeling (URL én Titel) gecombineerd met Vandaag/Gisteren filter`
     const allNewsRaw = [];
     const seenUrls = new Set();
     const seenTitles = new Set();
@@ -1183,6 +1188,7 @@ function NewsWidget({ lang }) {
         catItems.forEach(item => {
             const titleKey = (item.title || '').toLowerCase().substring(0, 40);
             if (!seenUrls.has(item.link) && !seenTitles.has(titleKey)) {
+                // Pas hier de harde datumfilter toe
                 if (isRecent(item.pubDate)) {
                     seenUrls.add(item.link);
                     seenTitles.add(titleKey);
@@ -1196,15 +1202,14 @@ function NewsWidget({ lang }) {
         let filtered = itemsList.filter(item => {
             const text = (item.title + " " + (item.source || '') + " " + (item.description || '')).toLowerCase();
             if (blocked.some(b => text.includes(b))) return false;
+            // Zoekresultaten ook extra verifiëren op recente datum
             if (!isRecent(item.pubDate)) return false; 
             return true; 
         });
 
         filtered.sort((a, b) => {
-            const cleanA = a.pubDate.replace(/-/g, '/').replace('T', ' ').replace('Z', '');
-            const cleanB = b.pubDate.replace(/-/g, '/').replace('T', ' ').replace('Z', '');
-            const timeA = new Date(cleanA).getTime();
-            const timeB = new Date(cleanB).getTime();
+            const timeA = new Date(a.pubDate.replace(/-/g, '/')).getTime();
+            const timeB = new Date(b.pubDate.replace(/-/g, '/')).getTime();
             
             if (sortMode === 'tijd') return timeB - timeA;
 
@@ -1254,17 +1259,12 @@ function NewsWidget({ lang }) {
         if (isDescriptionRedundant(displayTitle, cleanDesc)) cleanDesc = '';
 
         const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
-
+        
+        // Vernieuwde Afbeeldingszoeker
         let finalImageUrl = item.imageUrl || item.thumbnail || (item.enclosure && item.enclosure.link) || null;
         if (!finalImageUrl && item.description) {
-            try {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(item.description, 'text/html');
-                const img = doc.querySelector('img');
-                if (img && img.src && !img.src.includes('pixel') && !img.src.includes('tracking')) {
-                    finalImageUrl = img.src;
-                }
-            } catch(e) {}
+            const imgMatch = item.description.match(/<img[^>]+src="([^">]+)"/i);
+            if (imgMatch && imgMatch[1]) finalImageUrl = imgMatch[1];
         }
 
         return (
@@ -1316,6 +1316,7 @@ function NewsWidget({ lang }) {
 
     const finalNews = filterAndSortItems(allNewsRaw);
     
+    // Bij searchResults doen we ook een ontdubbel check voor de combi API's
     const uniqueSearch = [];
     const sUrls = new Set();
     searchResults.forEach(item => {
@@ -1414,6 +1415,7 @@ function NewsWidget({ lang }) {
                         )}
                     </div>
 
+                    {/* `NIEUW: GNews API Key Veld` */}
                     <div className="border-t border-gray-200 pt-3">
                         <div className="flex gap-2 items-center">
                             <span className="font-bold w-20 text-gray-700">GNews API (Optioneel):</span>
@@ -1429,12 +1431,18 @@ function NewsWidget({ lang }) {
                             />
                         </div>
                     </div>
+
                 </div>
             )}
 
             <div className="flex-1 overflow-y-auto hide-scroll p-4 bg-gray-50/30">
                 {!debouncedSearch ? (
                     <div className="w-full flex flex-col">
+                        <div className="flex justify-between items-center pb-2 mb-4 border-b border-gray-200 sticky top-0 bg-gray-50/90 backdrop-blur-sm z-10">
+                            <h4 className="text-[12px] font-black text-gray-900 uppercase tracking-wide truncate">
+                                ALLE NIEUWS (Actueel)
+                            </h4>
+                        </div>
                         <div className="space-y-4">
                             {finalNews.slice(0, newsLimit).map((item, i) => renderItemCard(item, i))}
                             {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen & Vandaag/Gisteren filter toepassen...</div>}
@@ -1448,6 +1456,11 @@ function NewsWidget({ lang }) {
                     </div>
                 ) : (
                     <div className="w-full flex flex-col">
+                        <div className="flex justify-between items-center pb-2 mb-4 border-b border-blue-200 sticky top-0 bg-gray-50/90 backdrop-blur-sm z-10">
+                            <h4 className="text-[12px] font-black text-blue-600 uppercase tracking-wide truncate">
+                                ZOEKEN: {debouncedSearch}
+                            </h4>
+                        </div>
                         <div className="space-y-4">
                             {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Actueel nieuws ophalen...</div>}
                             {!isSearching && searchResults.length === 0 && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Geen recente resultaten gevonden voor "{debouncedSearch}".</div>}
