@@ -78,11 +78,10 @@ const Ico = {
 };
 
 function WeatherBar({ lang }) {
-    /* `Nieuwe wijziging`: Filter foute cache-waarden eruit en gebruik de veilige opgeslagen fallback */
     const [c, setC] = useState(() => {
         const saved = S.load('wcity', '');
-        if (saved === 'Huidige Locatie' || saved === 'Amsterdam') return 'Zoetermeer';
-        return saved || 'Zoetermeer';
+        if (saved === 'Huidige Locatie' || saved === 'Amsterdam' || saved === 'Zoetermeer') return ''; 
+        return saved;
     });
     const [w, setW] = useState(null);
     const [locLoading, setLocLoading] = useState(false);
@@ -91,6 +90,21 @@ function WeatherBar({ lang }) {
     const [isEditing, setIsEditing] = useState(false);
     const [editVal, setEditVal] = useState('');
 
+    const syncWeather = () => {
+        const cloudSettings = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('d_')) {
+                cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
+            }
+        }
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings })
+        }).catch(()=>{});
+    };
+
     useEffect(() => { 
         const h = (e) => { 
             if(e.detail.type === 'SET_CITY') { 
@@ -98,6 +112,7 @@ function WeatherBar({ lang }) {
                 S.save('wcity', e.detail.payload);
                 setAutoGps(false); 
                 S.save('auto_gps', false);
+                syncWeather();
             }
         }; 
         window.addEventListener('dashCmd', h); 
@@ -107,18 +122,18 @@ function WeatherBar({ lang }) {
     const handleLocate = (silent = false) => {
         if(!navigator.geolocation) return;
         setLocLoading(true);
-        /* `Nieuwe wijziging`: Timeout toegevoegd en strikte beveiliging tegen overschrijven bij blokkade */
         navigator.geolocation.getCurrentPosition(async (pos) => {
             const { latitude, longitude } = pos.coords;
             try {
                 const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=${lang}`);
                 const data = await res.json();
                 const newCity = data.city || data.locality;
-                if(newCity) {
+                if(newCity && newCity !== 'Amsterdam') {
                     setC(newCity);
                     S.save('wcity', newCity);
                     setAutoGps(true);
                     S.save('auto_gps', true);
+                    syncWeather();
                 }
             } catch(e) { console.error("Locatiefout:", e); }
             setLocLoading(false);
@@ -126,10 +141,18 @@ function WeatherBar({ lang }) {
             setLocLoading(false); 
             setAutoGps(false); 
             S.save('auto_gps', false);
+            if (!c) {
+                // Nood-fallback naar je daadwerkelijke stad als de cache leeg is en GPS blokkeert
+                setC('Den Haag');
+                S.save('wcity', 'Den Haag');
+                syncWeather();
+            }
         }, { timeout: 5000 });
     };
 
-    useEffect(() => { if (autoGps) handleLocate(true); }, []);
+    useEffect(() => { 
+        if (autoGps || !c) handleLocate(true); 
+    }, []);
     
     useEffect(() => {
         if (!c) return;
@@ -168,7 +191,12 @@ function WeatherBar({ lang }) {
 
     const saveCity = (val) => {
         if(val && val.trim() !== "") {
-            setC(val.trim()); S.save('wcity', val.trim()); setAutoGps(false); S.save('auto_gps', false);
+            const cleanCity = val.trim();
+            setC(cleanCity); 
+            S.save('wcity', cleanCity); 
+            setAutoGps(false); 
+            S.save('auto_gps', false);
+            syncWeather();
         }
         setIsEditing(false);
     };
@@ -195,7 +223,7 @@ function WeatherBar({ lang }) {
                                 className="bg-transparent border-b border-blue-400 outline-none w-full text-white text-xs p-0 m-0 placeholder-white/30"
                             />
                         ) : (
-                            <span className="truncate block">{w?.name || c}</span>
+                            <span className="truncate block">{w?.name || c || 'Zoeken...'}</span>
                         )}
                     </div>
                     <div className="w-px h-3 bg-white/20 mx-0.5 shrink-0"></div>
