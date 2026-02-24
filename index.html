@@ -1020,8 +1020,8 @@ function NewsWidget({ lang }) {
     useEffect(() => {
         cols.forEach(cat => {
             const rssUrl = getGoogleNewsUrl(cat, lang);
-            // Count=200 forceert het maximaal ophalen bij de externe API
-            fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=200`)
+            // `WIJZIGING: &count=200 verwijderd om traagheid/timeouts te verhelpen`
+            fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
             .then(r=>r.json()).then(d => { 
                 if(d.items && Array.isArray(d.items)) {
                     const taggedItems = d.items.map(item => ({...item, _feedCategory: cat}));
@@ -1035,7 +1035,7 @@ function NewsWidget({ lang }) {
     useEffect(() => {
         const handler = setTimeout(() => {
             setDebouncedSearch(search.trim());
-            setSearchLimit(150); // Reset limiet bij nieuwe zoekopdracht
+            setSearchLimit(150); 
         }, 600);
         return () => clearTimeout(handler);
     }, [search]);
@@ -1048,7 +1048,8 @@ function NewsWidget({ lang }) {
         const query = `${debouncedSearch} when:30d`;
         const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${h}&gl=${g}`;
         
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=200`)
+        // `WIJZIGING: &count=200 verwijderd om timeout "Geen resultaten" bug te fixen`
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
         .then(r=>r.json()).then(d => { 
             if (d.items && Array.isArray(d.items)) {
                 const searchItems = d.items.map(item => ({...item, _feedCategory: 'ZOEKEN'}));
@@ -1186,7 +1187,6 @@ function NewsWidget({ lang }) {
 
         const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
         
-        // Extract Afbeelding via Regex (uit de verborgen originele beschrijving)
         let imageUrl = null;
         if (item.description) {
             const imgMatch = item.description.match(/<img[^>]+src="([^">]+)"/i);
@@ -1195,8 +1195,6 @@ function NewsWidget({ lang }) {
 
         return (
             <a href={item.link} target="_blank" key={i} className={`flex gap-3 border-b border-gray-100 pb-4 mb-4 hover:bg-gray-50 transition group ${isPriorityItem && sortMode === 'bron' ? 'bg-green-50/30 -mx-2 px-2 pt-2 rounded' : ''}`}>
-                
-                {/* Tekst Content */}
                 <div className="flex-1 flex flex-col justify-between">
                     <div>
                         <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition">
@@ -1227,7 +1225,6 @@ function NewsWidget({ lang }) {
                     </div>
                 </div>
 
-                {/* Thumbnail Afbeelding */}
                 {imageUrl && (
                     <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 mt-0.5">
                         <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -1243,7 +1240,6 @@ function NewsWidget({ lang }) {
         syncNewsSettings();
     };
 
-    // Gefilterde arrays
     const finalNews = filterAndSortItems(allNewsRaw);
     const finalSearch = filterAndSortItems(searchResults);
 
@@ -1349,7 +1345,6 @@ function NewsWidget({ lang }) {
                             {finalNews.slice(0, newsLimit).map((item, i) => renderItemCard(item, i))}
                             {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen...</div>}
                             
-                            {/* Laad Meer Knop */}
                             {finalNews.length > newsLimit && (
                                 <button onClick={() => setNewsLimit(l => l + 50)} className="w-full mt-4 py-3 bg-white border border-gray-200 text-blue-600 font-bold text-[11px] rounded-md hover:bg-blue-50 transition shadow-sm">
                                     LAAD 50 EXTRA BERICHTEN
@@ -1370,7 +1365,6 @@ function NewsWidget({ lang }) {
                             
                             {!isSearching && finalSearch.slice(0, searchLimit).map((item, i) => renderItemCard(item, i))}
                             
-                            {/* Laad Meer Knop */}
                             {!isSearching && finalSearch.length > searchLimit && (
                                 <button onClick={() => setSearchLimit(l => l + 50)} className="w-full mt-4 py-3 bg-white border border-gray-200 text-blue-600 font-bold text-[11px] rounded-md hover:bg-blue-50 transition shadow-sm">
                                     LAAD 50 EXTRA BERICHTEN
