@@ -1260,8 +1260,8 @@ function NewsWidget({ lang }) {
 
         const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
         
-        // Thumbnail via direct property (GNews) of fallback Regex (RSS)
-        let finalImageUrl = item.imageUrl || null;
+        // Vernieuwde Afbeeldingszoeker
+        let finalImageUrl = item.imageUrl || item.thumbnail || (item.enclosure && item.enclosure.link) || null;
         if (!finalImageUrl && item.description) {
             const imgMatch = item.description.match(/<img[^>]+src="([^">]+)"/i);
             if (imgMatch && imgMatch[1]) finalImageUrl = imgMatch[1];
