@@ -708,7 +708,7 @@ function CryptoWidget({ lang }) {
 
 function AgendaWidget({ lang }) {
     const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
-    const cals = rawCals.map(c=>c.name).filter(Boolean);
+    const cals = (Array.isArray(rawCals)?rawCals:[]).map(c=>c?.name).filter(Boolean);
     const [view, setView] = useState('dag'); 
     const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
     const [f, setF] = useState(cals);
@@ -716,281 +716,171 @@ function AgendaWidget({ lang }) {
     const [loading, setLoading] = useState(true);
     const [groupBy, setGroupBy] = useState('person'); 
     
-    const getDayStr = (dStr) => { const days = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']; return days[new Date(dStr).getDay()]; };
+    const getDayStr = (dStr) => { const days = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']; return days[new Date(dStr||Date.now()).getDay()]; };
 
-    useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => c.toLowerCase().includes(e.detail.payload?.toLowerCase() || '')); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
-
+    useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => (c||'').toLowerCase().includes((e.detail.payload||'').toLowerCase())); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
     useEffect(() => { setF(cals); }, [JSON.stringify(cals)]);
 
     useEffect(() => {
         const fetchCals = async () => {
             setLoading(true);
             let allEvs = [];
-
             const parseICalDate = (line) => {
-                const parts = line.split(':');
-                if (parts.length < 2) return null;
-                const params = parts[0]; 
-                const val = parts[parts.length - 1].trim();
-                const isUTC = val.endsWith('Z');
-                const m = val.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?Z?)?/);
+                const parts = (line||'').split(':'); if (parts.length < 2) return null;
+                const params = parts[0]; const val = parts[parts.length - 1].trim();
+                const isUTC = val.endsWith('Z'); const m = val.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?Z?)?/);
                 if (!m) return null;
-
-                const year = parseInt(m[1]);
-                const month = parseInt(m[2]) - 1;
-                const day = parseInt(m[3]);
-                const hour = m[4] ? parseInt(m[4]) : 0;
-                const min = m[5] ? parseInt(m[5]) : 0;
-                const sec = m[6] ? parseInt(m[6]) : 0;
+                const year = parseInt(m[1]); const month = parseInt(m[2]) - 1; const day = parseInt(m[3]);
+                const hour = m[4] ? parseInt(m[4]) : 0; const min = m[5] ? parseInt(m[5]) : 0; const sec = m[6] ? parseInt(m[6]) : 0;
                 const isAllDay = !m[4];
-
-                let dateObj;
-                if (isUTC) {
-                    dateObj = new Date(Date.UTC(year, month, day, hour, min, sec));
-                } else if (params.includes('TZID=')) {
-                    dateObj = new Date(year, month, day, hour, min, sec);
-                } else {
-                    dateObj = new Date(year, month, day, hour, min, sec);
-                }
-                
+                let dateObj = isUTC ? new Date(Date.UTC(year, month, day, hour, min, sec)) : new Date(year, month, day, hour, min, sec);
                 const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`;
                 const timeStr = isAllDay ? 'Hele dag' : dateObj.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
-
                 return { date: dateStr, time: timeStr, dateObj, isAllDay };
             };
 
-            const expandRRule = (rruleLine, startDateObj, eventData) => {
-                const expanded = [];
-                const params = {};
-                rruleLine.replace('RRULE:', '').split(';').forEach(p => { const [k, v] = p.split('='); params[k] = v; });
-
-                const freq = params.FREQ;
-                const count = params.COUNT ? parseInt(params.COUNT) : 200;
-                const untilMatch = params.UNTIL ? params.UNTIL.match(/(\d{4})(\d{2})(\d{2})/) : null;
-                const until = untilMatch ? new Date(parseInt(untilMatch[1]), parseInt(untilMatch[2])-1, parseInt(untilMatch[3]), 23, 59, 59) : null;
-                const interval = params.INTERVAL ? parseInt(params.INTERVAL) : 1;
-
-                const now = new Date();
-                const rangeStart = new Date(now); rangeStart.setDate(rangeStart.getDate() - 7); 
-                const rangeEnd = new Date(now); rangeEnd.setDate(rangeEnd.getDate() + 60); 
-
-                let current = new Date(startDateObj);
-                let generated = 0;
-
-                for (let i = 0; i < 500 && generated < count; i++) {
-                    if (until && current > until) break;
-                    if (current > rangeEnd) break;
-
-                    if (current >= rangeStart) {
-                        const dateStr = `${current.getFullYear()}-${String(current.getMonth()+1).padStart(2,'0')}-${String(current.getDate()).padStart(2,'0')}`;
-                        expanded.push({ ...eventData, date: dateStr });
-                    }
-                    generated++;
-
-                    if (freq === 'DAILY') current.setDate(current.getDate() + interval);
-                    else if (freq === 'WEEKLY') current.setDate(current.getDate() + (7 * interval));
-                    else if (freq === 'MONTHLY') current.setMonth(current.getMonth() + interval);
-                    else if (freq === 'YEARLY') current.setFullYear(current.getFullYear() + interval);
-                    else break; 
-                }
-                return expanded;
-            };
-
-            for (let c of rawCals) {
-                if (!c.val) continue;
-
+            for (let c of (Array.isArray(rawCals)?rawCals:[])) {
+                if (!c?.val) continue;
                 try {
-                    const res = await fetch('/api/ical', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: c.val })
-                    });
-
+                    const res = await fetch('/api/ical', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: c.val }) });
                     let txt = '';
-                    if (res.ok) {
-                        if ((res.headers.get('content-type') || '').includes('application/json')) {
-                            const errData = await res.json();
-                            throw new Error(errData.error || 'Proxy fout');
-                        }
-                        txt = await res.text();
-                    } else {
-                        const errData = await res.json().catch(() => ({ error: res.statusText }));
-                        throw new Error(errData.error || `HTTP ${res.status}`);
-                    }
-
+                    if (res.ok) { if ((res.headers.get('content-type') || '').includes('application/json')) throw new Error('Proxy fout'); txt = await res.text(); } 
+                    else throw new Error(`HTTP ${res.status}`);
                     if (!txt || !txt.includes('BEGIN:VCALENDAR')) throw new Error("Geen kalender data");
 
-                    let cur = {};
-                    let rrule = null;
-                    const lines = txt.split(/\r?\n/);
-
+                    let cur = {}; let rrule = null; const lines = txt.split(/\r?\n/);
                     for (let k = 0; k < lines.length; k++) {
                         let l = lines[k];
                         while (k + 1 < lines.length && (lines[k+1].startsWith(' ') || lines[k+1].startsWith('\t'))) { k++; l += lines[k].substring(1); }
-
                         if (l.startsWith('BEGIN:VEVENT')) { cur = {}; rrule = null; }
-                        else if (l.startsWith('SUMMARY')) {
-                            const idx = l.indexOf(':');
-                            if (idx !== -1) cur.t = l.substring(idx + 1).replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\n/g, ' ').replace(/\\/g, '');
-                        }
-                        else if (l.startsWith('DTSTART')) {
-                            const parsed = parseICalDate(l);
-                            if (parsed) { cur.date = parsed.date; cur.time = parsed.time; cur.dateObj = parsed.dateObj; }
-                        }
-                        else if (l.startsWith('DTEND')) {
-                            const parsed = parseICalDate(l);
-                            if (parsed && !parsed.isAllDay) { cur.endTime = parsed.time; }
-                        }
-                        else if (l.startsWith('RRULE:')) { rrule = l; }
-                        else if (l.startsWith('END:VEVENT') && cur.t && cur.date) {
-                            if (rrule && cur.dateObj) {
-                                const expanded = expandRRule(rrule, cur.dateObj, { t: cur.t, p: c.name, time: cur.time, endTime: cur.endTime });
-                                allEvs.push(...expanded);
-                            } else {
-                                allEvs.push({ t: cur.t, p: c.name, date: cur.date, time: cur.time, endTime: cur.endTime });
-                            }
-                        }
+                        else if (l.startsWith('SUMMARY')) { const idx = l.indexOf(':'); if (idx !== -1) cur.t = l.substring(idx + 1).replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\n/g, ' ').replace(/\\/g, ''); }
+                        else if (l.startsWith('DTSTART')) { const parsed = parseICalDate(l); if (parsed) { cur.date = parsed.date; cur.time = parsed.time; cur.dateObj = parsed.dateObj; } }
+                        else if (l.startsWith('DTEND')) { const parsed = parseICalDate(l); if (parsed && !parsed.isAllDay) cur.endTime = parsed.time; }
+                        else if (l.startsWith('END:VEVENT') && cur.t && cur.date) { allEvs.push({ t: cur.t, p: c.name, date: cur.date, time: cur.time, endTime: cur.endTime }); }
                     }
-                } catch (e) {
-                    console.error("iCal error voor: " + c.name, e);
-                    allEvs.push({ t: `⚠ ${c.name} fout`, p: c.name, date: d, time: '00:00' });
-                }
+                } catch (e) { allEvs.push({ t: `⚠ ${c.name} fout`, p: c.name, date: d, time: '00:00' }); }
             }
             if (allEvs.length === 0) allEvs = [{ t: 'Geen afspraken', p: cals[0] || 'Systeem', date: d, time: '00:00' }];
-            setItems(allEvs);
-            setLoading(false);
+            setItems(allEvs); setLoading(false);
         };
         fetchCals();
     }, [JSON.stringify(rawCals)]);
 
-    const getColor = (name) => {
-        if (!name) return 'border-gray-400';
+    // Nieuwe veilige kleurfunctie voor EXCLUSIEF de linker border
+    const getColorHex = (name) => {
+        if (!name) return '#9ca3af'; // gray-400
         const n = String(name).toLowerCase();
-        if (n.includes('ryan')) return 'border-red-500';
-        if (n.includes('yaron')) return 'border-blue-500';
-        if (n.includes('michael')) return 'border-green-500';
-        if (n.includes('fam')) return 'border-orange-500';
-        return 'border-purple-500';
+        if (n.includes('ryan')) return '#ef4444'; // red-500
+        if (n.includes('yaron')) return '#3b82f6'; // blue-500
+        if (n.includes('michael')) return '#22c55e'; // green-500
+        if (n.includes('fam')) return '#f97316'; // orange-500
+        return '#a855f7'; // purple-500
     };
 
-    const tEnd = new Date(d); 
-    tEnd.setDate(tEnd.getDate() + 6); 
-    const dEnd = tEnd.toISOString().split('T')[0];
-
-    const getWeekNumber = (dateStr) => {
-        const date = new Date(dateStr);
-        date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay()||7));
-        const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
-        return Math.ceil(( ( (date - yearStart) / 86400000) + 1)/7);
-    };
+    const tEnd = new Date(d); tEnd.setDate(tEnd.getDate() + 6); const dEnd = tEnd.toISOString().split('T')[0];
+    const getWeekNumber = (dateStr) => { const date = new Date(dateStr); date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay()||7)); return Math.ceil(( ( (date - new Date(Date.UTC(date.getUTCFullYear(),0,1))) / 86400000) + 1)/7); };
     
-    const filteredItems = items
-        .filter(i => f.includes(i.p) && (view === 'dag' ? i.date === d : (i.date >= d && i.date <= dEnd)))
-        .sort((a,b) => {
-            if(a.date !== b.date) return String(a.date).localeCompare(String(b.date));
-            const tA = (a.time === 'Hele dag' || !a.time) ? '00:00' : String(a.time);
-            const tB = (b.time === 'Hele dag' || !b.time) ? '00:00' : String(b.time);
-            return tA.localeCompare(tB);
-        });
+    const filteredItems = (Array.isArray(items)?items:[]).filter(i => (f||[]).includes(i?.p) && (view === 'dag' ? i?.date === d : (i?.date >= d && i?.date <= dEnd))).sort((a,b) => {
+        if(a.date !== b.date) return String(a.date||'').localeCompare(String(b.date||''));
+        const tA = (a.time === 'Hele dag' || !a.time) ? '00:00' : String(a.time); const tB = (b.time === 'Hele dag' || !b.time) ? '00:00' : String(b.time); return tA.localeCompare(tB);
+    });
 
     const getSummary = (name) => {
-        const evs = filteredItems.filter(e => e.p.toLowerCase().includes(name.toLowerCase()) && e.time !== 'Hele dag');
+        const evs = filteredItems.filter(e => (e.p || '').toLowerCase().includes((name||'').toLowerCase()) && e.time !== 'Hele dag');
         if (evs.length === 0) return null;
-        const times = [];
-        evs.forEach(e => { if(e.time) times.push(e.time); if(e.endTime) times.push(e.endTime); });
-        const sorted = times.sort();
-        return `${name}: ${sorted[0]} - ${sorted[sorted.length - 1]}`;
+        const times = []; evs.forEach(e => { if(e.time) times.push(e.time); if(e.endTime) times.push(e.endTime); });
+        const sorted = times.sort(); return `${name}: ${sorted[0]} - ${sorted[sorted.length - 1]}`;
     };
     
-    const sumRyan = getSummary('Ryan');
-    const sumYaron = getSummary('Yaron');
+    const sumRyan = getSummary('Ryan'); const sumYaron = getSummary('Yaron');
 
     return (
         <div className="widget h-[450px] flex flex-col">
-            <div className="p-3 bg-gray-50 border-b flex justify-between items-center shrink-0 flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                    <div className="relative flex items-center bg-gray-200 p-1.5 rounded hover:bg-gray-300 transition cursor-pointer">
-                        <span className="px-1 text-xs">📅</span>
-                        <span className="text-[10px] font-bold text-gray-600 ml-1 pr-1">{d.slice(8,10)}</span>
-                        <input type="date" value={d} onChange={(e)=>setD(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                    </div>
+            {/* BALK 1: Header + Sorteer + View Toggle */}
+            <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center shrink-0 flex-wrap gap-2">
+                <div className="flex items-center gap-2 text-gray-500 font-black tracking-widest text-[10px] uppercase">
+                    <Ico.Cal/> {T[lang].ag}
                 </div>
-                
                 <div className="flex items-center gap-2">
-                    <div className="hidden sm:flex items-center gap-1 text-gray-500 mr-2">
-                        <Ico.Cal/><h3 className="text-[10px] font-black uppercase tracking-widest">{T[lang].ag}</h3>
-                    </div>
-                    <button onClick={()=>setGroupBy(groupBy==='time'?'person':'time')} className="px-2 py-1 bg-white border shadow-sm text-[9px] font-bold rounded uppercase text-gray-600 hover:text-blue-600 transition">
+                    <button onClick={()=>setGroupBy(groupBy==='time'?'person':'time')} className="px-3 py-1.5 bg-white border border-gray-200 shadow-sm text-[9px] font-bold rounded uppercase text-gray-600 hover:text-blue-600 transition">
                         {groupBy === 'time' ? 'Groepeer' : 'Sorteer'}
                     </button>
                     <div className="flex bg-gray-200 p-1 rounded relative z-10">
-                        <button onClick={(e)=>{e.preventDefault(); setView('dag');}} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='dag'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].day}</button>
-                        <button onClick={(e)=>{e.preventDefault(); setView('week');}} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='week'?'bg-white shadow-sm text-blue-700':''}`}>{T[lang].wk}</button>
+                        <button onClick={(e)=>{e.preventDefault(); setView('dag');}} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='dag'?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{T[lang].day}</button>
+                        <button onClick={(e)=>{e.preventDefault(); setView('week');}} className={`px-2 py-1 text-[9px] font-bold rounded ${view==='week'?'bg-white shadow-sm text-blue-700':'text-gray-500'}`}>{T[lang].wk}</button>
                     </div>
                 </div>
-
-                <div>
-                    <button onClick={() => setD(new Date().toISOString().split('T')[0])} className="px-2.5 py-1.5 bg-white border shadow-sm text-[9px] font-bold rounded uppercase text-blue-600 hover:text-blue-800 transition">
-                        Vandaag
-                    </button>
+            </div>
+            
+            {/* BALK 2: Filters met linker border (Zoals Yaron in screenshot) */}
+            <div className="flex border-b border-gray-200 bg-white overflow-x-auto p-2.5 gap-2.5 hide-scroll shrink-0">
+                {cals.map(p => {
+                    const isActive = (f||[]).includes(p);
+                    return (
+                        <button 
+                            key={p} 
+                            onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} 
+                            className={`px-3 py-1.5 text-[10px] font-bold rounded uppercase whitespace-nowrap border border-gray-200 border-l-[4px] transition-all ${isActive ? 'bg-[#f8fafc] text-gray-900 shadow-sm' : 'bg-gray-50 text-gray-400 opacity-70 hover:opacity-100'}`}
+                            style={{ borderLeftColor: isActive ? getColorHex(p) : '#d1d5db' }}
+                        >
+                            {p}
+                        </button>
+                    );
+                })}
+            </div>
+            
+            {/* BALK 3: Datum Navigatie (Zoals screenshot) */}
+            <div className="p-2.5 flex border-b border-gray-200 bg-gray-50 items-center justify-between shrink-0 gap-2">
+                <div className="relative flex items-center bg-white border border-gray-200 p-1.5 px-2 rounded shadow-sm hover:bg-gray-100 transition cursor-pointer shrink-0">
+                    <span className="text-xs">📅</span>
+                    <span className="text-[10px] font-black text-gray-700 ml-1.5">{d.slice(8,10)}</span>
+                    <input type="date" value={d} onChange={(e)=>setD(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                 </div>
-            </div>
-            
-            <div className="flex border-b bg-white overflow-x-auto p-2 gap-2 hide-scroll shrink-0">
-                {cals.map(p=><button key={p} onClick={()=>setF(pr=>pr.includes(p)?pr.filter(x=>x!==p):[...pr, p])} className={`px-3 py-1.5 text-[10px] font-bold rounded uppercase whitespace-nowrap border-l-[6px] border border-gray-200 transition-all ${f.includes(p) ? `bg-[#e2e8f0] text-black ${getColor(p)} shadow-sm` : `bg-gray-50 text-gray-400 border-l-gray-300`}`}>{p}</button>)}
-            </div>
-            
-            <div className="p-2 flex border-b bg-gray-50 justify-center shrink-0">
-                <div className="flex items-center gap-2 bg-white border rounded shadow-sm">
-                    <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&lt;</button>
-                    <span className="text-[10px] font-black text-center uppercase tracking-widest text-gray-600 min-w-[140px]">
-                        <span className="text-blue-600">WK {getWeekNumber(d)}</span> <span className="opacity-30">|</span> {view === 'dag' ? `${getDayStr(d)} ${fmtDate(d)}` : `${getDayStr(d)} ${fmtDate(d).slice(0,5)} - ${getDayStr(dEnd)} ${fmtDate(dEnd).slice(0,5)}`}
+                
+                <div className="flex-1 flex items-center justify-between bg-white border border-gray-200 rounded shadow-sm px-1 overflow-hidden min-w-[140px] max-w-[220px]">
+                    <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500 transition">&lt;</button>
+                    <span className="text-[10px] font-black text-center uppercase tracking-widest text-gray-700 whitespace-nowrap px-1">
+                        <span className="text-blue-600">WK {getWeekNumber(d)}</span> <span className="opacity-30">|</span> {view === 'dag' ? `${getDayStr(d)} ${fmtDate(d)}` : `${getDayStr(d)} ${fmtDate(d).slice(0,5)}`}
                     </span>
-                    <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500">&gt;</button>
+                    <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500 transition">&gt;</button>
                 </div>
+
+                <button onClick={() => setD(new Date().toISOString().split('T')[0])} className="px-3 py-1.5 bg-white border border-gray-200 shadow-sm text-[9px] font-bold rounded uppercase text-blue-600 hover:text-blue-800 transition shrink-0">
+                    Vandaag
+                </button>
             </div>
             
             <div className="flex-1 p-4 bg-white overflow-y-auto content-start">
-                {loading ? (
-                    <div className="text-center text-xs font-bold text-blue-500 animate-pulse mt-10">Agenda synchroniseren...</div>
-                ) : filteredItems.length > 0 ? (
+                {loading ? ( <div className="text-center text-xs font-bold text-blue-500 animate-pulse mt-10">Agenda synchroniseren...</div> ) : filteredItems.length > 0 ? (
                     groupBy === 'time' ? (
                         <div className="grid grid-cols-2 gap-3">
                             {filteredItems.map((i, idx) => (
-                                <div key={idx} className={`p-3 border border-l-[5px] ${getColor(i.p)} bg-white rounded-lg flex flex-col shadow-sm h-fit`}>
-                                    <span className="font-bold text-[13px] leading-tight text-gray-900 mb-2">{i.t}</span>
+                                <div key={idx} className="p-3 bg-white border border-gray-200 border-l-[5px] rounded-lg flex flex-col shadow-sm h-fit transition-shadow hover:shadow-md" style={{ borderLeftColor: getColorHex(i.p) }}>
+                                    <span className="font-bold text-[13px] leading-tight text-gray-900 mb-2">{i.t||''}</span>
                                     <div className="flex justify-between items-center mt-auto">
-                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                                            {view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)} ` : ''}{i.p}
-                                        </span>
-                                        <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">
-                                            {i.time}{i.endTime ? ` - ${i.endTime}` : ''}
-                                        </span>
+                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)} ` : ''}{i.p||''}</span>
+                                        <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">{i.time||''}{i.endTime ? ` - ${i.endTime}` : ''}</span>
                                     </div>
                                 </div>
                             ))}
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {f.map(person => {
+                            {(f||[]).map(person => {
                                 const personItems = filteredItems.filter(i => i.p === person);
                                 if (personItems.length === 0) return null;
                                 return (
                                     <div key={person} className="flex flex-col">
-                                        <div className={`text-[10px] font-black uppercase text-gray-800 bg-gray-100 border-l-4 ${getColor(person)} px-3 py-1.5 mb-2 w-full`}>
+                                        <div className="text-[10px] font-black uppercase text-gray-800 bg-gray-100 border border-gray-200 border-l-[4px] rounded-sm px-3 py-1.5 mb-2.5 w-full" style={{ borderLeftColor: getColorHex(person) }}>
                                             {person}
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             {personItems.map((i, idx) => (
-                                                <div key={idx} className={`p-3 border border-l-[5px] ${getColor(person)} bg-white rounded-lg flex flex-col shadow-sm h-fit`}>
-                                                    <span className="font-bold text-[13px] leading-tight text-gray-900 mb-2">{i.t}</span>
+                                                <div key={idx} className="p-3 bg-white border border-gray-200 border-l-[5px] rounded-lg flex flex-col shadow-sm h-fit transition-shadow hover:shadow-md" style={{ borderLeftColor: getColorHex(person) }}>
+                                                    <span className="font-bold text-[13px] leading-tight text-gray-900 mb-2">{i.t||''}</span>
                                                     <div className="flex justify-between items-center mt-auto">
-                                                        <span className="text-[9px] font-black text-gray-400 uppercase">
-                                                            {view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)}` : ''}
-                                                        </span>
-                                                        <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">
-                                                            {i.time}{i.endTime ? ` - ${i.endTime}` : ''}
-                                                        </span>
+                                                        <span className="text-[9px] font-black text-gray-400 uppercase">{view==='week' ? `${getDayStr(i.date)} ${fmtDate(i.date).slice(0,5)}` : ''}</span>
+                                                        <span className="text-blue-600 font-bold font-mono text-[10px] bg-blue-50 px-1.5 py-0.5 rounded leading-tight text-right">{i.time||''}{i.endTime ? ` - ${i.endTime}` : ''}</span>
                                                     </div>
                                                 </div>
                                             ))}
@@ -1000,15 +890,10 @@ function AgendaWidget({ lang }) {
                             })}
                         </div>
                     )
-                ) : (
-                    <div className="col-span-2 text-center text-xs text-gray-400 mt-10">Geen afspraken.</div>
-                )}
+                ) : ( <div className="col-span-2 text-center text-xs text-gray-400 mt-10 font-bold uppercase tracking-widest">Geen afspraken</div> )}
             </div>
-            <div className="bg-gray-100 border-t border-gray-200 p-2 shrink-0 flex items-center justify-center min-h-[36px]">
-                <div className="flex gap-6 text-[9px] font-black uppercase tracking-widest text-gray-600">
-                    {sumRyan && <span>🎒 {sumRyan}</span>}
-                    {sumYaron && <span>🎒 {sumYaron}</span>}
-                </div>
+            <div className="bg-gray-50 border-t border-gray-200 p-2 shrink-0 flex items-center justify-center min-h-[36px]">
+                <div className="flex gap-6 text-[9px] font-black uppercase tracking-widest text-gray-600">{sumRyan && <span>🎒 {sumRyan}</span>}{sumYaron && <span>🎒 {sumYaron}</span>}</div>
             </div>
         </div>
     );
