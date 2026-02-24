@@ -1009,19 +1009,38 @@ function NewsWidget({ lang }) {
         }).catch(()=>{});
     };
 
+    // `` NIEUW: Robuuste datum checker voor ruwe XML datums
     const isRecent = (dateString) => {
         if (!dateString) return false;
         try {
-            const cleanDate = dateString.replace(/-/g, '/').replace('T', ' ').replace('Z', '');
-            const articleTime = new Date(cleanDate).getTime();
+            const articleTime = new Date(dateString).getTime();
+            if (isNaN(articleTime)) return false;
+            
             const today = new Date();
             today.setHours(0,0,0,0);
+            
             const yesterday = new Date(today);
             yesterday.setDate(yesterday.getDate() - 1);
+            
             return articleTime >= yesterday.getTime();
         } catch(e) { 
             return false; 
         }
+    };
+
+    // `` NIEUW: Robuuste datum opmaak voor weergave
+    const formatDate = (pubDate) => {
+        if (!pubDate) return '';
+        try {
+            const d = new Date(pubDate);
+            if (isNaN(d.getTime())) return pubDate; 
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yyyy = d.getFullYear();
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mins = String(d.getMinutes()).padStart(2, '0');
+            return `${dd}-${mm}-${yyyy} | ${hh}:${mins}`;
+        } catch(e) { return pubDate; }
     };
 
     const getGoogleNewsUrl = (cat, language) => {
@@ -1034,30 +1053,52 @@ function NewsWidget({ lang }) {
         return `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`;
     };
 
+    // `` NIEUW: Ruwe XML Ophaalfunctie (Omzeilt rss2json limieten en fotoblokkades)
+    const fetchRssRaw = (rssUrl, categoryName) => {
+        const cacheBuster = rssUrl.includes('?') ? `&cb=${Date.now()}` : `?cb=${Date.now()}`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl + cacheBuster)}`;
+        
+        return fetch(proxyUrl)
+            .then(r => r.text())
+            .then(xmlStr => {
+                const doc = new DOMParser().parseFromString(xmlStr, "text/xml");
+                return Array.from(doc.querySelectorAll("item")).map(el => {
+                    const title = el.querySelector("title")?.textContent || '';
+                    const link = el.querySelector("link")?.textContent || '';
+                    const pubDate = el.querySelector("pubDate")?.textContent || '';
+                    const source = el.querySelector("source")?.textContent || 'RSS';
+                    const description = el.querySelector("description")?.textContent || '';
+                    
+                    let imageUrl = null;
+                    const imgMatch = description.match(/<img[^>]+src="([^">]+)"/i);
+                    if (imgMatch && imgMatch[1] && !imgMatch[1].includes('pixel')) {
+                        imageUrl = imgMatch[1];
+                    }
+
+                    return { title, link, pubDate, source, description, imageUrl, _feedCategory: categoryName };
+                });
+            });
+    };
+
     useEffect(() => {
         cols.forEach(cat => {
             const rssUrl = getGoogleNewsUrl(cat, lang);
-            fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
-            .then(r=>r.json()).then(d => { 
-                if(d.items && Array.isArray(d.items)) {
-                    const taggedItems = d.items.map(item => ({...item, _feedCategory: cat}));
-                    setNewsData(p => ({...p, [cat + '_rss']: taggedItems})); 
-                }
-            }).catch(e => console.error("Nieuws API fout voor", cat, e));
+            
+            // Haal onbeperkte ruwe RSS op
+            fetchRssRaw(rssUrl, cat)
+                .then(items => {
+                    setNewsData(p => ({...p, [cat + '_rss']: items}));
+                })
+                .catch(e => console.error("Ruwe RSS fout voor", cat, e));
 
             if (gnewsKey && !cat.startsWith('http')) {
                 const gnewsLang = lang === 'nl' ? 'nl' : 'en';
-                fetch(`https://gnews.io/api/v4/search?q=${encodeURIComponent(cat)}&apikey=${gnewsKey}&lang=${gnewsLang}&max=10`)
+                fetch(`https://gnews.io/api/v4/search?q=${encodeURIComponent(cat)}&apikey=${gnewsKey}&lang=${gnewsLang}&max=20`)
                 .then(r=>r.json()).then(d => {
                     if (d.articles && Array.isArray(d.articles)) {
                         const mappedGnews = d.articles.map(a => ({
-                            title: a.title,
-                            link: a.url,
-                            pubDate: a.publishedAt.replace('T', ' ').replace('Z', ''),
-                            source: a.source?.name || 'GNews',
-                            description: a.description,
-                            imageUrl: a.image, 
-                            _feedCategory: cat
+                            title: a.title, link: a.url, pubDate: a.publishedAt,
+                            source: a.source?.name || 'GNews', description: a.description, imageUrl: a.image, _feedCategory: cat
                         }));
                         setNewsData(p => ({...p, [cat + '_gnews']: mappedGnews}));
                     }
@@ -1079,7 +1120,6 @@ function NewsWidget({ lang }) {
         setIsSearching(true);
         const h = lang === 'nl' ? 'nl' : 'en-US';
         const g = lang === 'nl' ? 'NL' : 'US';
-        const query = `${debouncedSearch} when:2d`; 
         
         let combinedSearch = [];
         let fetchedCount = 0;
@@ -1090,14 +1130,15 @@ function NewsWidget({ lang }) {
             }
         };
 
-        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${h}&gl=${g}`;
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
-        .then(r=>r.json()).then(d => { 
-            if (d.items && Array.isArray(d.items)) {
-                combinedSearch = [...combinedSearch, ...d.items.map(item => ({...item, _feedCategory: 'ZOEKEN'}))];
-            }
-            fetchedCount++; checkDone();
-        }).catch(e => { fetchedCount++; checkDone(); });
+        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(debouncedSearch)}&hl=${h}&gl=${g}`;
+        
+        // Zoeken via onbeperkte ruwe RSS
+        fetchRssRaw(rssUrl, 'ZOEKEN')
+            .then(items => {
+                combinedSearch = [...combinedSearch, ...items];
+                fetchedCount++; checkDone();
+            })
+            .catch(e => { fetchedCount++; checkDone(); });
 
         if (gnewsKey) {
             const gnewsLang = lang === 'nl' ? 'nl' : 'en';
@@ -1105,7 +1146,7 @@ function NewsWidget({ lang }) {
             .then(r=>r.json()).then(d => {
                 if (d.articles && Array.isArray(d.articles)) {
                     const mapped = d.articles.map(a => ({
-                        title: a.title, link: a.url, pubDate: a.publishedAt.replace('T', ' ').replace('Z', ''),
+                        title: a.title, link: a.url, pubDate: a.publishedAt,
                         source: a.source?.name || 'GNews', description: a.description, imageUrl: a.image, _feedCategory: 'ZOEKEN'
                     }));
                     combinedSearch = [...combinedSearch, ...mapped];
@@ -1140,17 +1181,6 @@ function NewsWidget({ lang }) {
             setPriority(newPri); S.save('news_priority', newPri); syncNewsSettings();
         }
         setDragItem(null); setDragType(null);
-    };
-
-    const formatDate = (pubDate) => {
-        if (!pubDate) return '';
-        try {
-            const [datePart, timePart] = pubDate.split(' ');
-            if (!datePart || !timePart) return pubDate;
-            const [y, m, d] = datePart.split('-');
-            const [h, min] = timePart.split(':');
-            return `${d}-${m}-${y} | ${h}:${min}`;
-        } catch(e) { return pubDate; }
     };
 
     const getSourceColor = (src) => {
@@ -1195,8 +1225,8 @@ function NewsWidget({ lang }) {
         });
 
         filtered.sort((a, b) => {
-            const timeA = new Date(a.pubDate.replace(/-/g, '/')).getTime();
-            const timeB = new Date(b.pubDate.replace(/-/g, '/')).getTime();
+            const timeA = new Date(a.pubDate).getTime();
+            const timeB = new Date(b.pubDate).getTime();
             
             if (sortMode === 'tijd') return timeB - timeA;
 
@@ -1246,19 +1276,6 @@ function NewsWidget({ lang }) {
         if (isDescriptionRedundant(displayTitle, cleanDesc)) cleanDesc = '';
 
         const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
-        
-        // `NIEUW: Robuuste DOMParser afbeeldingszoeker`
-        let finalImageUrl = item.imageUrl || item.thumbnail || (item.enclosure && item.enclosure.link) || null;
-        if (!finalImageUrl && item.description) {
-            try {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(item.description, 'text/html');
-                const img = doc.querySelector('img');
-                if (img && img.src && !img.src.includes('pixel') && !img.src.includes('tracking')) {
-                    finalImageUrl = img.src;
-                }
-            } catch(e) {}
-        }
 
         return (
             <a href={item.link} target="_blank" key={i} className={`flex gap-3 border-b border-gray-100 pb-4 mb-4 hover:bg-gray-50 transition group ${isPriorityItem && sortMode === 'bron' ? 'bg-green-50/30 -mx-2 px-2 pt-2 rounded' : ''}`}>
@@ -1292,9 +1309,9 @@ function NewsWidget({ lang }) {
                     </div>
                 </div>
 
-                {finalImageUrl && (
+                {item.imageUrl && (
                     <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 mt-0.5">
-                        <img src={finalImageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        <img src={item.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                     </div>
                 )}
             </a>
@@ -1422,14 +1439,12 @@ function NewsWidget({ lang }) {
                             />
                         </div>
                     </div>
-
                 </div>
             )}
 
             <div className="flex-1 overflow-y-auto hide-scroll p-4 bg-gray-50/30">
                 {!debouncedSearch ? (
                     <div className="w-full flex flex-col">
-                        {/* `WIJZIGING: De 'ALLE NIEUWS' header balk is hier volledig verwijderd` */}
                         <div className="space-y-4">
                             {finalNews.slice(0, newsLimit).map((item, i) => renderItemCard(item, i))}
                             {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen & Vandaag/Gisteren filter toepassen...</div>}
@@ -1443,7 +1458,6 @@ function NewsWidget({ lang }) {
                     </div>
                 ) : (
                     <div className="w-full flex flex-col">
-                        {/* `WIJZIGING: De 'ZOEKEN' header balk is hier volledig verwijderd` */}
                         <div className="space-y-4">
                             {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Actueel nieuws ophalen...</div>}
                             {!isSearching && searchResults.length === 0 && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Geen recente resultaten gevonden voor "{debouncedSearch}".</div>}
