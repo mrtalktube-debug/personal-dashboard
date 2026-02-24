@@ -78,8 +78,12 @@ const Ico = {
 };
 
 function WeatherBar({ lang }) {
-    /* Wijziging: standaardwaarde geoptimaliseerd naar de laatst opgeslagen locatie, fallback naar Den Haag i.p.v. leeg/Amsterdam */
-    const [c, setC] = useState(() => S.load('wcity', 'Den Haag'));
+    /* `Nieuwe wijziging`: Filter foute cache-waarden eruit en gebruik de veilige opgeslagen fallback */
+    const [c, setC] = useState(() => {
+        const saved = S.load('wcity', '');
+        if (saved === 'Huidige Locatie' || saved === 'Amsterdam') return 'Zoetermeer';
+        return saved || 'Zoetermeer';
+    });
     const [w, setW] = useState(null);
     const [locLoading, setLocLoading] = useState(false);
     const [autoGps, setAutoGps] = useState(() => S.load('auto_gps', true));
@@ -101,33 +105,28 @@ function WeatherBar({ lang }) {
     }, []);
 
     const handleLocate = (silent = false) => {
-        if(!navigator.geolocation) {
-            if(!silent) alert('Geolocatie wordt niet ondersteund door je browser.');
-            return;
-        }
+        if(!navigator.geolocation) return;
         setLocLoading(true);
+        /* `Nieuwe wijziging`: Timeout toegevoegd en strikte beveiliging tegen overschrijven bij blokkade */
         navigator.geolocation.getCurrentPosition(async (pos) => {
             const { latitude, longitude } = pos.coords;
             try {
                 const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=${lang}`);
                 const data = await res.json();
-                /* Wijziging: Huidige Locatie string verwijderd, we pakken alleen geldige steden of skippen het */
                 const newCity = data.city || data.locality;
                 if(newCity) {
                     setC(newCity);
                     S.save('wcity', newCity);
+                    setAutoGps(true);
+                    S.save('auto_gps', true);
                 }
-                setAutoGps(true);
-                S.save('auto_gps', true);
             } catch(e) { console.error("Locatiefout:", e); }
             setLocLoading(false);
         }, () => {
-            /* Wijziging: Als GPS faalt door werkgever permissies, behouden we in stilte de laatst bekende stad (geen Huidige Locatie fallback meer) */
-            if(!silent) alert('Toegang tot locatie geweigerd. Laatst gekozen locatie wordt behouden.');
             setLocLoading(false); 
             setAutoGps(false); 
             S.save('auto_gps', false);
-        });
+        }, { timeout: 5000 });
     };
 
     useEffect(() => { if (autoGps) handleLocate(true); }, []);
