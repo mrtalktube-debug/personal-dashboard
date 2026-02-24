@@ -709,14 +709,18 @@ function CryptoWidget({ lang }) {
 function AgendaWidget({ lang }) {
     const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
     const cals = (Array.isArray(rawCals)?rawCals:[]).map(c=>c?.name).filter(Boolean);
+    
+    const getLocalYYYYMMDD = (dateObj) => { return `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`; };
+    const todayStr = getLocalYYYYMMDD(new Date());
+
     const [view, setView] = useState('dag'); 
-    const [d, setD] = useState(new Date().toISOString().split('T')[0]); 
+    const [d, setD] = useState(todayStr); 
     const [f, setF] = useState(cals);
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [groupBy, setGroupBy] = useState('person'); 
     
-    const getDayStr = (dStr) => { const days = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']; return days[new Date(dStr||Date.now()).getDay()]; };
+    const getDayStr = (dStr) => { const days = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']; return days[new Date(dStr||todayStr).getDay()]; };
 
     useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => (c||'').toLowerCase().includes((e.detail.payload||'').toLowerCase())); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
     useEffect(() => { setF(cals); }, [JSON.stringify(cals)]);
@@ -734,9 +738,7 @@ function AgendaWidget({ lang }) {
                 const hour = m[4] ? parseInt(m[4]) : 0; const min = m[5] ? parseInt(m[5]) : 0; const sec = m[6] ? parseInt(m[6]) : 0;
                 const isAllDay = !m[4];
                 let dateObj = isUTC ? new Date(Date.UTC(year, month, day, hour, min, sec)) : new Date(year, month, day, hour, min, sec);
-                const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`;
-                const timeStr = isAllDay ? 'Hele dag' : dateObj.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
-                return { date: dateStr, time: timeStr, dateObj, isAllDay };
+                return { date: getLocalYYYYMMDD(dateObj), time: isAllDay ? 'Hele dag' : dateObj.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }), dateObj, isAllDay };
             };
 
             for (let c of (Array.isArray(rawCals)?rawCals:[])) {
@@ -756,7 +758,33 @@ function AgendaWidget({ lang }) {
                         else if (l.startsWith('SUMMARY')) { const idx = l.indexOf(':'); if (idx !== -1) cur.t = l.substring(idx + 1).replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\n/g, ' ').replace(/\\/g, ''); }
                         else if (l.startsWith('DTSTART')) { const parsed = parseICalDate(l); if (parsed) { cur.date = parsed.date; cur.time = parsed.time; cur.dateObj = parsed.dateObj; } }
                         else if (l.startsWith('DTEND')) { const parsed = parseICalDate(l); if (parsed && !parsed.isAllDay) cur.endTime = parsed.time; }
-                        else if (l.startsWith('END:VEVENT') && cur.t && cur.date) { allEvs.push({ t: cur.t, p: c.name, date: cur.date, time: cur.time, endTime: cur.endTime }); }
+                        else if (l.startsWith('RRULE:')) { rrule = l; }
+                        else if (l.startsWith('END:VEVENT') && cur.t && cur.date) {
+                            if (rrule && cur.dateObj) {
+                                const expanded = [];
+                                const params = {}; rrule.replace('RRULE:', '').split(';').forEach(p => { const [k, v] = p.split('='); params[k] = v; });
+                                const freq = params.FREQ; const count = params.COUNT ? parseInt(params.COUNT) : 200;
+                                const untilMatch = params.UNTIL ? params.UNTIL.match(/(\d{4})(\d{2})(\d{2})/) : null;
+                                const until = untilMatch ? new Date(parseInt(untilMatch[1]), parseInt(untilMatch[2])-1, parseInt(untilMatch[3]), 23, 59, 59) : null;
+                                const interval = params.INTERVAL ? parseInt(params.INTERVAL) : 1;
+                                const now = new Date(); const rangeStart = new Date(now); rangeStart.setDate(rangeStart.getDate() - 7); 
+                                const rangeEnd = new Date(now); rangeEnd.setDate(rangeEnd.getDate() + 60); 
+                                let current = new Date(cur.dateObj); let generated = 0;
+                                for (let i = 0; i < 500 && generated < count; i++) {
+                                    if (until && current > until) break; if (current > rangeEnd) break;
+                                    if (current >= rangeStart) { expanded.push({ t: cur.t, p: c.name, time: cur.time, endTime: cur.endTime, date: getLocalYYYYMMDD(current) }); }
+                                    generated++;
+                                    if (freq === 'DAILY') current.setDate(current.getDate() + interval);
+                                    else if (freq === 'WEEKLY') current.setDate(current.getDate() + (7 * interval));
+                                    else if (freq === 'MONTHLY') current.setMonth(current.getMonth() + interval);
+                                    else if (freq === 'YEARLY') current.setFullYear(current.getFullYear() + interval);
+                                    else break; 
+                                }
+                                allEvs.push(...expanded);
+                            } else {
+                                allEvs.push({ t: cur.t, p: c.name, date: cur.date, time: cur.time, endTime: cur.endTime });
+                            }
+                        }
                     }
                 } catch (e) { allEvs.push({ t: `⚠ ${c.name} fout`, p: c.name, date: d, time: '00:00' }); }
             }
@@ -766,37 +794,42 @@ function AgendaWidget({ lang }) {
         fetchCals();
     }, [JSON.stringify(rawCals)]);
 
-    // Nieuwe veilige kleurfunctie voor EXCLUSIEF de linker border
     const getColorHex = (name) => {
-        if (!name) return '#9ca3af'; // gray-400
+        if (!name) return '#9ca3af'; 
         const n = String(name).toLowerCase();
-        if (n.includes('ryan')) return '#ef4444'; // red-500
-        if (n.includes('yaron')) return '#3b82f6'; // blue-500
-        if (n.includes('michael')) return '#22c55e'; // green-500
-        if (n.includes('fam')) return '#f97316'; // orange-500
-        return '#a855f7'; // purple-500
+        if (n.includes('ryan')) return '#ef4444'; 
+        if (n.includes('yaron')) return '#3b82f6'; 
+        if (n.includes('michael')) return '#22c55e'; 
+        if (n.includes('fam')) return '#f97316'; 
+        return '#a855f7'; 
     };
 
-    const tEnd = new Date(d); tEnd.setDate(tEnd.getDate() + 6); const dEnd = tEnd.toISOString().split('T')[0];
+    const safeD = d || todayStr;
+    const tEnd = new Date(safeD); tEnd.setDate(tEnd.getDate() + 6); const dEnd = getLocalYYYYMMDD(tEnd);
+    
     const getWeekNumber = (dateStr) => { const date = new Date(dateStr); date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay()||7)); return Math.ceil(( ( (date - new Date(Date.UTC(date.getUTCFullYear(),0,1))) / 86400000) + 1)/7); };
     
-    const filteredItems = (Array.isArray(items)?items:[]).filter(i => (f||[]).includes(i?.p) && (view === 'dag' ? i?.date === d : (i?.date >= d && i?.date <= dEnd))).sort((a,b) => {
+    const filteredItems = (Array.isArray(items)?items:[]).filter(i => (f||[]).includes(i?.p) && (view === 'dag' ? i?.date === safeD : (i?.date >= safeD && i?.date <= dEnd))).sort((a,b) => {
         if(a.date !== b.date) return String(a.date||'').localeCompare(String(b.date||''));
         const tA = (a.time === 'Hele dag' || !a.time) ? '00:00' : String(a.time); const tB = (b.time === 'Hele dag' || !b.time) ? '00:00' : String(b.time); return tA.localeCompare(tB);
     });
 
-    const getSummary = (name) => {
-        const evs = filteredItems.filter(e => (e.p || '').toLowerCase().includes((name||'').toLowerCase()) && e.time !== 'Hele dag');
+    const getSelectedDaySummary = (name) => {
+        const evs = (Array.isArray(items)?items:[]).filter(e => e.date === safeD && (e.p || '').toLowerCase().includes((name||'').toLowerCase()) && e.time !== 'Hele dag');
         if (evs.length === 0) return null;
         const times = []; evs.forEach(e => { if(e.time) times.push(e.time); if(e.endTime) times.push(e.endTime); });
-        const sorted = times.sort(); return `${name}: ${sorted[0]} - ${sorted[sorted.length - 1]}`;
+        const sorted = times.sort(); return `${name.toUpperCase()}: ${sorted[0]} - ${sorted[sorted.length - 1]}`;
     };
     
-    const sumRyan = getSummary('Ryan'); const sumYaron = getSummary('Yaron');
+    const sumRyan = getSelectedDaySummary('Ryan'); 
+    const sumYaron = getSelectedDaySummary('Yaron');
+
+    const navDateText = view === 'dag' 
+        ? `${getDayStr(safeD).toUpperCase()} ${fmtDate(safeD).slice(0,5)}` 
+        : `${fmtDate(safeD).slice(0,5)} / ${fmtDate(dEnd).slice(0,5)}`;
 
     return (
         <div className="widget h-[450px] flex flex-col">
-            {/* BALK 1: Header + Sorteer + View Toggle */}
             <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center shrink-0 flex-wrap gap-2">
                 <div className="flex items-center gap-2 text-gray-500 font-black tracking-widest text-[10px] uppercase">
                     <Ico.Cal/> {T[lang].ag}
@@ -812,7 +845,6 @@ function AgendaWidget({ lang }) {
                 </div>
             </div>
             
-            {/* BALK 2: Filters met linker border (Zoals Yaron in screenshot) */}
             <div className="flex border-b border-gray-200 bg-white overflow-x-auto p-2.5 gap-2.5 hide-scroll shrink-0">
                 {cals.map(p => {
                     const isActive = (f||[]).includes(p);
@@ -829,23 +861,22 @@ function AgendaWidget({ lang }) {
                 })}
             </div>
             
-            {/* BALK 3: Datum Navigatie (Zoals screenshot) */}
             <div className="p-2.5 flex border-b border-gray-200 bg-gray-50 items-center justify-between shrink-0 gap-2">
                 <div className="relative flex items-center bg-white border border-gray-200 p-1.5 px-2 rounded shadow-sm hover:bg-gray-100 transition cursor-pointer shrink-0">
-                    <span className="text-xs">📅</span>
-                    <span className="text-[10px] font-black text-gray-700 ml-1.5">{d.slice(8,10)}</span>
-                    <input type="date" value={d} onChange={(e)=>setD(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <span className="text-xs pointer-events-none">📅</span>
+                    <span className="text-[10px] font-black text-gray-700 ml-1.5 pointer-events-none">{safeD.slice(8,10)}</span>
+                    <input type="date" value={safeD} onChange={(e)=>setD(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                 </div>
                 
                 <div className="flex-1 flex items-center justify-between bg-white border border-gray-200 rounded shadow-sm px-1 overflow-hidden min-w-[140px] max-w-[220px]">
-                    <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500 transition">&lt;</button>
+                    <button onClick={()=>{const nd=new Date(safeD);nd.setDate(nd.getDate()-(view==='week'?7:1));setD(getLocalYYYYMMDD(nd))}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500 transition">&lt;</button>
                     <span className="text-[10px] font-black text-center uppercase tracking-widest text-gray-700 whitespace-nowrap px-1">
-                        <span className="text-blue-600">WK {getWeekNumber(d)}</span> <span className="opacity-30">|</span> {view === 'dag' ? `${getDayStr(d)} ${fmtDate(d)}` : `${getDayStr(d)} ${fmtDate(d).slice(0,5)}`}
+                        <span className="text-blue-600">WK {getWeekNumber(safeD)}</span> <span className="opacity-30">|</span> {navDateText}
                     </span>
-                    <button onClick={()=>{const nd=new Date(d);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(nd.toISOString().split('T')[0])}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500 transition">&gt;</button>
+                    <button onClick={()=>{const nd=new Date(safeD);nd.setDate(nd.getDate()+(view==='week'?7:1));setD(getLocalYYYYMMDD(nd))}} className="px-3 py-1.5 hover:bg-gray-100 font-bold text-gray-500 transition">&gt;</button>
                 </div>
 
-                <button onClick={() => setD(new Date().toISOString().split('T')[0])} className="px-3 py-1.5 bg-white border border-gray-200 shadow-sm text-[9px] font-bold rounded uppercase text-blue-600 hover:text-blue-800 transition shrink-0">
+                <button onClick={() => setD(todayStr)} className="px-3 py-1.5 bg-white border border-gray-200 shadow-sm text-[9px] font-bold rounded uppercase text-blue-600 hover:text-blue-800 transition shrink-0">
                     Vandaag
                 </button>
             </div>
@@ -890,7 +921,7 @@ function AgendaWidget({ lang }) {
                             })}
                         </div>
                     )
-                ) : ( <div className="col-span-2 text-center text-xs text-gray-400 mt-10 font-bold uppercase tracking-widest">Geen afspraken</div> )}
+                ) : ( <div className="col-span-2 text-center text-[10px] text-gray-400 mt-10 font-bold uppercase tracking-widest">Geen afspraken</div> )}
             </div>
             <div className="bg-gray-50 border-t border-gray-200 p-2 shrink-0 flex items-center justify-center min-h-[36px]">
                 <div className="flex gap-6 text-[9px] font-black uppercase tracking-widest text-gray-600">{sumRyan && <span>🎒 {sumRyan}</span>}{sumYaron && <span>🎒 {sumYaron}</span>}</div>
