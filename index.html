@@ -969,20 +969,20 @@ function NewsWidget({ lang }) {
     const [manage, setManage] = useState(false);
     const [newsData, setNewsData] = useState({});
     
-    // Zoek states
+    // Zoek states voor de 2e kolom
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     
+    // Zwarte lijst, prioriteit en globale sortering (3-weg)
     const [blocked, setBlocked] = useState(() => S.load('news_blocked', []));
     const [priority, setPriority] = useState(() => S.load('news_priority', []));
-    const [sortMode, setSortMode] = useState(() => S.load('news_sort', 'bron'));
+    const [sortMode, setSortMode] = useState(() => S.load('news_sort', 'tijd')); // 'tijd', 'bron', of 'onderwerp'
     
     const [newCol, setNewCol] = useState('');
     const [newBlock, setNewBlock] = useState('');
     const [newPriority, setNewPriority] = useState(''); 
-    const [dragCol, setDragCol] = useState(null);
 
     const getGoogleNewsUrl = (cat, language) => {
         if (cat.startsWith('http')) return cat;
@@ -994,76 +994,51 @@ function NewsWidget({ lang }) {
         return `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`;
     };
 
-    // Standaard kolommen inladen
+    // Laad standaard onderwerpen en hang een 'stempel' aan de artikelen
     useEffect(() => {
         cols.forEach(cat => {
             const rssUrl = getGoogleNewsUrl(cat, lang);
             fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
             .then(r=>r.json()).then(d => { 
                 if(d.items && Array.isArray(d.items)) {
-                    setNewsData(p => ({...p, [cat]: d.items})); 
+                    // Stempel de categorie eraan vast voor de 'Sorteer op Onderwerp' functie
+                    const taggedItems = d.items.map(item => ({...item, _feedCategory: cat}));
+                    setNewsData(p => ({...p, [cat]: taggedItems})); 
                 }
             })
             .catch(e => console.error("Nieuws API fout voor", cat, e));
         });
     }, [cols, lang]);
 
-    // Debounce voor de zoekbalk (voorkomt API blokkade tijdens typen)
+    // Zoekbalk vertraging ter preventie van API blokkades
     useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedSearch(search.trim());
-        }, 600);
+        const handler = setTimeout(() => setDebouncedSearch(search.trim()), 600);
         return () => clearTimeout(handler);
     }, [search]);
 
-    // Live zoekopdracht uitvoeren voor kolom 2
+    // Live Web Search voor Kolom 2
     useEffect(() => {
-        if (!debouncedSearch) {
-            setSearchResults([]);
-            return;
-        }
+        if (!debouncedSearch) { setSearchResults([]); return; }
         setIsSearching(true);
         const h = lang === 'nl' ? 'nl' : 'en-US';
         const g = lang === 'nl' ? 'NL' : 'US';
-        // when:30d dwingt Google om maximaal 30 dagen terug te zoeken
         const query = `${debouncedSearch} when:30d`;
         const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${h}&gl=${g}`;
         
         fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
         .then(r=>r.json()).then(d => { 
-            if(d.items && Array.isArray(d.items)) {
-                setSearchResults(d.items); 
-            } else {
-                setSearchResults([]);
-            }
+            setSearchResults((d.items && Array.isArray(d.items)) ? d.items : []);
             setIsSearching(false);
-        })
-        .catch(e => {
-            console.error("Zoek API fout", e);
-            setSearchResults([]);
-            setIsSearching(false);
-        });
+        }).catch(e => { setSearchResults([]); setIsSearching(false); });
     }, [debouncedSearch, lang]);
 
+    // Beheer Functies
     const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n = [...cols, newCol.toUpperCase()]; setCols(n); S.save('newscats', n); setNewCol(''); } };
     const removeCol = (c) => { const n = cols.filter(x => x !== c); setCols(n); S.save('newscats', n); };
     const addBlock = () => { if(newBlock && !blocked.includes(newBlock.toLowerCase())) { const n = [...blocked, newBlock.toLowerCase()]; setBlocked(n); S.save('news_blocked', n); setNewBlock(''); } };
     const removeBlock = (b) => { const n = blocked.filter(x => x !== b); setBlocked(n); S.save('news_blocked', n); };
     const addPriority = () => { if(newPriority && !priority.includes(newPriority.toLowerCase())) { const n = [...priority, newPriority.toLowerCase()]; setPriority(n); S.save('news_priority', n); setNewPriority(''); } };
     const removePriority = (p) => { const n = priority.filter(x => x !== p); setPriority(n); S.save('news_priority', n); };
-
-    const handleDragStart = (e, col) => { setDragCol(col); };
-    const handleDrop = (e, col) => {
-        if (!dragCol || dragCol === col) return;
-        const newCols = [...cols];
-        const dragIdx = newCols.indexOf(dragCol);
-        const dropIdx = newCols.indexOf(col);
-        newCols.splice(dragIdx, 1);
-        newCols.splice(dropIdx, 0, dragCol);
-        setCols(newCols);
-        S.save('newscats', newCols);
-        setDragCol(null);
-    };
 
     const formatDate = (pubDate) => {
         if (!pubDate) return '';
@@ -1092,6 +1067,7 @@ function NewsWidget({ lang }) {
         return false;
     };
 
+    // Masterlijst: Samenvoegen en Ontdubbelen op URL
     const allNewsMap = new Map();
     Object.values(newsData).forEach(catItems => {
         catItems.forEach(item => {
@@ -1106,27 +1082,40 @@ function NewsWidget({ lang }) {
         let filtered = itemsList.filter(item => {
             const text = (item.title + " " + (item.source || '') + " " + (item.description || '')).toLowerCase();
             if (blocked.some(b => text.includes(b))) return false;
-            return true; // Lokale search block is verwijderd: filtert niet meer de andere kolommen
+            return true; 
         });
 
         filtered.sort((a, b) => {
             const timeA = new Date(a.pubDate.replace(/-/g, '/')).getTime();
             const timeB = new Date(b.pubDate.replace(/-/g, '/')).getTime();
             
-            if (sortMode === 'nieuwste') return timeB - timeA;
-
-            const dayA = new Date(timeA).setHours(0,0,0,0);
-            const dayB = new Date(timeB).setHours(0,0,0,0);
-
-            if (dayA !== dayB) return dayB - dayA;
-
             const srcA = (a.source || a.title || '').toLowerCase();
             const srcB = (b.source || b.title || '').toLowerCase();
-            const isPriA = priority.some(p => srcA.includes(p)) ? 1 : 0;
-            const isPriB = priority.some(p => srcB.includes(p)) ? 1 : 0;
-            
-            if (isPriA !== isPriB) return isPriB - isPriA; 
-            
+            const isPriA = priority.some(p => (srcA + ' ' + a.title.toLowerCase()).includes(p)) ? 1 : 0;
+            const isPriB = priority.some(p => (srcB + ' ' + b.title.toLowerCase()).includes(p)) ? 1 : 0;
+
+            if (sortMode === 'tijd') {
+                const dayA = new Date(timeA).setHours(0,0,0,0);
+                const dayB = new Date(timeB).setHours(0,0,0,0);
+                if (dayA !== dayB) return dayB - dayA;
+                if (isPriA !== isPriB) return isPriB - isPriA; // Voorrangsbron wint binnen dezelfde dag
+                return timeB - timeA;
+            }
+
+            if (sortMode === 'bron') {
+                if (isPriA !== isPriB) return isPriB - isPriA; // Voorrangsbron wint altijd
+                if (srcA !== srcB) return srcA.localeCompare(srcB); // Alfabetisch op bron
+                return timeB - timeA;
+            }
+
+            if (sortMode === 'onderwerp') {
+                if (isPriA !== isPriB) return isPriB - isPriA; // Voorrangsbron wint altijd
+                const catA = (a._feedCategory || '').toLowerCase();
+                const catB = (b._feedCategory || '').toLowerCase();
+                if (catA !== catB) return catA.localeCompare(catB); // Alfabetisch op onderwerp
+                return timeB - timeA;
+            }
+
             return timeB - timeA;
         });
 
@@ -1149,14 +1138,15 @@ function NewsWidget({ lang }) {
         const srcRegex = new RegExp(`[\\-\\|]?\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
         cleanDesc = cleanDesc.replace(srcRegex, '').trim();
 
-        if (isDescriptionRedundant(displayTitle, cleanDesc)) {
-            cleanDesc = '';
-        }
+        if (isDescriptionRedundant(displayTitle, cleanDesc)) cleanDesc = '';
 
         const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
+        
+        // Bepaal de logische weergavetekst linksonder afhankelijk van sortering
+        const labelText = (sortMode === 'onderwerp' && item._feedCategory) ? item._feedCategory : sourceName;
 
         return (
-            <a href={item.link} target="_blank" key={i} className={`block border-b border-gray-100 pb-4 hover:bg-gray-50 transition group ${isPriorityItem && sortMode === 'bron' ? 'bg-green-50/30 -mx-2 px-2 pt-2 rounded' : ''}`}>
+            <a href={item.link} target="_blank" key={i} className={`block border-b border-gray-100 pb-4 hover:bg-gray-50 transition group ${isPriorityItem ? 'bg-green-50/30 -mx-2 px-2 pt-2 rounded' : ''}`}>
                 <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition">
                     {displayTitle}
                 </p>
@@ -1166,9 +1156,9 @@ function NewsWidget({ lang }) {
                     </p>
                 )}
                 <div className="flex justify-between items-end mt-3">
-                    <span className="text-[10px] font-black uppercase tracking-wider truncate max-w-[60%] flex items-center gap-1" style={{ color: getSourceColor(sourceName) }}>
+                    <span className="text-[10px] font-black uppercase tracking-wider truncate max-w-[60%] flex items-center gap-1" style={{ color: getSourceColor(labelText) }}>
                         {isPriorityItem && <span title="Voorrang bron">⭐</span>}
-                        {sourceName}
+                        {labelText}
                     </span>
                     <span className="text-[10px] font-bold text-gray-400 shrink-0">
                         {formatDate(item.pubDate)}
@@ -1180,22 +1170,28 @@ function NewsWidget({ lang }) {
 
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
+            {/* Header */}
             <div className="p-3 bg-[#f8f9fa] border-b border-gray-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-gray-600 font-black tracking-widest text-[11px] uppercase">
                     <Ico.Nws/> NEWS
                 </div>
-                <div className="flex gap-2 flex-1 max-w-[500px] justify-end">
-                    <div className="flex bg-[#eef0f2] p-1 rounded-md border border-gray-200 shrink-0">
-                        <button onClick={() => {setSortMode('nieuwste'); S.save('news_sort', 'nieuwste');}} className={`px-3 py-1 text-[9px] font-bold rounded ${sortMode === 'nieuwste' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500'}`}>Nieuwste</button>
-                        <button onClick={() => {setSortMode('bron'); S.save('news_sort', 'bron');}} className={`px-3 py-1 text-[9px] font-bold rounded ${sortMode === 'bron' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500'}`}>Voorrang</button>
+                <div className="flex gap-2 flex-1 justify-end items-center">
+                    
+                    {/* De 3-weg Sorteer Switch */}
+                    <div className="hidden sm:flex bg-[#eef0f2] p-1 rounded-md border border-gray-200 shrink-0">
+                        {['tijd', 'bron', 'onderwerp'].map(m => (
+                            <button key={m} onClick={() => {setSortMode(m); S.save('news_sort', m);}} className={`px-3 py-1 text-[9px] font-bold rounded uppercase transition ${sortMode === m ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:bg-gray-200'}`}>
+                                {m}
+                            </button>
+                        ))}
                     </div>
 
                     <input 
                         type="text" 
-                        placeholder="Live nieuws zoeken..." 
+                        placeholder="Live Web Search..." 
                         value={search} 
                         onChange={e=>setSearch(e.target.value)} 
-                        className="w-1/2 min-w-[120px] px-3 py-1.5 text-[11px] font-medium border border-gray-200 rounded-md outline-none focus:border-blue-500 shadow-sm transition" 
+                        className="w-full max-w-[250px] px-3 py-1.5 text-[11px] font-medium border border-gray-200 rounded-md outline-none focus:border-blue-500 shadow-sm transition" 
                     />
                     <button 
                         onClick={()=>setManage(!manage)} 
@@ -1206,59 +1202,80 @@ function NewsWidget({ lang }) {
                 </div>
             </div>
             
+            {/* Mobiele 3-weg Sorteer Switch (Zichtbaar op kleine schermen) */}
+            <div className="sm:hidden flex bg-[#f8f9fa] border-b border-gray-200 p-2 justify-center gap-1 shrink-0">
+                {['tijd', 'bron', 'onderwerp'].map(m => (
+                    <button key={m} onClick={() => {setSortMode(m); S.save('news_sort', m);}} className={`flex-1 px-3 py-1.5 text-[9px] font-bold rounded uppercase transition ${sortMode === m ? 'bg-white shadow-sm text-blue-700 border border-gray-200' : 'text-gray-500'}`}>
+                        {m}
+                    </button>
+                ))}
+            </div>
+            
+            {/* Beheer Paneel (Aangepast voor de weergave zonder losse kolommen) */}
             {manage && (
-                <div className="p-4 bg-gray-100 border-b border-gray-200 flex flex-col gap-3 text-[10px] shrink-0">
-                    <div className="flex gap-2 items-center">
-                        <span className="font-bold w-20">Nieuwe Kolom:</span>
-                        <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addCol()} className="flex-1 p-2 border rounded-md outline-none focus:border-blue-500" placeholder="Bijv. EUROPA, ECONOMIE of RSS link..." />
-                        <button onClick={addCol} className="bg-blue-600 text-white px-4 py-2 rounded-md font-bold hover:bg-blue-700 transition">+</button>
+                <div className="p-4 bg-gray-100 border-b border-gray-200 flex flex-col gap-4 text-[10px] shrink-0">
+                    <div>
+                        <div className="flex gap-2 items-center mb-2">
+                            <span className="font-bold w-20">Nieuw Onderwerp:</span>
+                            <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addCol()} className="flex-1 p-2 border rounded-md outline-none focus:border-blue-500" placeholder="Bijv. EUROPA, ECONOMIE of RSS link..." />
+                            <button onClick={addCol} className="bg-blue-600 text-white px-4 py-2 rounded-md font-bold hover:bg-blue-700 transition">+</button>
+                        </div>
+                        {cols.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pl-22">
+                                {cols.map(c => <span key={c} className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold flex items-center gap-1">{c} <button onClick={()=>removeCol(c)} className="text-blue-500 hover:text-blue-900 ml-1 text-xs">&times;</button></span>)}
+                            </div>
+                        )}
                     </div>
                     
-                    <div className="flex gap-2 items-center">
-                        <span className="font-bold w-20 text-green-700">Voorrang bron:</span>
-                        <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addPriority()} className="flex-1 p-2 border rounded-md outline-none focus:border-green-500" placeholder="Bron (bijv. Tweakers)..." />
-                        <button onClick={addPriority} className="bg-green-600 text-white px-4 py-2 rounded-md font-bold hover:bg-green-700 transition">+</button>
-                    </div>
-                    {priority.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-0">
-                            {priority.map(p => <span key={p} className="bg-green-100 text-green-800 px-2 py-1 rounded font-bold flex items-center gap-1">⭐ {p} <button onClick={()=>removePriority(p)} className="text-green-600 hover:text-green-900 ml-1 text-xs">&times;</button></span>)}
+                    <div className="border-t border-gray-200 pt-3">
+                        <div className="flex gap-2 items-center">
+                            <span className="font-bold w-20 text-green-700">Voorrang bron:</span>
+                            <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addPriority()} className="flex-1 p-2 border rounded-md outline-none focus:border-green-500" placeholder="Bron (bijv. Tweakers)..." />
+                            <button onClick={addPriority} className="bg-green-600 text-white px-4 py-2 rounded-md font-bold hover:bg-green-700 transition">+</button>
                         </div>
-                    )}
+                        {priority.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pl-22 mt-2">
+                                {priority.map(p => <span key={p} className="bg-green-100 text-green-800 px-2 py-1 rounded font-bold flex items-center gap-1">⭐ {p} <button onClick={()=>removePriority(p)} className="text-green-600 hover:text-green-900 ml-1 text-xs">&times;</button></span>)}
+                            </div>
+                        )}
+                    </div>
 
-                    <div className="flex gap-2 items-center mt-1">
-                        <span className="font-bold w-20 text-red-600">Blokkeer woord:</span>
-                        <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addBlock()} className="flex-1 p-2 border rounded-md outline-none focus:border-red-500" placeholder="Te vermijden bron of woord..." />
-                        <button onClick={addBlock} className="bg-red-600 text-white px-4 py-2 rounded-md font-bold hover:bg-red-700 transition">+</button>
-                    </div>
-                    {blocked.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-0">
-                            {blocked.map(b => <span key={b} className="bg-red-100 text-red-800 px-2 py-1 rounded font-bold flex items-center gap-1">🚫 {b} <button onClick={()=>removeBlock(b)} className="text-red-500 hover:text-red-900 ml-1 text-xs">&times;</button></span>)}
+                    <div className="border-t border-gray-200 pt-3">
+                        <div className="flex gap-2 items-center">
+                            <span className="font-bold w-20 text-red-600">Blokkeer woord:</span>
+                            <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addBlock()} className="flex-1 p-2 border rounded-md outline-none focus:border-red-500" placeholder="Te vermijden bron of woord..." />
+                            <button onClick={addBlock} className="bg-red-600 text-white px-4 py-2 rounded-md font-bold hover:bg-red-700 transition">+</button>
                         </div>
-                    )}
-                    <span className="text-gray-500 italic mt-1 font-medium">Tip: Sleep de blauwe titels hieronder (Drag & Drop) om de volgorde te veranderen.</span>
+                        {blocked.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pl-22 mt-2">
+                                {blocked.map(b => <span key={b} className="bg-red-100 text-red-800 px-2 py-1 rounded font-bold flex items-center gap-1">🚫 {b} <button onClick={()=>removeBlock(b)} className="text-red-500 hover:text-red-900 ml-1 text-xs">&times;</button></span>)}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
-            <div className="flex overflow-x-auto flex-1 bg-white hide-scroll">
+            {/* Content: Vaste Twee-koloms Layout */}
+            <div className="flex flex-col md:flex-row flex-1 bg-white overflow-hidden">
                 
-                {/* 1. Vaste 'ALLE NIEUWS' Master Kolom */}
-                <div className="min-w-[320px] w-[320px] border-r border-gray-200 flex flex-col shrink-0">
-                    <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
+                {/* Kolom 1: ALLE NIEUWS (De Master Feed) */}
+                <div className="w-full md:w-1/2 flex flex-col shrink-0 border-b md:border-b-0 md:border-r border-gray-200 h-[50%] md:h-full">
+                    <div className="flex justify-between items-center px-4 py-2 border-b border-gray-200 bg-gray-50 sticky top-0 z-10 shadow-sm">
                         <h4 className="text-[12px] font-black text-gray-900 uppercase tracking-wide truncate pr-2">
                             ALLE NIEUWS
                         </h4>
                     </div>
-                    <div className="flex-1 overflow-y-auto hide-scroll p-4 space-y-4 bg-gray-50/30">
-                        {filterAndSortItems(allNewsRaw).slice(0, 30).map((item, i) => renderItemCard(item, i))}
-                        {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen...</div>}
+                    <div className="flex-1 overflow-y-auto hide-scroll p-4 space-y-4">
+                        {filterAndSortItems(allNewsRaw).slice(0, 40).map((item, i) => renderItemCard(item, i))}
+                        {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen uit onderwerpen...</div>}
                     </div>
                 </div>
 
-                {/* 2. Vaste 'ZOEKEN (LIVE)' Kolom (Reageert puur op zoekveld) */}
-                <div className="min-w-[320px] w-[320px] border-r-[3px] border-blue-100 flex flex-col shrink-0 bg-blue-50/10">
-                    <div className="flex justify-between items-center px-4 py-3 border-b border-blue-100 bg-white sticky top-0 z-10">
+                {/* Kolom 2: ZOEKEN (LIVE) */}
+                <div className="w-full md:w-1/2 flex flex-col shrink-0 bg-blue-50/10 h-[50%] md:h-full">
+                    <div className="flex justify-between items-center px-4 py-2 border-b border-blue-100 bg-white sticky top-0 z-10">
                         <h4 className="text-[12px] font-black text-blue-600 uppercase tracking-wide truncate pr-2">
-                            {debouncedSearch ? `ZOEKEN: ${debouncedSearch}` : 'ZOEKEN (LIVE)'}
+                            {debouncedSearch ? `ZOEKEN: ${debouncedSearch}` : 'LIVE ZOEKEN'}
                         </h4>
                     </div>
                     <div className="flex-1 overflow-y-auto hide-scroll p-4 space-y-4">
@@ -1269,26 +1286,6 @@ function NewsWidget({ lang }) {
                     </div>
                 </div>
 
-                {/* 3. Dynamische Categorie Kolommen */}
-                {cols.map(cat => {
-                    const items = filterAndSortItems(newsData[cat] || []);
-                    return (
-                        <div key={cat} draggable={manage} onDragStart={(e)=>manage && handleDragStart(e, cat)} onDragOver={(e)=>manage && e.preventDefault()} onDrop={(e)=>manage && handleDrop(e, cat)} className={`min-w-[320px] w-[320px] border-r border-gray-200 flex flex-col shrink-0 ${manage ? 'cursor-grab active:cursor-grabbing' : ''}`}>
-                            <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
-                                <h4 className="text-[12px] font-black text-[#0b57d0] uppercase tracking-wide truncate pr-2" title={cat}>
-                                    {cat.startsWith('http') ? 'Custom Feed' : cat}
-                                </h4>
-                                {manage && <button onClick={()=>removeCol(cat)} className="text-red-400 font-bold hover:text-red-600 text-lg leading-none">&times;</button>}
-                            </div>
-                            
-                            <div className="flex-1 overflow-y-auto hide-scroll p-4 space-y-4">
-                                {items.slice(0, 20).map((item, i) => renderItemCard(item, i))}
-                                {(!newsData[cat]) && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Laden...</div>}
-                                {(newsData[cat] && items.length === 0) && <div className="text-[11px] text-gray-400 font-medium text-center mt-10">Geen resultaten.</div>}
-                            </div>
-                        </div>
-                    )
-                })}
             </div>
         </div>
     );
