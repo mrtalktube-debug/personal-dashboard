@@ -1,23 +1,16 @@
 export default async function handler(req, res) {
-    const { q, hl = 'nl' } = req.query;
+    const { q, hl = 'nl', gl = 'NL' } = req.query;
     
     if (!q) {
         return res.status(400).json({ error: 'Missing query parameter' });
     }
 
-    const mkt = hl === 'nl' ? 'nl-NL' : 'en-US';
-    // Bing News RSS is veel stabieler en blokkeert servers niet
-    const url = `https://www.bing.com/news/search?q=${encodeURIComponent(q)}&setmkt=${mkt}&format=rss`;
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${hl}&gl=${gl}`;
     
     try {
-        const response = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
-        });
-        
+        const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+            throw new Error(`Google News API responded with status: ${response.status}`);
         }
         
         const xml = await response.text();
