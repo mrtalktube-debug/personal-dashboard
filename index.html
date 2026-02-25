@@ -1021,29 +1021,49 @@ function NewsWidget({ lang }) {
         fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ALLOWED_EMAIL, settings: s }) }).catch(()=>{});
     };
 
-    // const fastFetch = async (query, hlParam, glParam) => {
+    // Klassieke, foutloze Async functie om syntax-crashes in Babel te voorkomen
+    async function fastFetch(query, hlParam, glParam) {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 8000);
+        
         try {
-            // Stap 1: Eigen API (snel, betrouwbaar)
-            const apiUrl = `/api/news?q=${encodeURIComponent(query)}&hl=${hlParam}&gl=${glParam}`;
+            // Stap 1: Eigen Vercel API
+            const apiUrl = '/api/news?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
             const r = await fetch(apiUrl, { signal: ctrl.signal });
-            if (r.ok) { clearTimeout(tid); return await r.text(); }
+            if (r.ok) {
+                clearTimeout(tid);
+                return await r.text();
+            }
             throw new Error('API failed');
         } catch(e) {
-            // Stap 2: Fallback naar externe proxy's
+            // Stap 2: Veilige opeenvolgende fallback (geen Promise.any om bugs te voorkomen)
             try {
-                const gUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hlParam}&gl=${glParam}`;
-                const proxies = [
-                    `https://corsproxy.io/?${encodeURIComponent(gUrl)}`,
-                    `https://api.allorigins.win/raw?url=${encodeURIComponent(gUrl)}`
-                ];
-                const r2 = await Promise.any(proxies.map(p => fetch(p, { signal: ctrl.signal }).then(r => { if (!r.ok) throw new Error(); return r.text(); })));
-                clearTimeout(tid);
-                return r2;
-            } catch(e2) { clearTimeout(tid); return null; }
+                const gUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
+                const proxy1 = 'https://corsproxy.io/?' + encodeURIComponent(gUrl);
+                const r2 = await fetch(proxy1, { signal: ctrl.signal });
+                if (r2.ok) {
+                    clearTimeout(tid);
+                    return await r2.text();
+                }
+                throw new Error('Proxy 1 failed');
+            } catch(e2) {
+                try {
+                    const gUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
+                    const proxy2 = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(gUrl);
+                    const r3 = await fetch(proxy2, { signal: ctrl.signal });
+                    if (r3.ok) {
+                        clearTimeout(tid);
+                        return await r3.text();
+                    }
+                } catch(e3) {
+                    clearTimeout(tid);
+                    return null;
+                }
+            }
+            clearTimeout(tid);
+            return null;
         }
-    };
+    }
 
     const parseRSS = (xml, cat) => {
         const doc = new DOMParser().parseFromString(xml, 'text/xml');
@@ -1071,8 +1091,8 @@ function NewsWidget({ lang }) {
             let img = null;
             const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
             if (imgM) img = imgM[1];
-            if (!img && srcUrl) { try { img = `https://logo.clearbit.com/${new URL(srcUrl).hostname.replace('www.','')}?size=80`; } catch(e){} }
-            if (!img && link) { try { img = `https://www.google.com/s2/favicons?domain=${new URL(link).hostname.replace('www.','')}&sz=64`; } catch(e){} }
+            if (!img && srcUrl) { try { img = 'https://logo.clearbit.com/' + new URL(srcUrl).hostname.replace('www.','') + '?size=80'; } catch(e){} }
+            if (!img && link) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(link).hostname.replace('www.','') + '&sz=64'; } catch(e){} }
 
             if (pubDate) {
                 try {
@@ -1089,7 +1109,7 @@ function NewsWidget({ lang }) {
 
     useEffect(() => {
         let alive = true;
-        const cached = sessionStorage.getItem('nws_cache_v6');
+        const cached = sessionStorage.getItem('nws_cache_v7');
         if (cached) {
             try {
                 const { t, d } = JSON.parse(cached);
@@ -1099,26 +1119,31 @@ function NewsWidget({ lang }) {
 
         setFeedReady(false);
         const seen = new Set();
+        let merged = [];
 
-        cols.forEach(async (cat) => {
-            const h = lang === 'nl' ? 'nl' : 'en-US';
-            const g = lang === 'nl' ? 'NL' : 'US';
-            const xml = await fastFetch(cat, h, g);
-            if (!xml || !alive) return;
-            const items = parseRSS(xml, cat);
-            if (!alive) return;
+        const loadCats = async () => {
+            for (const cat of cols) {
+                if (!alive) return;
+                const h = lang === 'nl' ? 'nl' : 'en-US';
+                const g = lang === 'nl' ? 'NL' : 'US';
+                const xml = await fastFetch(cat, h, g);
+                if (!xml || !alive) continue;
+                
+                const items = parseRSS(xml, cat);
+                if (!alive) return;
 
-            setAllArticles(prev => {
-                const merged = [...prev];
                 items.forEach(a => {
                     const key = a.link || a.title.substring(0, 40);
                     if (!seen.has(key)) { seen.add(key); merged.push(a); }
                 });
-                sessionStorage.setItem('nws_cache_v6', JSON.stringify({ t: Date.now(), d: merged }));
-                return merged;
-            });
-            setFeedReady(true);
-        });
+                
+                setAllArticles([...merged]);
+                sessionStorage.setItem('nws_cache_v7', JSON.stringify({ t: Date.now(), d: merged }));
+            }
+            if (alive) setFeedReady(true);
+        };
+        
+        loadCats();
 
         return () => { alive = false; };
     }, [cols, lang]);
@@ -1320,7 +1345,7 @@ function NewsWidget({ lang }) {
                                                 const el = e.target;
                                                 if (!el.dataset.retried) {
                                                     el.dataset.retried = '1';
-                                                    try { el.src = `https://www.google.com/s2/favicons?domain=${new URL(a.link).hostname.replace('www.','')}&sz=64`; }
+                                                    try { el.src = 'https://www.google.com/s2/favicons?domain=' + new URL(a.link).hostname.replace('www.','') + '&sz=64'; }
                                                     catch(err) { el.parentElement.style.display='none'; }
                                                 } else { el.parentElement.style.display='none'; }
                                             }}
