@@ -1021,13 +1021,11 @@ function NewsWidget({ lang }) {
         fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ALLOWED_EMAIL, settings: s }) }).catch(()=>{});
     };
 
-    // Klassieke, foutloze Async functie om syntax-crashes in Babel te voorkomen
     async function fastFetch(query, hlParam, glParam) {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 8000);
         
         try {
-            // Stap 1: Eigen Vercel API
             const apiUrl = '/api/news?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
             const r = await fetch(apiUrl, { signal: ctrl.signal });
             if (r.ok) {
@@ -1036,7 +1034,6 @@ function NewsWidget({ lang }) {
             }
             throw new Error('API failed');
         } catch(e) {
-            // Stap 2: Veilige opeenvolgende fallback (geen Promise.any om bugs te voorkomen)
             try {
                 const gUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
                 const proxy1 = 'https://corsproxy.io/?' + encodeURIComponent(gUrl);
@@ -1088,11 +1085,22 @@ function NewsWidget({ lang }) {
             let cleanDesc = desc.replace(/<[^>]+>/g, '').trim();
             if (cleanDesc.toLowerCase().startsWith(title.toLowerCase().substring(0, 30))) cleanDesc = '';
 
+            // --- FIX START: Verbeterde afbeelding detectie ---
             let img = null;
-            const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
-            if (imgM) img = imgM[1];
-            if (!img && srcUrl) { try { img = 'https://logo.clearbit.com/' + new URL(srcUrl).hostname.replace('www.','') + '?size=80'; } catch(e){} }
-            if (!img && link) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(link).hostname.replace('www.','') + '&sz=64'; } catch(e){} }
+            // 1. Zoek naar directe afbeeldings-URL's in de tekst (vaak betere kwaliteit)
+            const urlM = desc.match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif)(?:\?[^"'\s<>]*)?)/i);
+            if (urlM) {
+                img = urlM[1];
+            } else {
+                // 2. Fallback: oude methode, zoek naar <img> tag src
+                const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (imgM) img = imgM[1];
+            }
+
+            // 3. Fallbacks naar logo services als er echt geen image in de feed zit (grotere maten)
+            if (!img && srcUrl) { try { img = 'https://logo.clearbit.com/' + new URL(srcUrl).hostname.replace('www.','') + '?size=96'; } catch(e){} }
+            if (!img && link) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(link).hostname.replace('www.','') + '&sz=128'; } catch(e){} }
+            // --- FIX END ---
 
             if (pubDate) {
                 try {
@@ -1109,7 +1117,7 @@ function NewsWidget({ lang }) {
 
     useEffect(() => {
         let alive = true;
-        const cached = sessionStorage.getItem('nws_cache_v7');
+        const cached = sessionStorage.getItem('nws_cache_v8'); // Versie opgehoogd
         if (cached) {
             try {
                 const { t, d } = JSON.parse(cached);
@@ -1138,7 +1146,7 @@ function NewsWidget({ lang }) {
                 });
                 
                 setAllArticles([...merged]);
-                sessionStorage.setItem('nws_cache_v7', JSON.stringify({ t: Date.now(), d: merged }));
+                sessionStorage.setItem('nws_cache_v8', JSON.stringify({ t: Date.now(), d: merged }));
             }
             if (alive) setFeedReady(true);
         };
@@ -1339,18 +1347,23 @@ function NewsWidget({ lang }) {
                                     </div>
                                 </div>
                                 {a.img && (
-                                    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 flex items-center justify-center p-1">
-                                        <img src={a.img} alt="" referrerPolicy="no-referrer" className="w-full h-full object-contain mix-blend-multiply" loading="lazy"
+                                    // --- FIX START: CSS aangepast ---
+                                    // Verwijderd: p-1, border, border-gray-200
+                                    // Toegevoegd: shadow-sm, bg-gray-200
+                                    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-200 rounded-lg overflow-hidden shadow-sm">
+                                        {/* Verwijderd: mix-blend-multiply. Gewijzigd: object-contain -> object-cover */}
+                                        <img src={a.img} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" loading="lazy"
                                             onError={(e) => {
                                                 const el = e.target;
                                                 if (!el.dataset.retried) {
                                                     el.dataset.retried = '1';
-                                                    try { el.src = 'https://www.google.com/s2/favicons?domain=' + new URL(a.link).hostname.replace('www.','') + '&sz=64'; }
+                                                    try { el.src = 'https://www.google.com/s2/favicons?domain=' + new URL(a.link).hostname.replace('www.','') + '&sz=128'; }
                                                     catch(err) { el.parentElement.style.display='none'; }
                                                 } else { el.parentElement.style.display='none'; }
                                             }}
                                         />
                                     </div>
+                                    // --- FIX END ---
                                 )}
                             </a>
                         );
