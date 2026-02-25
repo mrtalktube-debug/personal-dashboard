@@ -286,15 +286,14 @@ function AIWidget({ lang }) {
     const [view, setView] = useState('chat');
     const [exp, setExp] = useState(false);
 
-    /* <mark> Nieuw: Desktop view detectie */
     const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
     useEffect(() => {
         const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+    
     const showContent = exp || isDesktop;
-    /* </mark> */
 
     const syncToCloud = () => {
         const cloudSettings = {};
@@ -312,9 +311,7 @@ function AIWidget({ lang }) {
     };
 
     useEffect(() => {
-        /* <mark> */
         if (showContent && hist.length > prevHistLen.current) {
-        /* </mark> */
             setTimeout(() => {
                 if (chatContainerRef.current && lastUserMsgRef.current) {
                     const container = chatContainerRef.current;
@@ -324,9 +321,7 @@ function AIWidget({ lang }) {
             }, 100);
         }
         prevHistLen.current = hist.length;
-    /* <mark> */
     }, [hist.length, showContent]);
-    /* </mark> */
 
     const handleFile = (e) => {
         const file = e.target.files[0]; if(!file) return;
@@ -473,14 +468,11 @@ function AIWidget({ lang }) {
     const lastUserIdx = hist.map(m=>m.r).lastIndexOf('usr');
 
     return (
-        /* <mark> Nieuw: Container past zich automatisch aan */
         <div className={`widget ai-transition relative flex flex-col overflow-hidden ${showContent ? 'h-[450px]' : 'h-[72px]'}`}>
             <div className={`p-4 bg-white border-b flex justify-between items-center shrink-0 z-20 ${!isDesktop ? 'cursor-pointer' : ''}`} onClick={() => { if(!isDesktop) setExp(true); }}>
-        /* </mark> */
                 <div className="flex items-center gap-2">
                     <img src="https://i.postimg.cc/NLqKzZ4C/nieuw-schaap-logo1.png" alt="AI Logo" className="w-8 h-8 object-contain mix-blend-multiply" />
                 </div>
-                /* <mark> Nieuw: Knoppen layout logica */
                 {showContent ? (
                     <div className="flex items-center gap-2">
                         <button onClick={e=>{e.stopPropagation();setView(view==='history'?'chat':'history')}} className={`px-2.5 py-1 rounded-full text-[9px] font-bold transition ${view==='history'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
@@ -490,12 +482,9 @@ function AIWidget({ lang }) {
                         {!isDesktop && <button onClick={e=>{e.stopPropagation();setExp(false)}} className="text-gray-400 hover:text-gray-800 transition font-bold text-lg ml-1">×</button>}
                     </div>
                 ) : <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block lg:hidden">Openen ▼</div>}
-                /* </mark> */
             </div>
 
-            /* <mark> Nieuw: Voorwaarde voor weergave chat en history */
             {showContent && view === 'chat' && (
-            /* </mark> */
                 <>
                     <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 hide-scroll relative" style={{overscrollBehavior:'contain'}}>
                         {hist.map((m,i) => {
@@ -547,9 +536,7 @@ function AIWidget({ lang }) {
                 </>
             )}
 
-            /* <mark> Nieuw: Voorwaarde voor weergave history */
             {showContent && view === 'history' && (
-            /* </mark> */
                 <div className="flex-1 overflow-y-auto p-4 space-y-2 hide-scroll">
                     {sessions.length === 0 ? (
                         <div className="flex-1 flex items-center justify-center text-gray-400 text-xs font-bold h-full">
