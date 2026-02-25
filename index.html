@@ -1006,70 +1006,56 @@ function NewsWidget({ lang }) {
     const [newCol, setNewCol] = useState('');
     const [newBlock, setNewBlock] = useState('');
     const [newPriority, setNewPriority] = useState(''); 
-    
-    const [dragItem, setDragItem] = useState(null);
-    const [dragType, setDragType] = useState(null);
 
     const syncNewsSettings = () => {
         const cloudSettings = {};
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith('d_')) {
-                cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
-            }
+            if (key && key.startsWith('d_')) cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
         }
-        fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings })
-        }).catch(()=>{});
+        fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings }) }).catch(()=>{});
     };
 
-    /* Datum check ruimer gezet (3 dagen) om lege schermen bij trage nieuwscycli te voorkomen */
     const isRecent = (dateString) => {
         if (!dateString) return true; 
         try {
             const articleTime = new Date(dateString).getTime();
             if (isNaN(articleTime)) return true; 
-            
             const limit = new Date();
             limit.setDate(limit.getDate() - 3); 
             limit.setHours(0,0,0,0);
-            
             return articleTime >= limit.getTime();
-        } catch(e) { 
-            return true; 
-        }
+        } catch(e) { return true; }
     };
 
-    /* Engine gewisseld naar Bing News voor onbeperkte toegang mét afbeeldingen */
-    const getNewsUrl = (cat, language) => {
-        if (cat.startsWith('http')) return cat;
-        const mkt = language === 'nl' ? 'nl-NL' : 'en-US';
-        return `https://www.bing.com/news/search?q=${encodeURIComponent(cat)}&setmkt=${mkt}&format=rss`;
-    };
-
-    const extractImage = (item) => {
-        let imageUrl = null;
-        const imgTag = item.getElementsByTagName("image")[0];
-        if (imgTag) {
-            const urlTag = imgTag.getElementsByTagName("url")[0];
-            if (urlTag) imageUrl = urlTag.textContent;
-        }
-        if (!imageUrl) {
-            const desc = item.querySelector("description")?.textContent || "";
-            const imgMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
-            if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
-        }
-        return imageUrl;
+    // Definitieve anti-vastloop functie met 2 reserve proxy's en 6 sec limiet
+    const fetchWithTimeoutAndFallback = async (url) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000); 
+        try {
+            const proxy1 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            let res = await fetch(proxy1, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (res.ok) return await res.text();
+        } catch (e) { clearTimeout(timeoutId); }
+        
+        const controller2 = new AbortController();
+        const timeoutId2 = setTimeout(() => controller2.abort(), 6000);
+        try {
+            const proxy2 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            let res = await fetch(proxy2, { signal: controller2.signal });
+            clearTimeout(timeoutId2);
+            if (res.ok) return await res.text();
+        } catch (e) { clearTimeout(timeoutId2); }
+        
+        return null;
     };
 
     useEffect(() => {
         let isMounted = true;
-        
         const fetchAllNews = async () => {
             try {
-                const cached = sessionStorage.getItem('michael_news_cache');
+                const cached = sessionStorage.getItem('michael_news_cache_v5');
                 if (cached) {
                     const { time, data } = JSON.parse(cached);
                     if (Date.now() - time < 300000) {
@@ -1079,50 +1065,57 @@ function NewsWidget({ lang }) {
                 }
             } catch(e) {}
 
-            let liveData = {};
-            
-            for (const cat of cols) {
-                if (!isMounted) break;
-                try {
-                    const rssUrl = getNewsUrl(cat, lang);
-                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+            if (isMounted) setNewsData({}); 
+
+            const promises = cols.map(async (cat) => {
+                const h = lang === 'nl' ? 'nl' : 'en-US';
+                const g = lang === 'nl' ? 'NL' : 'US';
+                const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`;
+                
+                const text = await fetchWithTimeoutAndFallback(rssUrl);
+                if (!text || !isMounted) return;
+
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, "text/xml");
+                const items = xmlDoc.querySelectorAll("item");
+                const parsedItems = [];
+                
+                const maxItems = Math.min(items.length, 35);
+                for(let i = 0; i < maxItems; i++) {
+                    const item = items[i];
+                    const title = item.querySelector("title")?.textContent || "";
+                    const link = item.querySelector("link")?.textContent || "";
+                    const pubDate = item.querySelector("pubDate")?.textContent || "";
+                    const sourceTag = item.querySelector("source");
+                    const source = sourceTag?.textContent || "Nieuwsbron";
+                    const sourceUrl = sourceTag?.getAttribute("url") || "";
+                    const description = item.querySelector("description")?.textContent || "";
                     
-                    const res = await fetch(proxyUrl, { cache: 'no-store' });
-                    const data = await res.json();
-                    
-                    if (data.contents) {
-                        const parser = new DOMParser();
-                        const xmlDoc = parser.parseFromString(data.contents, "text/xml");
-                        const items = xmlDoc.querySelectorAll("item");
-                        const parsedItems = [];
-                        
-                        const maxItems = Math.min(items.length, 35);
-                        for(let i = 0; i < maxItems; i++) {
-                            const item = items[i];
-                            const title = item.querySelector("title")?.textContent || "";
-                            const link = item.querySelector("link")?.textContent || "";
-                            const pubDate = item.querySelector("pubDate")?.textContent || "";
-                            const source = item.querySelector("source")?.textContent || "Nieuwsbron";
-                            let description = item.querySelector("description")?.textContent || "";
-                            
-                            const imageUrl = extractImage(item);
-                            parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: cat });
-                        }
-                        
-                        liveData[cat + '_xml'] = parsedItems;
-                        
-                        if (isMounted) {
-                            setNewsData(prev => {
-                                const updated = {...prev, [cat + '_xml']: parsedItems};
-                                sessionStorage.setItem('michael_news_cache', JSON.stringify({ time: Date.now(), data: updated }));
-                                return updated;
-                            });
-                        }
+                    let imageUrl = null;
+                    const imgMatch = description.match(/<img[^>]+src=["']([^"']+)["']/i);
+                    if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
+
+                    // Dynamische bedrijfslogo generator als artikel geen foto heeft
+                    if (!imageUrl && sourceUrl) {
+                        try {
+                            const domain = new URL(sourceUrl).hostname.replace('www.', '');
+                            imageUrl = `https://logo.clearbit.com/${domain}?size=100`;
+                        } catch(e) {}
                     }
-                } catch (e) {
-                    console.error("Fout bij laden van categorie:", cat);
+                    
+                    parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: cat });
                 }
-            }
+                
+                if (isMounted && parsedItems.length > 0) {
+                    setNewsData(prev => {
+                        const updated = {...prev, [cat]: parsedItems};
+                        sessionStorage.setItem('michael_news_cache_v5', JSON.stringify({ time: Date.now(), data: updated }));
+                        return updated;
+                    });
+                }
+            });
+
+            await Promise.allSettled(promises);
         };
 
         fetchAllNews();
@@ -1130,18 +1123,28 @@ function NewsWidget({ lang }) {
     }, [cols, lang]);
 
     useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearch(search.trim());
+            setSearchLimit(40); 
+        }, 600);
+        return () => clearTimeout(handler);
+    }, [search]);
+
+    useEffect(() => {
         if (!debouncedSearch) { setSearchResults([]); return; }
+        let isMounted = true;
         setIsSearching(true);
         
-        const rssUrl = getNewsUrl(debouncedSearch, lang);
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
-        
-        fetch(proxyUrl)
-        .then(r => r.json())
-        .then(data => { 
-            if(data.contents) {
+        const fetchSearch = async () => {
+            const h = lang === 'nl' ? 'nl' : 'en-US';
+            const g = lang === 'nl' ? 'NL' : 'US';
+            const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(debouncedSearch)}&hl=${h}&gl=${g}`;
+            
+            const text = await fetchWithTimeoutAndFallback(rssUrl);
+            
+            if (text && isMounted) {
                 const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                const xmlDoc = parser.parseFromString(text, "text/xml");
                 const items = xmlDoc.querySelectorAll("item");
                 const parsedItems = [];
                 const maxItems = Math.min(items.length, 40);
@@ -1151,21 +1154,33 @@ function NewsWidget({ lang }) {
                     const title = item.querySelector("title")?.textContent || "";
                     const link = item.querySelector("link")?.textContent || "";
                     const pubDate = item.querySelector("pubDate")?.textContent || "";
-                    const source = item.querySelector("source")?.textContent || "Nieuwsbron";
+                    const sourceTag = item.querySelector("source");
+                    const source = sourceTag?.textContent || "Nieuwsbron";
+                    const sourceUrl = sourceTag?.getAttribute("url") || "";
                     const description = item.querySelector("description")?.textContent || "";
                     
-                    const imageUrl = extractImage(item);
+                    let imageUrl = null;
+                    const imgMatch = description.match(/<img[^>]+src=["']([^"']+)["']/i);
+                    if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
+
+                    if (!imageUrl && sourceUrl) {
+                        try {
+                            const domain = new URL(sourceUrl).hostname.replace('www.', '');
+                            imageUrl = `https://logo.clearbit.com/${domain}?size=100`;
+                        } catch(e) {}
+                    }
+                    
                     parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: 'ZOEKEN' });
                 }
                 setSearchResults(parsedItems);
-            } else {
+            } else if (isMounted) {
                 setSearchResults([]);
             }
-            setIsSearching(false);
-        }).catch(e => { 
-            setSearchResults([]);
-            setIsSearching(false); 
-        });
+            if (isMounted) setIsSearching(false);
+        };
+
+        fetchSearch();
+        return () => { isMounted = false; };
     }, [debouncedSearch, lang]);
 
     const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n = [...cols, newCol.toUpperCase()]; setCols(n); S.save('newscats', n); syncNewsSettings(); setNewCol(''); } };
@@ -1336,8 +1351,9 @@ function NewsWidget({ lang }) {
                 </div>
 
                 {finalImageUrl && (
-                    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 mt-0.5">
-                        <img src={finalImageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 mt-0.5 flex items-center justify-center p-1">
+                        {/* Failsafe in gebouwd: onzichtbaar maken als het bedrijfslogo ook niet bestaat */}
+                        <img src={finalImageUrl} alt="" className="w-full h-full object-contain mix-blend-multiply" loading="lazy" onError={(e) => { e.target.parentElement.style.display='none'; }} />
                     </div>
                 )}
             </a>
@@ -1457,7 +1473,7 @@ function NewsWidget({ lang }) {
                     <div className="w-full flex flex-col">
                         <div className="space-y-4">
                             {finalNews.slice(0, newsLimit).map((item, i) => renderItemCard(item, i))}
-                            {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Nieuws ophalen en verwerken...</div>}
+                            {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Nieuws ophalen (max 6 sec)...</div>}
                             
                             {finalNews.length > newsLimit && (
                                 <button onClick={() => setNewsLimit(l => l + 50)} className="w-full mt-4 py-3 bg-white border border-gray-200 text-blue-600 font-bold text-[11px] rounded-md hover:bg-blue-50 transition shadow-sm">
@@ -1469,7 +1485,7 @@ function NewsWidget({ lang }) {
                 ) : (
                     <div className="w-full flex flex-col">
                         <div className="space-y-4">
-                            {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Zoeken naar live artikelen...</div>}
+                            {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Zoeken naar live artikelen (max 6 sec)...</div>}
                             {!isSearching && searchResults.length === 0 && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Geen recente resultaten gevonden voor "{debouncedSearch}".</div>}
                             
                             {!isSearching && finalSearch.slice(0, searchLimit).map((item, i) => renderItemCard(item, i))}
