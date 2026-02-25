@@ -1021,14 +1021,13 @@ function NewsWidget({ lang }) {
         fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ALLOWED_EMAIL, settings: s }) }).catch(()=>{});
     };
 
-    // Klassieke fetch om syntax-crashes (blauw scherm) te blokkeren
-    async function fastFetch(query, hlParam) {
+    async function fastFetch(query, hlParam, glParam) {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 8000);
         
         try {
-            // 1. Eigen Vercel API (Snel & Onbeperkt via Bing)
-            const apiUrl = '/api/news?q=' + encodeURIComponent(query) + '&hl=' + hlParam;
+            // Stap 1: Eigen Vercel API
+            const apiUrl = '/api/news?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
             const r = await fetch(apiUrl, { signal: ctrl.signal });
             if (r.ok) {
                 clearTimeout(tid);
@@ -1036,17 +1035,30 @@ function NewsWidget({ lang }) {
             }
             throw new Error('API failed');
         } catch(e) {
-            // 2. Veilige fallback als Vercel slaapt
+            // Stap 2: Veilige fallback
             try {
-                const mkt = hlParam === 'nl' ? 'nl-NL' : 'en-US';
-                const bingUrl = 'https://www.bing.com/news/search?q=' + encodeURIComponent(query) + '&setmkt=' + mkt + '&format=rss';
-                const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(bingUrl);
-                const r2 = await fetch(proxyUrl, { signal: ctrl.signal });
+                const gUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
+                const proxy1 = 'https://corsproxy.io/?' + encodeURIComponent(gUrl);
+                const r2 = await fetch(proxy1, { signal: ctrl.signal });
                 if (r2.ok) {
                     clearTimeout(tid);
                     return await r2.text();
                 }
-            } catch(e2) {}
+                throw new Error('Proxy 1 failed');
+            } catch(e2) {
+                try {
+                    const gUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
+                    const proxy2 = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(gUrl);
+                    const r3 = await fetch(proxy2, { signal: ctrl.signal });
+                    if (r3.ok) {
+                        clearTimeout(tid);
+                        return await r3.text();
+                    }
+                } catch(e3) {
+                    clearTimeout(tid);
+                    return null;
+                }
+            }
             clearTimeout(tid);
             return null;
         }
@@ -1056,57 +1068,41 @@ function NewsWidget({ lang }) {
         const doc = new DOMParser().parseFromString(xml, 'text/xml');
         const items = doc.querySelectorAll('item');
         const out = [];
-        const max = Math.min(items.length, 40);
-        
+        const max = Math.min(items.length, 60);
         for (let i = 0; i < max; i++) {
             const item = items[i];
-            let title = item.querySelector('title')?.textContent || '';
+            const rawTitle = item.querySelector('title')?.textContent || '';
             const link = item.querySelector('link')?.textContent || '';
             const pubDate = item.querySelector('pubDate')?.textContent || '';
+            const srcTag = item.querySelector('source');
+            let source = srcTag?.textContent || '';
+            const srcUrl = srcTag?.getAttribute('url') || '';
             const desc = item.querySelector('description')?.textContent || '';
-            
-            let source = item.querySelector('source')?.textContent || '';
-            if (!source) {
-                const parts = title.split(' - ');
-                if (parts.length > 1) {
-                    source = parts.pop().trim();
-                    title = parts.join(' - ').trim();
-                } else {
-                    source = 'Nieuws';
-                }
-            }
+
+            let title = rawTitle;
+            const parts = rawTitle.split(' - ');
+            if (parts.length > 1) { const s = parts.pop().trim(); title = parts.join(' - '); if (!source) source = s; }
+            if (!source) source = 'Nieuws';
 
             let cleanDesc = desc.replace(/<[^>]+>/g, '').trim();
-            if (cleanDesc.toLowerCase().startsWith(title.toLowerCase().substring(0, 20))) {
-                cleanDesc = '';
-            }
+            if (cleanDesc.toLowerCase().startsWith(title.toLowerCase().substring(0, 30))) cleanDesc = '';
 
-            // High-res afbeelding extractie specifiek voor Bing News
             let img = null;
-            const imgTags = item.getElementsByTagName('image');
-            if (imgTags.length > 0) {
-                const urlTags = imgTags[0].getElementsByTagName('url');
-                if (urlTags.length > 0) img = urlTags[0].textContent;
-            }
-            if (!img) {
-                const urlTags = item.getElementsByTagName('url');
-                if (urlTags.length > 0) img = urlTags[0].textContent;
-            }
-            if (!img) {
-                const imgM = desc.match(/src=["']([^"']+)["']/i);
+            const urlM = desc.match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif)(?:\?[^"'\s<>]*)?)/i);
+            if (urlM) {
+                img = urlM[1];
+            } else {
+                const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
                 if (imgM) img = imgM[1];
             }
-            // Zekere fallback naar officieel bedrijfslogo als er geen foto is
-            if (!img && source !== 'Nieuws') {
-                const domainMatch = source.toLowerCase().replace(/[^a-z0-9]/g, '') + '.nl';
-                img = 'https://logo.clearbit.com/' + domainMatch + '?size=128';
-            }
 
-            // Alleen nieuws van afgelopen 7 dagen tonen
+            if (!img && srcUrl) { try { img = 'https://logo.clearbit.com/' + new URL(srcUrl).hostname.replace('www.','') + '?size=80'; } catch(e){} }
+            if (!img && link) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(link).hostname.replace('www.','') + '&sz=64'; } catch(e){} }
+
             if (pubDate) {
                 try {
                     const t = new Date(pubDate).getTime();
-                    const limit = Date.now() - (7 * 24 * 60 * 60 * 1000);
+                    const limit = Date.now() - (3 * 24 * 60 * 60 * 1000);
                     if (t < limit) continue;
                 } catch(e) {}
             }
@@ -1118,7 +1114,7 @@ function NewsWidget({ lang }) {
 
     useEffect(() => {
         let alive = true;
-        const cached = sessionStorage.getItem('nws_cache_v10');
+        const cached = sessionStorage.getItem('nws_cache_v7');
         if (cached) {
             try {
                 const { t, d } = JSON.parse(cached);
@@ -1134,7 +1130,8 @@ function NewsWidget({ lang }) {
             for (const cat of cols) {
                 if (!alive) return;
                 const h = lang === 'nl' ? 'nl' : 'en-US';
-                const xml = await fastFetch(cat, h);
+                const g = lang === 'nl' ? 'NL' : 'US';
+                const xml = await fastFetch(cat, h, g);
                 if (!xml || !alive) continue;
                 
                 const items = parseRSS(xml, cat);
@@ -1146,7 +1143,7 @@ function NewsWidget({ lang }) {
                 });
                 
                 setAllArticles([...merged]);
-                sessionStorage.setItem('nws_cache_v10', JSON.stringify({ t: Date.now(), d: merged }));
+                sessionStorage.setItem('nws_cache_v7', JSON.stringify({ t: Date.now(), d: merged }));
             }
             if (alive) setFeedReady(true);
         };
@@ -1161,7 +1158,8 @@ function NewsWidget({ lang }) {
         setIsSearching(true);
         setSearchDone(false);
         const h = lang === 'nl' ? 'nl' : 'en-US';
-        const xml = await fastFetch(q.trim(), h);
+        const g = lang === 'nl' ? 'NL' : 'US';
+        const xml = await fastFetch(q.trim(), h, g);
         if (xml) {
             const items = parseRSS(xml, 'ZOEKEN');
             const unique = []; const urls = new Set();
@@ -1312,14 +1310,14 @@ function NewsWidget({ lang }) {
 
             <div className="flex-1 overflow-y-auto hide-scroll">
                 {displayItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full py-10">
+                    <div className="flex items-center justify-center h-full">
                         {(isSearching || (!feedReady && !isSearchActive)) ? (
                             <div className="text-xs font-bold text-blue-500 animate-pulse">
-                                {isSearchActive ? `Zoeken naar "${search}"...` : 'Nieuws synchroniseren...'}
+                                {isSearchActive ? `Zoeken naar "${search}"...` : 'Nieuws ophalen...'}
                             </div>
                         ) : (
                             <div className="text-xs font-bold text-gray-400">
-                                {isSearchActive && searchDone ? `Geen resultaten voor "${search}"` : 'Geen artikelen gevonden.'}
+                                {isSearchActive && searchDone ? `Geen resultaten voor "${search}"` : 'Geen artikelen gevonden'}
                             </div>
                         )}
                     </div>
@@ -1346,9 +1344,16 @@ function NewsWidget({ lang }) {
                                     </div>
                                 </div>
                                 {a.img && (
-                                    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden shadow-sm flex items-center justify-center">
+                                    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
                                         <img src={a.img} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" loading="lazy"
-                                            onError={(e) => { e.target.parentElement.style.display='none'; }}
+                                            onError={(e) => {
+                                                const el = e.target;
+                                                if (!el.dataset.retried) {
+                                                    el.dataset.retried = '1';
+                                                    try { el.src = 'https://www.google.com/s2/favicons?domain=' + new URL(a.link).hostname.replace('www.','') + '&sz=64'; }
+                                                    catch(err) { el.parentElement.style.display='none'; }
+                                                } else { el.parentElement.style.display='none'; }
+                                            }}
                                         />
                                     </div>
                                 )}
