@@ -1021,22 +1021,30 @@ function NewsWidget({ lang }) {
         fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ALLOWED_EMAIL, settings: s }) }).catch(()=>{});
     };
 
-    // <!-- NIEUW: Snelle proxy race - beide tegelijk, eerste wint -->
-    const fastFetch = async (url) => {
-        const proxies = [
-            `https://corsproxy.io/?${encodeURIComponent(url)}`,
-            `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-        ];
+    // const fastFetch = async (query, hlParam, glParam) => {
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 5000);
+        const tid = setTimeout(() => ctrl.abort(), 8000);
         try {
-            const r = await Promise.any(proxies.map(p => fetch(p, { signal: ctrl.signal }).then(r => { if (!r.ok) throw new Error(); return r.text(); })));
-            clearTimeout(tid);
-            return r;
-        } catch(e) { clearTimeout(tid); return null; }
+            // Stap 1: Eigen API (snel, betrouwbaar)
+            const apiUrl = `/api/news?q=${encodeURIComponent(query)}&hl=${hlParam}&gl=${glParam}`;
+            const r = await fetch(apiUrl, { signal: ctrl.signal });
+            if (r.ok) { clearTimeout(tid); return await r.text(); }
+            throw new Error('API failed');
+        } catch(e) {
+            // Stap 2: Fallback naar externe proxy's
+            try {
+                const gUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hlParam}&gl=${glParam}`;
+                const proxies = [
+                    `https://corsproxy.io/?${encodeURIComponent(gUrl)}`,
+                    `https://api.allorigins.win/raw?url=${encodeURIComponent(gUrl)}`
+                ];
+                const r2 = await Promise.any(proxies.map(p => fetch(p, { signal: ctrl.signal }).then(r => { if (!r.ok) throw new Error(); return r.text(); })));
+                clearTimeout(tid);
+                return r2;
+            } catch(e2) { clearTimeout(tid); return null; }
+        }
     };
 
-    // <!-- NIEUW: Parse RSS xml naar artikel-array -->
     const parseRSS = (xml, cat) => {
         const doc = new DOMParser().parseFromString(xml, 'text/xml');
         const items = doc.querySelectorAll('item');
@@ -1066,7 +1074,6 @@ function NewsWidget({ lang }) {
             if (!img && srcUrl) { try { img = `https://logo.clearbit.com/${new URL(srcUrl).hostname.replace('www.','')}?size=80`; } catch(e){} }
             if (!img && link) { try { img = `https://www.google.com/s2/favicons?domain=${new URL(link).hostname.replace('www.','')}&sz=64`; } catch(e){} }
 
-            // Check max 3 dagen oud
             if (pubDate) {
                 try {
                     const t = new Date(pubDate).getTime();
@@ -1080,7 +1087,6 @@ function NewsWidget({ lang }) {
         return out;
     };
 
-    // <!-- NIEUW: Feed laden - alle categorieën parallel, progressief renderen -->
     useEffect(() => {
         let alive = true;
         const cached = sessionStorage.getItem('nws_cache_v6');
@@ -1097,7 +1103,7 @@ function NewsWidget({ lang }) {
         cols.forEach(async (cat) => {
             const h = lang === 'nl' ? 'nl' : 'en-US';
             const g = lang === 'nl' ? 'NL' : 'US';
-            const xml = await fastFetch(`https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`);
+            const xml = await fastFetch(cat, h, g);
             if (!xml || !alive) return;
             const items = parseRSS(xml, cat);
             if (!alive) return;
@@ -1117,14 +1123,13 @@ function NewsWidget({ lang }) {
         return () => { alive = false; };
     }, [cols, lang]);
 
-    // <!-- NIEUW: Zoeken - vervangt feedweergave direct -->
     const doSearch = async (q) => {
         if (!q.trim()) { setSearchResults([]); setSearchDone(false); setIsSearching(false); return; }
         setIsSearching(true);
         setSearchDone(false);
         const h = lang === 'nl' ? 'nl' : 'en-US';
         const g = lang === 'nl' ? 'NL' : 'US';
-        const xml = await fastFetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q.trim())}&hl=${h}&gl=${g}`);
+        const xml = await fastFetch(q.trim(), h, g);
         if (xml) {
             const items = parseRSS(xml, 'ZOEKEN');
             const unique = []; const urls = new Set();
@@ -1146,7 +1151,6 @@ function NewsWidget({ lang }) {
         searchTimer.current = setTimeout(() => doSearch(val), 400);
     };
 
-    // <!-- NIEUW: Filter + sort logica -->
     const filterSort = (items) => {
         let f = items.filter(a => {
             const txt = (a.title + ' ' + a.source + ' ' + a.desc).toLowerCase();
@@ -1171,7 +1175,6 @@ function NewsWidget({ lang }) {
         return f;
     };
 
-    // <!-- NIEUW: Eén artikel-lijst die wisselt tussen feed en zoekresultaten -->
     const isSearchActive = search.trim().length > 0;
     const displayItems = filterSort(isSearchActive ? searchResults : allArticles).slice(0, visibleCount);
     const totalFiltered = filterSort(isSearchActive ? searchResults : allArticles).length;
@@ -1198,7 +1201,6 @@ function NewsWidget({ lang }) {
 
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
-            {/* HEADER */}
             <div className="p-3 bg-[#f8f9fa] border-b border-gray-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-gray-600 font-black tracking-widest text-[11px] uppercase">
                     <Ico.Nws/> NEWS
@@ -1220,7 +1222,6 @@ function NewsWidget({ lang }) {
                 </div>
             </div>
 
-            {/* STATUS BAR */}
             <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-100 flex justify-between items-center text-[9px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
                 {isSearchActive ? (
                     <span className="text-amber-500">🔍 Zoekresultaten: "{search}" {isSearching && <span className="animate-pulse ml-1">laden...</span>}</span>
@@ -1230,7 +1231,6 @@ function NewsWidget({ lang }) {
                 <span className="text-blue-500">{displayItems.length} / {totalFiltered} getoond</span>
             </div>
 
-            {/* BEHEER PANEEL */}
             {manage && (
                 <div className="p-4 bg-gray-50 border-b border-gray-200 space-y-3 shrink-0 max-h-[200px] overflow-y-auto">
                     <div>
@@ -1278,7 +1278,6 @@ function NewsWidget({ lang }) {
                 </div>
             )}
 
-            {/* ARTIKEL LIJST — zelfde blok voor feed EN zoekresultaten */}
             <div className="flex-1 overflow-y-auto hide-scroll">
                 {displayItems.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
@@ -1333,7 +1332,6 @@ function NewsWidget({ lang }) {
                     })
                 )}
 
-                {/* Meer laden knop */}
                 {displayItems.length < totalFiltered && (
                     <div className="p-3 text-center border-t border-gray-100">
                         <button onClick={()=>setVisibleCount(v=>v+40)} className="px-6 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold hover:bg-blue-100 transition">
