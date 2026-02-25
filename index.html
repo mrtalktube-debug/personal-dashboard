@@ -996,8 +996,8 @@ function NewsWidget({ lang }) {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     
-    const [newsLimit, setNewsLimit] = useState(150);
-    const [searchLimit, setSearchLimit] = useState(150);
+    const [newsLimit, setNewsLimit] = useState(40);
+    const [searchLimit, setSearchLimit] = useState(40);
 
     const [blocked, setBlocked] = useState(() => S.load('news_blocked', []));
     const [priority, setPriority] = useState(() => S.load('news_priority', []));
@@ -1025,25 +1025,22 @@ function NewsWidget({ lang }) {
         }).catch(()=>{});
     };
 
-    /* <mark> Datum check geüpdatet voor directe RSS datum notatie */
+    /* Aangepast: Fail-safe toegevoegd zodat nieuws niet onterecht onzichtbaar wordt */
     const isRecent = (dateString) => {
-        if (!dateString) return false;
+        if (!dateString) return true; 
         try {
             const articleTime = new Date(dateString).getTime();
-            if (isNaN(articleTime)) return false;
+            if (isNaN(articleTime)) return true; 
             
-            const today = new Date();
-            today.setHours(0,0,0,0);
+            const limit = new Date();
+            limit.setDate(limit.getDate() - 2); 
+            limit.setHours(0,0,0,0);
             
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            
-            return articleTime >= yesterday.getTime();
+            return articleTime >= limit.getTime();
         } catch(e) { 
-            return false; 
+            return true; 
         }
     };
-    /* </mark> */
 
     const getGoogleNewsUrl = (cat, language) => {
         if (cat.startsWith('http')) return cat;
@@ -1055,47 +1052,82 @@ function NewsWidget({ lang }) {
         return `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`;
     };
 
+    const extractImage = (item) => {
+        let imageUrl = null;
+        const desc = item.querySelector("description")?.textContent || "";
+        const imgMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch && imgMatch[1]) {
+            imageUrl = imgMatch[1];
+        } else {
+            const itemStr = item.innerHTML || "";
+            const mediaMatch = itemStr.match(/url=["']([^"']+(?:jpg|jpeg|png|webp|gif)[^"']*)["']/i);
+            if (mediaMatch && mediaMatch[1]) imageUrl = mediaMatch[1];
+        }
+        return imageUrl;
+    };
+
     useEffect(() => {
-        cols.forEach(cat => {
-            const rssUrl = getGoogleNewsUrl(cat, lang);
-            /* <mark> API call vervangen door ruwe XML fetch via CORS proxy om limieten en ontbrekende afbeeldingen te fixen */
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
-            fetch(proxyUrl)
-            .then(r=>r.json()).then(data => { 
-                if(data.contents) {
+        let isMounted = true;
+        
+        const fetchAllNews = async () => {
+            try {
+                const cached = sessionStorage.getItem('michael_news_cache');
+                if (cached) {
+                    const { time, data } = JSON.parse(cached);
+                    if (Date.now() - time < 300000) {
+                        if (isMounted) setNewsData(data);
+                        return;
+                    }
+                }
+            } catch(e) {}
+
+            let liveData = {};
+            
+            for (const cat of cols) {
+                if (!isMounted) break;
+                try {
+                    const rssUrl = getGoogleNewsUrl(cat, lang);
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`;
+                    
+                    const res = await fetch(proxyUrl, { cache: 'no-store' });
+                    const text = await res.text();
+                    
                     const parser = new DOMParser();
-                    const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                    const xmlDoc = parser.parseFromString(text, "text/xml");
                     const items = xmlDoc.querySelectorAll("item");
                     const parsedItems = [];
-                    items.forEach(item => {
+                    
+                    const maxItems = Math.min(items.length, 35);
+                    for(let i = 0; i < maxItems; i++) {
+                        const item = items[i];
                         const title = item.querySelector("title")?.textContent || "";
                         const link = item.querySelector("link")?.textContent || "";
                         const pubDate = item.querySelector("pubDate")?.textContent || "";
                         const source = item.querySelector("source")?.textContent || "";
                         const description = item.querySelector("description")?.textContent || "";
                         
-                        let imageUrl = null;
-                        const imgMatch = description.match(/<img[^>]+src="([^">]+)"/i);
-                        if (imgMatch && imgMatch[1]) {
-                            imageUrl = imgMatch[1];
-                        }
-                        
+                        const imageUrl = extractImage(item);
                         parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: cat });
-                    });
-                    setNewsData(p => ({...p, [cat + '_xml']: parsedItems})); 
+                    }
+                    
+                    liveData[cat + '_xml'] = parsedItems;
+                    
+                    if (isMounted) {
+                        setNewsData(prev => {
+                            const updated = {...prev, [cat + '_xml']: parsedItems};
+                            sessionStorage.setItem('michael_news_cache', JSON.stringify({ time: Date.now(), data: updated }));
+                            return updated;
+                        });
+                    }
+                } catch (e) {
+                    console.error("Fout bij laden van categorie:", cat);
                 }
-            }).catch(e => console.error("Nieuws XML fout voor", cat, e));
-            /* </mark> */
-        });
-    }, [cols, lang]);
+            }
+        };
 
-    useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedSearch(search.trim());
-            setSearchLimit(150); 
-        }, 600);
-        return () => clearTimeout(handler);
-    }, [search]);
+        fetchAllNews();
+        return () => { isMounted = false; };
+    }, [cols, lang]);
 
     useEffect(() => {
         if (!debouncedSearch) { setSearchResults([]); return; }
@@ -1105,28 +1137,28 @@ function NewsWidget({ lang }) {
         const query = `${debouncedSearch} when:2d`; 
         
         const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${h}&gl=${g}`;
-        /* <mark> Ook zoekopdracht omgezet naar ruwe XML fetch voor >10 resultaten en afbeeldingen */
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`;
+        
         fetch(proxyUrl)
-        .then(r=>r.json()).then(data => { 
-            if(data.contents) {
+        .then(r => r.text())
+        .then(text => { 
+            if(text && text.includes('<rss')) {
                 const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                const xmlDoc = parser.parseFromString(text, "text/xml");
                 const items = xmlDoc.querySelectorAll("item");
                 const parsedItems = [];
-                items.forEach(item => {
+                const maxItems = Math.min(items.length, 30);
+                for(let i=0; i<maxItems; i++) {
+                    const item = items[i];
                     const title = item.querySelector("title")?.textContent || "";
                     const link = item.querySelector("link")?.textContent || "";
                     const pubDate = item.querySelector("pubDate")?.textContent || "";
                     const source = item.querySelector("source")?.textContent || "";
                     const description = item.querySelector("description")?.textContent || "";
                     
-                    let imageUrl = null;
-                    const imgMatch = description.match(/<img[^>]+src="([^">]+)"/i);
-                    if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
-                    
+                    const imageUrl = extractImage(item);
                     parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: 'ZOEKEN' });
-                });
+                }
                 setSearchResults(parsedItems);
             } else {
                 setSearchResults([]);
@@ -1136,7 +1168,6 @@ function NewsWidget({ lang }) {
             setSearchResults([]);
             setIsSearching(false); 
         });
-        /* </mark> */
     }, [debouncedSearch, lang]);
 
     const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n = [...cols, newCol.toUpperCase()]; setCols(n); S.save('newscats', n); syncNewsSettings(); setNewCol(''); } };
@@ -1166,7 +1197,6 @@ function NewsWidget({ lang }) {
         setDragItem(null); setDragType(null);
     };
 
-    /* <mark> Datumnotatie parser aangepast voor standaard JS datums */
     const formatDate = (pubDate) => {
         if (!pubDate) return '';
         try {
@@ -1180,7 +1210,6 @@ function NewsWidget({ lang }) {
             return `${day}-${month}-${year} | ${hours}:${mins}`;
         } catch(e) { return pubDate; }
     };
-    /* </mark> */
 
     const getSourceColor = (src) => {
         const colors = ['#c586c0', '#d16b92', '#b278a9', '#9a73b5', '#e27b64', '#e2a864', '#4a90e2'];
@@ -1430,14 +1459,9 @@ function NewsWidget({ lang }) {
             <div className="flex-1 overflow-y-auto hide-scroll p-4 bg-gray-50/30">
                 {!debouncedSearch ? (
                     <div className="w-full flex flex-col">
-                       <div className="flex justify-between items-center pb-2 mb-4 border-b border-blue-200 sticky top-0 bg-gray-50/90 backdrop-blur-sm z-10">
-    <h4 className="text-[12px] font-black text-blue-600 uppercase tracking-wide truncate">
-        ZOEKEN: {debouncedSearch}
-    </h4>
-</div>
                         <div className="space-y-4">
                             {finalNews.slice(0, newsLimit).map((item, i) => renderItemCard(item, i))}
-                            {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Data verzamelen & Vandaag/Gisteren filter toepassen...</div>}
+                            {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Nieuws ophalen en verwerken...</div>}
                             
                             {finalNews.length > newsLimit && (
                                 <button onClick={() => setNewsLimit(l => l + 50)} className="w-full mt-4 py-3 bg-white border border-gray-200 text-blue-600 font-bold text-[11px] rounded-md hover:bg-blue-50 transition shadow-sm">
@@ -1448,13 +1472,8 @@ function NewsWidget({ lang }) {
                     </div>
                 ) : (
                     <div className="w-full flex flex-col">
-                        <div className="flex justify-between items-center pb-2 mb-4 border-b border-blue-200 sticky top-0 bg-gray-50/90 backdrop-blur-sm z-10">
-                            <h4 className="text-[12px] font-black text-blue-600 uppercase tracking-wide truncate">
-                                ZOEKEN: {debouncedSearch}
-                            </h4>
-                        </div>
                         <div className="space-y-4">
-                            {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Actueel nieuws ophalen...</div>}
+                            {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Zoeken naar live artikelen...</div>}
                             {!isSearching && searchResults.length === 0 && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Geen recente resultaten gevonden voor "{debouncedSearch}".</div>}
                             
                             {!isSearching && finalSearch.slice(0, searchLimit).map((item, i) => renderItemCard(item, i))}
