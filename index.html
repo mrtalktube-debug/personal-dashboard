@@ -9,11 +9,16 @@
     <link rel="apple-touch-icon" href="https://i.postimg.cc/NLqKzZ4C/nieuw-schaap-logo1.png">
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- NIEUW: preconnect voor snellere DNS/TLS -->
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- NIEUW: Chart.js lazy laden, alleen nodig als crypto-widget zichtbaar -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root { --p-blue: #0073b1; --bg: linear-gradient(135deg, #001a33 0%, #000a14 100%); }
@@ -996,7 +1001,8 @@ function NewsWidget({ lang }) {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     
-    const [newsLimit, setNewsLimit] = useState(40);
+    // <!-- NIEUW: Standaard meer artikelen tonen -->
+const [newsLimit, setNewsLimit] = useState(80);
     const [searchLimit, setSearchLimit] = useState(40);
 
     const [blocked, setBlocked] = useState(() => S.load('news_blocked', []));
@@ -1030,26 +1036,24 @@ function NewsWidget({ lang }) {
 
     // Definitieve anti-vastloop functie met 2 reserve proxy's en 6 sec limiet
     const fetchWithTimeoutAndFallback = async (url) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000); 
-        try {
-            const proxy1 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-            let res = await fetch(proxy1, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            if (res.ok) return await res.text();
-        } catch (e) { clearTimeout(timeoutId); }
-        
-        const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => controller2.abort(), 6000);
-        try {
-            const proxy2 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-            let res = await fetch(proxy2, { signal: controller2.signal });
-            clearTimeout(timeoutId2);
-            if (res.ok) return await res.text();
-        } catch (e) { clearTimeout(timeoutId2); }
-        
-        return null;
-    };
+    // <!-- NIEUW: Race beide proxy's tegelijk, eerste wint -->
+    const proxies = [
+        `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+    ];
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    try {
+        const result = await Promise.any(
+            proxies.map(p => fetch(p, { signal: controller.signal }).then(r => {
+                if (!r.ok) throw new Error('not ok');
+                return r.text();
+            }))
+        );
+        clearTimeout(timeoutId);
+        return result;
+    } catch (e) { clearTimeout(timeoutId); return null; }
+};
 
     useEffect(() => {
         let isMounted = true;
@@ -1058,7 +1062,8 @@ function NewsWidget({ lang }) {
                 const cached = sessionStorage.getItem('michael_news_cache_v5');
                 if (cached) {
                     const { time, data } = JSON.parse(cached);
-                    if (Date.now() - time < 300000) {
+                    // <!-- NIEUW: Cache 15 min ipv 5 — minder API calls, snellere herlaadtijd -->
+if (Date.now() - time < 900000) {
                         if (isMounted) setNewsData(data);
                         return;
                     }
@@ -1080,7 +1085,8 @@ function NewsWidget({ lang }) {
                 const items = xmlDoc.querySelectorAll("item");
                 const parsedItems = [];
                 
-                const maxItems = Math.min(items.length, 35);
+                // <!-- NIEUW: Meer artikelen per feed ophalen -->
+const maxItems = Math.min(items.length, 60);
                 for(let i = 0; i < maxItems; i++) {
                     const item = items[i];
                     const title = item.querySelector("title")?.textContent || "";
@@ -1123,10 +1129,11 @@ function NewsWidget({ lang }) {
     }, [cols, lang]);
 
     useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedSearch(search.trim());
-            setSearchLimit(40); 
-        }, 600);
+        // <!-- NIEUW: Snellere debounce voor responsive zoeken -->
+const handler = setTimeout(() => {
+    setDebouncedSearch(search.trim());
+    setSearchLimit(40); 
+}, 350);
         return () => clearTimeout(handler);
     }, [search]);
 
@@ -1353,7 +1360,26 @@ function NewsWidget({ lang }) {
                 {finalImageUrl && (
                     <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 mt-0.5 flex items-center justify-center p-1">
                         {/* Failsafe in gebouwd: onzichtbaar maken als het bedrijfslogo ook niet bestaat */}
-                        <img src={finalImageUrl} alt="" className="w-full h-full object-contain mix-blend-multiply" loading="lazy" onError={(e) => { e.target.parentElement.style.display='none'; }} />
+                        <img src={// <!-- NIEUW: Dubbele fallback: eerst clearbit, dan favicon, dan verbergen -->
+<img 
+    src={finalImageUrl} 
+    alt="" 
+    className="w-full h-full object-contain mix-blend-multiply" 
+    loading="lazy" 
+    referrerPolicy="no-referrer"
+    onError={(e) => { 
+        const el = e.target;
+        if (!el.dataset.retried) {
+            el.dataset.retried = '1';
+            try {
+                const domain = new URL(item.link).hostname.replace('www.','');
+                el.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+            } catch(err) { el.parentElement.style.display='none'; }
+        } else {
+            el.parentElement.style.display='none';
+        }
+    }} 
+/>
                     </div>
                 )}
             </a>
