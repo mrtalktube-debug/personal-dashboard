@@ -992,527 +992,353 @@ function AgendaWidget({ lang }) {
     
 function NewsWidget({ lang }) {
     const defaultCols = ['AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
-    const [cols, setCols] = useState(() => S.load('newscats', defaultCols)); 
+    const [cols, setCols] = useState(() => S.load('newscats', defaultCols));
     const [manage, setManage] = useState(false);
-    const [newsData, setNewsData] = useState({});
-    
+    const [allArticles, setAllArticles] = useState([]);
+    const [feedReady, setFeedReady] = useState(false);
+
     const [search, setSearch] = useState('');
-    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
-    
-    // <!-- NIEUW: Standaard meer artikelen tonen -->
-const [newsLimit, setNewsLimit] = useState(80);
-    const [searchLimit, setSearchLimit] = useState(40);
+    const [searchDone, setSearchDone] = useState(false);
 
+    const [visibleCount, setVisibleCount] = useState(40);
     const [blocked, setBlocked] = useState(() => S.load('news_blocked', []));
     const [priority, setPriority] = useState(() => S.load('news_priority', []));
-    const [sortMode, setSortMode] = useState(() => S.load('news_sort', 'tijd')); 
-    
+    const [sortMode, setSortMode] = useState(() => S.load('news_sort', 'tijd'));
     const [newCol, setNewCol] = useState('');
     const [newBlock, setNewBlock] = useState('');
-    const [newPriority, setNewPriority] = useState(''); 
+    const [newPriority, setNewPriority] = useState('');
 
-    const syncNewsSettings = () => {
-        const cloudSettings = {};
+    const searchTimer = useRef(null);
+
+    const syncSettings = () => {
+        const s = {};
         for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('d_')) cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
+            const k = localStorage.key(i);
+            if (k && k.startsWith('d_')) s[k.substring(2)] = JSON.parse(localStorage.getItem(k));
         }
-        fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings }) }).catch(()=>{});
+        fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ALLOWED_EMAIL, settings: s }) }).catch(()=>{});
     };
 
-    const isRecent = (dateString) => {
-        if (!dateString) return true; 
+    // <!-- NIEUW: Snelle proxy race - beide tegelijk, eerste wint -->
+    const fastFetch = async (url) => {
+        const proxies = [
+            `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+        ];
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 5000);
         try {
-            const articleTime = new Date(dateString).getTime();
-            if (isNaN(articleTime)) return true; 
-            const limit = new Date();
-            limit.setDate(limit.getDate() - 3); 
-            limit.setHours(0,0,0,0);
-            return articleTime >= limit.getTime();
-        } catch(e) { return true; }
+            const r = await Promise.any(proxies.map(p => fetch(p, { signal: ctrl.signal }).then(r => { if (!r.ok) throw new Error(); return r.text(); })));
+            clearTimeout(tid);
+            return r;
+        } catch(e) { clearTimeout(tid); return null; }
     };
 
-    // Definitieve anti-vastloop functie met 2 reserve proxy's en 6 sec limiet
-    const fetchWithTimeoutAndFallback = async (url) => {
-    // <!-- NIEUW: Race beide proxy's tegelijk, eerste wint -->
-    const proxies = [
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-    ];
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    try {
-        const result = await Promise.any(
-            proxies.map(p => fetch(p, { signal: controller.signal }).then(r => {
-                if (!r.ok) throw new Error('not ok');
-                return r.text();
-            }))
-        );
-        clearTimeout(timeoutId);
-        return result;
-    } catch (e) { clearTimeout(timeoutId); return null; }
-};
+    // <!-- NIEUW: Parse RSS xml naar artikel-array -->
+    const parseRSS = (xml, cat) => {
+        const doc = new DOMParser().parseFromString(xml, 'text/xml');
+        const items = doc.querySelectorAll('item');
+        const out = [];
+        const max = Math.min(items.length, 60);
+        for (let i = 0; i < max; i++) {
+            const item = items[i];
+            const rawTitle = item.querySelector('title')?.textContent || '';
+            const link = item.querySelector('link')?.textContent || '';
+            const pubDate = item.querySelector('pubDate')?.textContent || '';
+            const srcTag = item.querySelector('source');
+            let source = srcTag?.textContent || '';
+            const srcUrl = srcTag?.getAttribute('url') || '';
+            const desc = item.querySelector('description')?.textContent || '';
 
+            let title = rawTitle;
+            const parts = rawTitle.split(' - ');
+            if (parts.length > 1) { const s = parts.pop().trim(); title = parts.join(' - '); if (!source) source = s; }
+            if (!source) source = 'Nieuws';
+
+            let cleanDesc = desc.replace(/<[^>]+>/g, '').trim();
+            if (cleanDesc.toLowerCase().startsWith(title.toLowerCase().substring(0, 30))) cleanDesc = '';
+
+            let img = null;
+            const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgM) img = imgM[1];
+            if (!img && srcUrl) { try { img = `https://logo.clearbit.com/${new URL(srcUrl).hostname.replace('www.','')}?size=80`; } catch(e){} }
+            if (!img && link) { try { img = `https://www.google.com/s2/favicons?domain=${new URL(link).hostname.replace('www.','')}&sz=64`; } catch(e){} }
+
+            // Check max 3 dagen oud
+            if (pubDate) {
+                try {
+                    const t = new Date(pubDate).getTime();
+                    const limit = Date.now() - (3 * 24 * 60 * 60 * 1000);
+                    if (t < limit) continue;
+                } catch(e) {}
+            }
+
+            out.push({ title, link, pubDate, source, desc: cleanDesc, img, cat });
+        }
+        return out;
+    };
+
+    // <!-- NIEUW: Feed laden - alle categorieën parallel, progressief renderen -->
     useEffect(() => {
-        let isMounted = true;
-        const fetchAllNews = async () => {
+        let alive = true;
+        const cached = sessionStorage.getItem('nws_cache_v6');
+        if (cached) {
             try {
-                const cached = sessionStorage.getItem('michael_news_cache_v5');
-                if (cached) {
-                    const { time, data } = JSON.parse(cached);
-                    // <!-- NIEUW: Cache 15 min ipv 5 — minder API calls, snellere herlaadtijd -->
-if (Date.now() - time < 900000) {
-                        if (isMounted) setNewsData(data);
-                        return;
-                    }
-                }
+                const { t, d } = JSON.parse(cached);
+                if (Date.now() - t < 900000) { setAllArticles(d); setFeedReady(true); return; }
             } catch(e) {}
+        }
 
-            if (isMounted) setNewsData({}); 
+        setFeedReady(false);
+        const seen = new Set();
 
-            const promises = cols.map(async (cat) => {
-                const h = lang === 'nl' ? 'nl' : 'en-US';
-                const g = lang === 'nl' ? 'NL' : 'US';
-                const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`;
-                
-                const text = await fetchWithTimeoutAndFallback(rssUrl);
-                if (!text || !isMounted) return;
-
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(text, "text/xml");
-                const items = xmlDoc.querySelectorAll("item");
-                const parsedItems = [];
-                
-                // <!-- NIEUW: Meer artikelen per feed ophalen -->
-const maxItems = Math.min(items.length, 60);
-                for(let i = 0; i < maxItems; i++) {
-                    const item = items[i];
-                    const title = item.querySelector("title")?.textContent || "";
-                    const link = item.querySelector("link")?.textContent || "";
-                    const pubDate = item.querySelector("pubDate")?.textContent || "";
-                    const sourceTag = item.querySelector("source");
-                    const source = sourceTag?.textContent || "Nieuwsbron";
-                    const sourceUrl = sourceTag?.getAttribute("url") || "";
-                    const description = item.querySelector("description")?.textContent || "";
-                    
-                    let imageUrl = null;
-                    const imgMatch = description.match(/<img[^>]+src=["']([^"']+)["']/i);
-                    if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
-
-                    // Dynamische bedrijfslogo generator als artikel geen foto heeft
-                    if (!imageUrl && sourceUrl) {
-                        try {
-                            const domain = new URL(sourceUrl).hostname.replace('www.', '');
-                            imageUrl = `https://logo.clearbit.com/${domain}?size=100`;
-                        } catch(e) {}
-                    }
-                    
-                    parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: cat });
-                }
-                
-                if (isMounted && parsedItems.length > 0) {
-                    setNewsData(prev => {
-                        const updated = {...prev, [cat]: parsedItems};
-                        sessionStorage.setItem('michael_news_cache_v5', JSON.stringify({ time: Date.now(), data: updated }));
-                        return updated;
-                    });
-                }
-            });
-
-            await Promise.allSettled(promises);
-        };
-
-        fetchAllNews();
-        return () => { isMounted = false; };
-    }, [cols, lang]);
-
-    useEffect(() => {
-        // <!-- NIEUW: Snellere debounce voor responsive zoeken -->
-const handler = setTimeout(() => {
-    setDebouncedSearch(search.trim());
-    setSearchLimit(40); 
-}, 350);
-        return () => clearTimeout(handler);
-    }, [search]);
-
-    useEffect(() => {
-        if (!debouncedSearch) { setSearchResults([]); return; }
-        let isMounted = true;
-        setIsSearching(true);
-        
-        const fetchSearch = async () => {
+        cols.forEach(async (cat) => {
             const h = lang === 'nl' ? 'nl' : 'en-US';
             const g = lang === 'nl' ? 'NL' : 'US';
-            const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(debouncedSearch)}&hl=${h}&gl=${g}`;
-            
-            const text = await fetchWithTimeoutAndFallback(rssUrl);
-            
-            if (text && isMounted) {
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(text, "text/xml");
-                const items = xmlDoc.querySelectorAll("item");
-                const parsedItems = [];
-                const maxItems = Math.min(items.length, 40);
-                
-                for(let i=0; i<maxItems; i++) {
-                    const item = items[i];
-                    const title = item.querySelector("title")?.textContent || "";
-                    const link = item.querySelector("link")?.textContent || "";
-                    const pubDate = item.querySelector("pubDate")?.textContent || "";
-                    const sourceTag = item.querySelector("source");
-                    const source = sourceTag?.textContent || "Nieuwsbron";
-                    const sourceUrl = sourceTag?.getAttribute("url") || "";
-                    const description = item.querySelector("description")?.textContent || "";
-                    
-                    let imageUrl = null;
-                    const imgMatch = description.match(/<img[^>]+src=["']([^"']+)["']/i);
-                    if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
+            const xml = await fastFetch(`https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`);
+            if (!xml || !alive) return;
+            const items = parseRSS(xml, cat);
+            if (!alive) return;
 
-                    if (!imageUrl && sourceUrl) {
-                        try {
-                            const domain = new URL(sourceUrl).hostname.replace('www.', '');
-                            imageUrl = `https://logo.clearbit.com/${domain}?size=100`;
-                        } catch(e) {}
-                    }
-                    
-                    parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: 'ZOEKEN' });
-                }
-                setSearchResults(parsedItems);
-            } else if (isMounted) {
-                setSearchResults([]);
-            }
-            if (isMounted) setIsSearching(false);
-        };
+            setAllArticles(prev => {
+                const merged = [...prev];
+                items.forEach(a => {
+                    const key = a.link || a.title.substring(0, 40);
+                    if (!seen.has(key)) { seen.add(key); merged.push(a); }
+                });
+                sessionStorage.setItem('nws_cache_v6', JSON.stringify({ t: Date.now(), d: merged }));
+                return merged;
+            });
+            setFeedReady(true);
+        });
 
-        fetchSearch();
-        return () => { isMounted = false; };
-    }, [debouncedSearch, lang]);
+        return () => { alive = false; };
+    }, [cols, lang]);
 
-    const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n = [...cols, newCol.toUpperCase()]; setCols(n); S.save('newscats', n); syncNewsSettings(); setNewCol(''); } };
-    const removeCol = (c) => { const n = cols.filter(x => x !== c); setCols(n); S.save('newscats', n); syncNewsSettings(); };
-    const addBlock = () => { if(newBlock && !blocked.includes(newBlock.toLowerCase())) { const n = [...blocked, newBlock.toLowerCase()]; setBlocked(n); S.save('news_blocked', n); syncNewsSettings(); setNewBlock(''); } };
-    const removeBlock = (b) => { const n = blocked.filter(x => x !== b); setBlocked(n); S.save('news_blocked', n); syncNewsSettings(); };
-    const addPriority = () => { if(newPriority && !priority.includes(newPriority.toLowerCase())) { const n = [...priority, newPriority.toLowerCase()]; setPriority(n); S.save('news_priority', n); syncNewsSettings(); setNewPriority(''); } };
-    const removePriority = (p) => { const n = priority.filter(x => x !== p); setPriority(n); S.save('news_priority', n); syncNewsSettings(); };
-
-    const handleDragStart = (e, item, type) => { setDragItem(item); setDragType(type); e.dataTransfer.effectAllowed = "move"; };
-    const handleDrop = (e, targetItem, type) => {
-        e.preventDefault();
-        if (dragType !== type || dragItem === targetItem) return;
-        if (type === 'col') {
-            const newCols = [...cols];
-            const dragIdx = newCols.indexOf(dragItem);
-            const dropIdx = newCols.indexOf(targetItem);
-            newCols.splice(dragIdx, 1); newCols.splice(dropIdx, 0, dragItem);
-            setCols(newCols); S.save('newscats', newCols); syncNewsSettings();
-        } else if (type === 'pri') {
-            const newPri = [...priority];
-            const dragIdx = newPri.indexOf(dragItem);
-            const dropIdx = newPri.indexOf(targetItem);
-            newPri.splice(dragIdx, 1); newPri.splice(dropIdx, 0, dragItem);
-            setPriority(newPri); S.save('news_priority', newPri); syncNewsSettings();
+    // <!-- NIEUW: Zoeken - vervangt feedweergave direct -->
+    const doSearch = async (q) => {
+        if (!q.trim()) { setSearchResults([]); setSearchDone(false); setIsSearching(false); return; }
+        setIsSearching(true);
+        setSearchDone(false);
+        const h = lang === 'nl' ? 'nl' : 'en-US';
+        const g = lang === 'nl' ? 'NL' : 'US';
+        const xml = await fastFetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q.trim())}&hl=${h}&gl=${g}`);
+        if (xml) {
+            const items = parseRSS(xml, 'ZOEKEN');
+            const unique = []; const urls = new Set();
+            items.forEach(a => { if (!urls.has(a.link)) { urls.add(a.link); unique.push(a); } });
+            setSearchResults(unique);
+        } else {
+            setSearchResults([]);
         }
-        setDragItem(null); setDragType(null);
+        setIsSearching(false);
+        setSearchDone(true);
     };
 
-    const formatDate = (pubDate) => {
-        if (!pubDate) return '';
-        try {
-            const d = new Date(pubDate);
-            if (isNaN(d.getTime())) return pubDate;
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            const hours = String(d.getHours()).padStart(2, '0');
-            const mins = String(d.getMinutes()).padStart(2, '0');
-            return `${day}-${month}-${year} | ${hours}:${mins}`;
-        } catch(e) { return pubDate; }
+    const handleSearchInput = (val) => {
+        setSearch(val);
+        setVisibleCount(40);
+        if (searchTimer.current) clearTimeout(searchTimer.current);
+        if (!val.trim()) { setSearchResults([]); setSearchDone(false); setIsSearching(false); return; }
+        setIsSearching(true);
+        searchTimer.current = setTimeout(() => doSearch(val), 400);
     };
 
-    const getSourceColor = (src) => {
-        const colors = ['#c586c0', '#d16b92', '#b278a9', '#9a73b5', '#e27b64', '#e2a864', '#4a90e2'];
-        let hash = 0;
-        for (let i = 0; i < src.length; i++) hash = src.charCodeAt(i) + ((hash << 5) - hash);
-        return colors[Math.abs(hash) % colors.length];
-    };
-
-    const isDescriptionRedundant = (title, desc) => {
-        if (!desc) return true;
-        const t = title.toLowerCase().trim();
-        const d = desc.toLowerCase().trim();
-        if (t === d) return true;
-        if (d.startsWith(t.substring(0, Math.floor(t.length * 0.8)))) return true;
-        return false;
-    };
-
-    const allNewsRaw = [];
-    const seenUrls = new Set();
-    const seenTitles = new Set();
-    
-    Object.values(newsData).forEach(catItems => {
-        catItems.forEach(item => {
-            const titleKey = (item.title || '').toLowerCase().substring(0, 40);
-            if (!seenUrls.has(item.link) && !seenTitles.has(titleKey)) {
-                if (isRecent(item.pubDate)) {
-                    seenUrls.add(item.link);
-                    seenTitles.add(titleKey);
-                    allNewsRaw.push(item);
-                }
-            }
-        });
-    });
-
-    const filterAndSortItems = (itemsList) => {
-        let filtered = itemsList.filter(item => {
-            const text = (item.title + " " + (item.source || '') + " " + (item.description || '')).toLowerCase();
-            if (blocked.some(b => text.includes(b))) return false;
-            if (!isRecent(item.pubDate)) return false; 
-            return true; 
+    // <!-- NIEUW: Filter + sort logica -->
+    const filterSort = (items) => {
+        let f = items.filter(a => {
+            const txt = (a.title + ' ' + a.source + ' ' + a.desc).toLowerCase();
+            return !blocked.some(b => txt.includes(b));
         });
 
-        filtered.sort((a, b) => {
-            const timeA = new Date(a.pubDate).getTime() || 0;
-            const timeB = new Date(b.pubDate).getTime() || 0;
-            
-            if (sortMode === 'tijd') return timeB - timeA;
-
+        f.sort((a, b) => {
+            const tA = new Date(a.pubDate).getTime() || 0;
+            const tB = new Date(b.pubDate).getTime() || 0;
             if (sortMode === 'bron') {
-                const srcA = (a.source || a.title || '').toLowerCase();
-                const srcB = (b.source || b.title || '').toLowerCase();
-                let idxA = priority.findIndex(p => srcA.includes(p));
-                let idxB = priority.findIndex(p => srcB.includes(p));
-                if (idxA === -1) idxA = 9999;
-                if (idxB === -1) idxB = 9999;
-                if (idxA !== idxB) return idxA - idxB; 
-                return timeB - timeA; 
+                let iA = priority.findIndex(p => (a.source||'').toLowerCase().includes(p)); if (iA===-1) iA=9999;
+                let iB = priority.findIndex(p => (b.source||'').toLowerCase().includes(p)); if (iB===-1) iB=9999;
+                if (iA !== iB) return iA - iB;
             }
-
             if (sortMode === 'onderwerp') {
-                const catA = (a._feedCategory || '').toLowerCase();
-                const catB = (b._feedCategory || '').toLowerCase();
-                let idxA = cols.findIndex(c => c.toLowerCase() === catA);
-                let idxB = cols.findIndex(c => c.toLowerCase() === catB);
-                if (idxA === -1) idxA = 9999;
-                if (idxB === -1) idxB = 9999;
-                if (idxA !== idxB) return idxA - idxB;
-                return timeB - timeA;
+                let iA = cols.findIndex(c => c.toLowerCase() === (a.cat||'').toLowerCase()); if (iA===-1) iA=9999;
+                let iB = cols.findIndex(c => c.toLowerCase() === (b.cat||'').toLowerCase()); if (iB===-1) iB=9999;
+                if (iA !== iB) return iA - iB;
             }
-
-            return timeB - timeA;
+            return tB - tA;
         });
-
-        return filtered;
+        return f;
     };
 
-    const renderItemCard = (item, i) => {
-        let displayTitle = item.title || '';
-        let sourceName = item.source || '';
-        
-        const titleParts = displayTitle.split(' - ');
-        if (titleParts.length > 1) {
-            const possibleSource = titleParts.pop().trim();
-            displayTitle = titleParts.join(' - ');
-            if (!sourceName || sourceName === 'Nieuwsbron') sourceName = possibleSource;
-        }
+    // <!-- NIEUW: Eén artikel-lijst die wisselt tussen feed en zoekresultaten -->
+    const isSearchActive = search.trim().length > 0;
+    const displayItems = filterSort(isSearchActive ? searchResults : allArticles).slice(0, visibleCount);
+    const totalFiltered = filterSort(isSearchActive ? searchResults : allArticles).length;
 
-        let cleanDesc = item.description?.replace(/<[^>]+>/g, '').trim() || '';
-        const srcRegex = new RegExp(`[\\-\\|]?\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
-        cleanDesc = cleanDesc.replace(srcRegex, '').trim();
-        if (isDescriptionRedundant(displayTitle, cleanDesc)) cleanDesc = '';
-
-        const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
-        let finalImageUrl = item.imageUrl || null;
-
-        return (
-            <a href={item.link} target="_blank" key={i} className={`flex gap-3 border-b border-gray-100 pb-4 mb-4 hover:bg-gray-50 transition group ${isPriorityItem && sortMode === 'bron' ? 'bg-green-50/30 -mx-2 px-2 pt-2 rounded' : ''}`}>
-                <div className="flex-1 flex flex-col justify-between">
-                    <div>
-                        <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition">
-                            {displayTitle}
-                        </p>
-                        {cleanDesc && (
-                            <p className="text-[#0b57d0] font-semibold text-[11px] line-clamp-2 mt-1.5 leading-snug">
-                                {cleanDesc}
-                            </p>
-                        )}
-                    </div>
-                    
-                    <div className="flex justify-between items-start mt-3 flex-wrap gap-2">
-                        <div className="flex items-center gap-1.5 max-w-[70%] flex-wrap">
-                            {item._feedCategory && (
-                                <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase shadow-sm">
-                                    {item._feedCategory}
-                                </span>
-                            )}
-                            <span className="text-[10px] font-black uppercase tracking-wider truncate flex items-center gap-1" style={{ color: getSourceColor(sourceName) }}>
-                                {isPriorityItem && <span title="Voorrang bron">⭐</span>}
-                                {sourceName}
-                            </span>
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-400 shrink-0 mt-0.5">
-                            {formatDate(item.pubDate)}
-                        </span>
-                    </div>
-                </div>
-
-                {finalImageUrl && (
-    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 mt-0.5 flex items-center justify-center p-1">
-        <img src={finalImageUrl} alt="" referrerPolicy="no-referrer" className="w-full h-full object-contain mix-blend-multiply" loading="lazy" onError={(e) => { 
-            const el = e.target;
-            if (!el.dataset.retried) {
-                el.dataset.retried = '1';
-                try {
-                    const domain = new URL(item.link).hostname.replace('www.','');
-                    el.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-                } catch(err) { el.parentElement.style.display='none'; }
-            } else {
-                el.parentElement.style.display='none';
-            }
-        }} />
-    </div>
-)}
-            </a>
-        );
+    const formatDate = (d) => {
+        if (!d) return '';
+        try { const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()} | ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`; }
+        catch(e) { return d; }
     };
 
-    const handleSortChange = (m) => {
-        setSortMode(m); 
-        S.save('news_sort', m); 
-        syncNewsSettings();
+    const srcColor = (s) => {
+        const c = ['#c586c0','#d16b92','#b278a9','#9a73b5','#e27b64','#e2a864','#4a90e2'];
+        let h = 0; for (let i=0;i<s.length;i++) h = s.charCodeAt(i)+((h<<5)-h);
+        return c[Math.abs(h)%c.length];
     };
 
-    const finalNews = filterAndSortItems(allNewsRaw);
-    
-    const uniqueSearch = [];
-    const sUrls = new Set();
-    searchResults.forEach(item => {
-        if (!sUrls.has(item.link)) {
-            sUrls.add(item.link);
-            uniqueSearch.push(item);
-        }
-    });
-    const finalSearch = filterAndSortItems(uniqueSearch);
+    const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n=[...cols,newCol.toUpperCase()]; setCols(n); S.save('newscats',n); syncSettings(); setNewCol(''); }};
+    const removeCol = (c) => { const n=cols.filter(x=>x!==c); setCols(n); S.save('newscats',n); syncSettings(); };
+    const addBlock = () => { if(newBlock && !blocked.includes(newBlock.toLowerCase())) { const n=[...blocked,newBlock.toLowerCase()]; setBlocked(n); S.save('news_blocked',n); syncSettings(); setNewBlock(''); }};
+    const removeBlock = (b) => { const n=blocked.filter(x=>x!==b); setBlocked(n); S.save('news_blocked',n); syncSettings(); };
+    const addPriority = () => { if(newPriority && !priority.includes(newPriority.toLowerCase())) { const n=[...priority,newPriority.toLowerCase()]; setPriority(n); S.save('news_priority',n); syncSettings(); setNewPriority(''); }};
+    const removePriority = (p) => { const n=priority.filter(x=>x!==p); setPriority(n); S.save('news_priority',n); syncSettings(); };
+    const handleSortChange = (m) => { setSortMode(m); S.save('news_sort',m); syncSettings(); };
 
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
+            {/* HEADER */}
             <div className="p-3 bg-[#f8f9fa] border-b border-gray-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-gray-600 font-black tracking-widest text-[11px] uppercase">
                     <Ico.Nws/> NEWS
                 </div>
                 <div className="flex gap-2 flex-1 justify-end items-center">
                     <div className="hidden sm:flex bg-[#eef0f2] p-1 rounded-md border border-gray-200 shrink-0">
-                        {['tijd', 'bron', 'onderwerp'].map(m => (
-                            <button key={m} onClick={() => handleSortChange(m)} className={`px-3 py-1 text-[9px] font-bold rounded uppercase transition ${sortMode === m ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:bg-gray-200'}`}>
-                                {m}
-                            </button>
+                        {['tijd','bron','onderwerp'].map(m => (
+                            <button key={m} onClick={()=>handleSortChange(m)} className={`px-3 py-1 text-[9px] font-bold rounded uppercase transition ${sortMode===m?'bg-white shadow-sm text-blue-700':'text-gray-500 hover:bg-gray-200'}`}>{m}</button>
                         ))}
                     </div>
-
-                    <input 
-                        type="text" 
-                        placeholder="Live Web Search..." 
-                        value={search} 
-                        onChange={e=>setSearch(e.target.value)} 
-                        className="w-full max-w-[250px] px-3 py-1.5 text-[16px] md:text-[11px] font-medium border border-gray-200 rounded-md outline-none focus:border-blue-500 shadow-sm transition" 
+                    <input
+                        type="text"
+                        placeholder="Zoek nieuws..."
+                        value={search}
+                        onChange={e => handleSearchInput(e.target.value)}
+                        className="w-full max-w-[250px] px-3 py-1.5 text-[16px] md:text-[11px] font-medium border border-gray-200 rounded-md bg-white outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition"
                     />
-                    <button 
-                        onClick={()=>setManage(!manage)} 
-                        className={`px-4 py-1.5 rounded-md text-[11px] font-bold transition shrink-0 ${manage ? 'bg-blue-600 text-white' : 'bg-[#eef0f2] text-gray-700 hover:bg-gray-200 border border-gray-200'}`}
-                    >
-                        {manage ? 'Klaar' : 'Beheer'}
-                    </button>
+                    <button onClick={()=>setManage(!manage)} className="px-3 py-1.5 bg-white border border-gray-200 shadow-sm text-[10px] font-bold rounded text-gray-600 hover:text-blue-600 transition shrink-0">Beheer</button>
                 </div>
             </div>
-            
-            <div className="sm:hidden flex bg-[#f8f9fa] border-b border-gray-200 p-2 justify-center gap-1 shrink-0">
-                {['tijd', 'bron', 'onderwerp'].map(m => (
-                    <button key={m} onClick={() => handleSortChange(m)} className={`flex-1 px-3 py-1.5 text-[9px] font-bold rounded uppercase transition ${sortMode === m ? 'bg-white shadow-sm text-blue-700 border border-gray-200' : 'text-gray-500'}`}>
-                        {m}
-                    </button>
-                ))}
-            </div>
-            
-            {manage && (
-                <div className="p-4 bg-gray-100 border-b border-gray-200 flex flex-col gap-4 text-[10px] shrink-0">
-                    <div>
-                        <div className="flex gap-2 items-center mb-2">
-                            <span className="font-bold w-20">Nieuw Onderwerp:</span>
-                            <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addCol()} className="flex-1 p-2 text-[16px] md:text-[11px] border rounded-md outline-none focus:border-blue-500" placeholder="Bijv. EUROPA, url of rss-link..." />
-                            <button onClick={addCol} className="bg-blue-600 text-white px-4 py-2 rounded-md font-bold hover:bg-blue-700 transition">+</button>
-                        </div>
-                        {cols.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pl-22">
-                                {cols.map(c => (
-                                    <span key={c} draggable onDragStart={(e)=>handleDragStart(e, c, 'col')} onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>handleDrop(e, c, 'col')} className="cursor-move bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold flex items-center gap-1 shadow-sm hover:bg-blue-200 transition">
-                                        {c} <button onClick={()=>removeCol(c)} className="text-blue-500 hover:text-blue-900 ml-1 text-xs">&times;</button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    
-                    <div className="border-t border-gray-200 pt-3">
-                        <div className="flex gap-2 items-center">
-                            <span className="font-bold w-20 text-green-700">Voorrang bron:</span>
-                            <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addPriority()} className="flex-1 p-2 text-[16px] md:text-[11px] border rounded-md outline-none focus:border-green-500" placeholder="Bron (bijv. Tweakers)..." />
-                            <button onClick={addPriority} className="bg-green-600 text-white px-4 py-2 rounded-md font-bold hover:bg-green-700 transition">+</button>
-                        </div>
-                        {priority.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pl-22 mt-2">
-                                {priority.map(p => (
-                                    <span key={p} draggable onDragStart={(e)=>handleDragStart(e, p, 'pri')} onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>handleDrop(e, p, 'pri')} className="cursor-move bg-green-100 text-green-800 px-2 py-1 rounded font-bold flex items-center gap-1 shadow-sm hover:bg-green-200 transition">
-                                        ⭐ {p} <button onClick={()=>removePriority(p)} className="text-green-600 hover:text-green-900 ml-1 text-xs">&times;</button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
 
-                    <div className="border-t border-gray-200 pt-3">
-                        <div className="flex gap-2 items-center">
-                            <span className="font-bold w-20 text-red-600">Blokkeer woord:</span>
-                            <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addBlock()} className="flex-1 p-2 text-[16px] md:text-[11px] border rounded-md outline-none focus:border-red-500" placeholder="Te vermijden bron of woord..." />
-                            <button onClick={addBlock} className="bg-red-600 text-white px-4 py-2 rounded-md font-bold hover:bg-red-700 transition">+</button>
+            {/* STATUS BAR */}
+            <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-100 flex justify-between items-center text-[9px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
+                {isSearchActive ? (
+                    <span className="text-amber-500">🔍 Zoekresultaten: "{search}" {isSearching && <span className="animate-pulse ml-1">laden...</span>}</span>
+                ) : (
+                    <span>Feed — {allArticles.length} artikelen {!feedReady && <span className="text-blue-500 animate-pulse ml-1">laden...</span>}</span>
+                )}
+                <span className="text-blue-500">{displayItems.length} / {totalFiltered} getoond</span>
+            </div>
+
+            {/* BEHEER PANEEL */}
+            {manage && (
+                <div className="p-4 bg-gray-50 border-b border-gray-200 space-y-3 shrink-0 max-h-[200px] overflow-y-auto">
+                    <div>
+                        <div className="text-[9px] font-black uppercase text-gray-500 mb-1">Categorieën (sleep om te ordenen)</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {cols.map(c => (
+                                <span key={c} className="px-2 py-1 bg-blue-50 text-blue-700 text-[9px] font-bold rounded border border-blue-200 flex items-center gap-1">
+                                    {c} <button onClick={()=>removeCol(c)} className="text-red-400 hover:text-red-600">×</button>
+                                </span>
+                            ))}
                         </div>
-                        {blocked.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pl-22 mt-2">
-                                {blocked.map(b => <span key={b} className="bg-red-100 text-red-800 px-2 py-1 rounded font-bold flex items-center gap-1">🚫 {b} <button onClick={()=>removeBlock(b)} className="text-red-500 hover:text-red-900 ml-1 text-xs">&times;</button></span>)}
-                            </div>
-                        )}
+                        <div className="flex gap-1 mt-1.5">
+                            <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addCol()} placeholder="+ Categorie" className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
+                            <button onClick={addCol} className="px-2 py-1 bg-blue-500 text-white text-[9px] font-bold rounded">+</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-[9px] font-black uppercase text-gray-500 mb-1">Geblokkeerde woorden</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {blocked.map(b => (
+                                <span key={b} className="px-2 py-1 bg-red-50 text-red-600 text-[9px] font-bold rounded border border-red-200 flex items-center gap-1">
+                                    {b} <button onClick={()=>removeBlock(b)} className="hover:text-red-800">×</button>
+                                </span>
+                            ))}
+                        </div>
+                        <div className="flex gap-1 mt-1.5">
+                            <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addBlock()} placeholder="+ Blokkeer woord" className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
+                            <button onClick={addBlock} className="px-2 py-1 bg-red-500 text-white text-[9px] font-bold rounded">+</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-[9px] font-black uppercase text-gray-500 mb-1">⭐ Prioriteit bronnen</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {priority.map(p => (
+                                <span key={p} className="px-2 py-1 bg-green-50 text-green-700 text-[9px] font-bold rounded border border-green-200 flex items-center gap-1">
+                                    ⭐ {p} <button onClick={()=>removePriority(p)} className="hover:text-red-600">×</button>
+                                </span>
+                            ))}
+                        </div>
+                        <div className="flex gap-1 mt-1.5">
+                            <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addPriority()} placeholder="+ Prioriteit bron" className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
+                            <button onClick={addPriority} className="px-2 py-1 bg-green-500 text-white text-[9px] font-bold rounded">+</button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            <div className="flex-1 overflow-y-auto hide-scroll p-4 bg-gray-50/30">
-                {!debouncedSearch ? (
-                    <div className="w-full flex flex-col">
-                        <div className="space-y-4">
-                            {finalNews.slice(0, newsLimit).map((item, i) => renderItemCard(item, i))}
-                            {allNewsRaw.length === 0 && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Nieuws ophalen (max 6 sec)...</div>}
-                            
-                            {finalNews.length > newsLimit && (
-                                <button onClick={() => setNewsLimit(l => l + 50)} className="w-full mt-4 py-3 bg-white border border-gray-200 text-blue-600 font-bold text-[11px] rounded-md hover:bg-blue-50 transition shadow-sm">
-                                    LAAD EXTRA BERICHTEN
-                                </button>
-                            )}
-                        </div>
+            {/* ARTIKEL LIJST — zelfde blok voor feed EN zoekresultaten */}
+            <div className="flex-1 overflow-y-auto hide-scroll">
+                {displayItems.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                        {(isSearching || (!feedReady && !isSearchActive)) ? (
+                            <div className="text-xs font-bold text-blue-500 animate-pulse">
+                                {isSearchActive ? `Zoeken naar "${search}"...` : 'Nieuws ophalen...'}
+                            </div>
+                        ) : (
+                            <div className="text-xs font-bold text-gray-400">
+                                {isSearchActive && searchDone ? `Geen resultaten voor "${search}"` : 'Geen artikelen gevonden'}
+                            </div>
+                        )}
                     </div>
                 ) : (
-                    <div className="w-full flex flex-col">
-                        <div className="space-y-4">
-                            {isSearching && <div className="text-[11px] font-bold text-blue-500 text-center mt-10 animate-pulse">Zoeken naar live artikelen (max 6 sec)...</div>}
-                            {!isSearching && searchResults.length === 0 && <div className="text-[11px] text-gray-500 font-medium text-center mt-10">Geen recente resultaten gevonden voor "{debouncedSearch}".</div>}
-                            
-                            {!isSearching && finalSearch.slice(0, searchLimit).map((item, i) => renderItemCard(item, i))}
-                            
-                            {!isSearching && finalSearch.length > searchLimit && (
-                                <button onClick={() => setSearchLimit(l => l + 50)} className="w-full mt-4 py-3 bg-white border border-gray-200 text-blue-600 font-bold text-[11px] rounded-md hover:bg-blue-50 transition shadow-sm">
-                                    LAAD EXTRA BERICHTEN
-                                </button>
-                            )}
-                        </div>
+                    displayItems.map((a, i) => {
+                        const isPri = priority.some(p => (a.source||'').toLowerCase().includes(p));
+                        return (
+                            <a href={a.link} target="_blank" rel="noopener" key={a.link+i}
+                                className={`flex gap-3 px-4 py-3.5 border-b border-gray-100 hover:bg-gray-50 transition group ${isPri && sortMode==='bron' ? 'bg-green-50/30' : ''}`}
+                            >
+                                <div className="flex-1 flex flex-col justify-between min-w-0">
+                                    <div>
+                                        <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition line-clamp-2">{a.title}</p>
+                                        {a.desc && <p className="text-[#0b57d0] font-semibold text-[11px] line-clamp-2 mt-1 leading-snug">{a.desc}</p>}
+                                    </div>
+                                    <div className="flex justify-between items-center mt-2.5 flex-wrap gap-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase">{a.cat}</span>
+                                            <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-0.5" style={{color: srcColor(a.source)}}>
+                                                {isPri && '⭐'}{a.source}
+                                            </span>
+                                        </div>
+                                        <span className="text-[10px] font-bold text-gray-400 shrink-0">{formatDate(a.pubDate)}</span>
+                                    </div>
+                                </div>
+                                {a.img && (
+                                    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 flex items-center justify-center p-1">
+                                        <img src={a.img} alt="" referrerPolicy="no-referrer" className="w-full h-full object-contain mix-blend-multiply" loading="lazy"
+                                            onError={(e) => {
+                                                const el = e.target;
+                                                if (!el.dataset.retried) {
+                                                    el.dataset.retried = '1';
+                                                    try { el.src = `https://www.google.com/s2/favicons?domain=${new URL(a.link).hostname.replace('www.','')}&sz=64`; }
+                                                    catch(err) { el.parentElement.style.display='none'; }
+                                                } else { el.parentElement.style.display='none'; }
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                            </a>
+                        );
+                    })
+                )}
+
+                {/* Meer laden knop */}
+                {displayItems.length < totalFiltered && (
+                    <div className="p-3 text-center border-t border-gray-100">
+                        <button onClick={()=>setVisibleCount(v=>v+40)} className="px-6 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold hover:bg-blue-100 transition">
+                            Meer laden ({totalFiltered - displayItems.length} resterend)
+                        </button>
                     </div>
                 )}
             </div>
