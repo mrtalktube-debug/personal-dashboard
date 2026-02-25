@@ -1358,30 +1358,21 @@ const handler = setTimeout(() => {
                 </div>
 
                 {finalImageUrl && (
-                    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 mt-0.5 flex items-center justify-center p-1">
-                        {/* Failsafe in gebouwd: onzichtbaar maken als het bedrijfslogo ook niet bestaat */}
-                        <img src={// <!-- NIEUW: Dubbele fallback: eerst clearbit, dan favicon, dan verbergen -->
-<img 
-    src={finalImageUrl} 
-    alt="" 
-    className="w-full h-full object-contain mix-blend-multiply" 
-    loading="lazy" 
-    referrerPolicy="no-referrer"
-    onError={(e) => { 
-        const el = e.target;
-        if (!el.dataset.retried) {
-            el.dataset.retried = '1';
-            try {
-                const domain = new URL(item.link).hostname.replace('www.','');
-                el.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-            } catch(err) { el.parentElement.style.display='none'; }
-        } else {
-            el.parentElement.style.display='none';
-        }
-    }} 
-/>
-                    </div>
-                )}
+    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-md overflow-hidden border border-gray-200 mt-0.5 flex items-center justify-center p-1">
+        <img src={finalImageUrl} alt="" referrerPolicy="no-referrer" className="w-full h-full object-contain mix-blend-multiply" loading="lazy" onError={(e) => { 
+            const el = e.target;
+            if (!el.dataset.retried) {
+                el.dataset.retried = '1';
+                try {
+                    const domain = new URL(item.link).hostname.replace('www.','');
+                    el.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+                } catch(err) { el.parentElement.style.display='none'; }
+            } else {
+                el.parentElement.style.display='none';
+            }
+        }} />
+    </div>
+)}
             </a>
         );
     };
