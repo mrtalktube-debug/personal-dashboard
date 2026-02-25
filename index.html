@@ -986,7 +986,7 @@ function AgendaWidget({ lang }) {
 }
     
 function NewsWidget({ lang }) {
-    const defaultCols = ['AI & TECH', 'F1', 'BIOTECH', 'AUTO'];
+    const defaultCols = ['AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
     const [cols, setCols] = useState(() => S.load('newscats', defaultCols)); 
     const [manage, setManage] = useState(false);
     const [newsData, setNewsData] = useState({});
@@ -1025,11 +1025,12 @@ function NewsWidget({ lang }) {
         }).catch(()=>{});
     };
 
+    /* <mark> Datum check geüpdatet voor directe RSS datum notatie */
     const isRecent = (dateString) => {
         if (!dateString) return false;
         try {
-            const cleanDate = dateString.replace(/-/g, '/').replace('T', ' ').replace('Z', '');
-            const articleTime = new Date(cleanDate).getTime();
+            const articleTime = new Date(dateString).getTime();
+            if (isNaN(articleTime)) return false;
             
             const today = new Date();
             today.setHours(0,0,0,0);
@@ -1042,6 +1043,7 @@ function NewsWidget({ lang }) {
             return false; 
         }
     };
+    /* </mark> */
 
     const getGoogleNewsUrl = (cat, language) => {
         if (cat.startsWith('http')) return cat;
@@ -1056,13 +1058,34 @@ function NewsWidget({ lang }) {
     useEffect(() => {
         cols.forEach(cat => {
             const rssUrl = getGoogleNewsUrl(cat, lang);
-            fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
-            .then(r=>r.json()).then(d => { 
-                if(d.items && Array.isArray(d.items)) {
-                    const taggedItems = d.items.map(item => ({...item, _feedCategory: cat}));
-                    setNewsData(p => ({...p, [cat + '_rss']: taggedItems})); 
+            /* <mark> API call vervangen door ruwe XML fetch via CORS proxy om limieten en ontbrekende afbeeldingen te fixen */
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+            fetch(proxyUrl)
+            .then(r=>r.json()).then(data => { 
+                if(data.contents) {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                    const items = xmlDoc.querySelectorAll("item");
+                    const parsedItems = [];
+                    items.forEach(item => {
+                        const title = item.querySelector("title")?.textContent || "";
+                        const link = item.querySelector("link")?.textContent || "";
+                        const pubDate = item.querySelector("pubDate")?.textContent || "";
+                        const source = item.querySelector("source")?.textContent || "";
+                        const description = item.querySelector("description")?.textContent || "";
+                        
+                        let imageUrl = null;
+                        const imgMatch = description.match(/<img[^>]+src="([^">]+)"/i);
+                        if (imgMatch && imgMatch[1]) {
+                            imageUrl = imgMatch[1];
+                        }
+                        
+                        parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: cat });
+                    });
+                    setNewsData(p => ({...p, [cat + '_xml']: parsedItems})); 
                 }
-            }).catch(e => console.error("Nieuws API fout voor", cat, e));
+            }).catch(e => console.error("Nieuws XML fout voor", cat, e));
+            /* </mark> */
         });
     }, [cols, lang]);
 
@@ -1082,10 +1105,29 @@ function NewsWidget({ lang }) {
         const query = `${debouncedSearch} when:2d`; 
         
         const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${h}&gl=${g}`;
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
-        .then(r=>r.json()).then(d => { 
-            if (d.items && Array.isArray(d.items)) {
-                setSearchResults(d.items.map(item => ({...item, _feedCategory: 'ZOEKEN'})));
+        /* <mark> Ook zoekopdracht omgezet naar ruwe XML fetch voor >10 resultaten en afbeeldingen */
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+        fetch(proxyUrl)
+        .then(r=>r.json()).then(data => { 
+            if(data.contents) {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                const items = xmlDoc.querySelectorAll("item");
+                const parsedItems = [];
+                items.forEach(item => {
+                    const title = item.querySelector("title")?.textContent || "";
+                    const link = item.querySelector("link")?.textContent || "";
+                    const pubDate = item.querySelector("pubDate")?.textContent || "";
+                    const source = item.querySelector("source")?.textContent || "";
+                    const description = item.querySelector("description")?.textContent || "";
+                    
+                    let imageUrl = null;
+                    const imgMatch = description.match(/<img[^>]+src="([^">]+)"/i);
+                    if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
+                    
+                    parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: 'ZOEKEN' });
+                });
+                setSearchResults(parsedItems);
             } else {
                 setSearchResults([]);
             }
@@ -1094,6 +1136,7 @@ function NewsWidget({ lang }) {
             setSearchResults([]);
             setIsSearching(false); 
         });
+        /* </mark> */
     }, [debouncedSearch, lang]);
 
     const addCol = () => { if(newCol && !cols.includes(newCol.toUpperCase())) { const n = [...cols, newCol.toUpperCase()]; setCols(n); S.save('newscats', n); syncNewsSettings(); setNewCol(''); } };
@@ -1123,16 +1166,21 @@ function NewsWidget({ lang }) {
         setDragItem(null); setDragType(null);
     };
 
+    /* <mark> Datumnotatie parser aangepast voor standaard JS datums */
     const formatDate = (pubDate) => {
         if (!pubDate) return '';
         try {
-            const [datePart, timePart] = pubDate.split(' ');
-            if (!datePart || !timePart) return pubDate;
-            const [y, m, d] = datePart.split('-');
-            const [h, min] = timePart.split(':');
-            return `${d}-${m}-${y} | ${h}:${min}`;
+            const d = new Date(pubDate);
+            if (isNaN(d.getTime())) return pubDate;
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            const hours = String(d.getHours()).padStart(2, '0');
+            const mins = String(d.getMinutes()).padStart(2, '0');
+            return `${day}-${month}-${year} | ${hours}:${mins}`;
         } catch(e) { return pubDate; }
     };
+    /* </mark> */
 
     const getSourceColor = (src) => {
         const colors = ['#c586c0', '#d16b92', '#b278a9', '#9a73b5', '#e27b64', '#e2a864', '#4a90e2'];
@@ -1176,8 +1224,8 @@ function NewsWidget({ lang }) {
         });
 
         filtered.sort((a, b) => {
-            const timeA = new Date(a.pubDate.replace(/-/g, '/')).getTime();
-            const timeB = new Date(b.pubDate.replace(/-/g, '/')).getTime();
+            const timeA = new Date(a.pubDate).getTime();
+            const timeB = new Date(b.pubDate).getTime();
             
             if (sortMode === 'tijd') return timeB - timeA;
 
@@ -1228,11 +1276,7 @@ function NewsWidget({ lang }) {
 
         const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
         
-        let finalImageUrl = item.imageUrl || item.thumbnail || (item.enclosure && item.enclosure.link) || null;
-        if (!finalImageUrl && item.description) {
-            const imgMatch = item.description.match(/<img[^>]+src="([^">]+)"/i);
-            if (imgMatch && imgMatch[1]) finalImageUrl = imgMatch[1];
-        }
+        let finalImageUrl = item.imageUrl || null;
 
         return (
             <a href={item.link} target="_blank" key={i} className={`flex gap-3 border-b border-gray-100 pb-4 mb-4 hover:bg-gray-50 transition group ${isPriorityItem && sortMode === 'bron' ? 'bg-green-50/30 -mx-2 px-2 pt-2 rounded' : ''}`}>
