@@ -1025,7 +1025,7 @@ function NewsWidget({ lang }) {
         }).catch(()=>{});
     };
 
-    /* Aangepast: Fail-safe toegevoegd zodat nieuws niet onterecht onzichtbaar wordt */
+    /* Datum check ruimer gezet (3 dagen) om lege schermen bij trage nieuwscycli te voorkomen */
     const isRecent = (dateString) => {
         if (!dateString) return true; 
         try {
@@ -1033,7 +1033,7 @@ function NewsWidget({ lang }) {
             if (isNaN(articleTime)) return true; 
             
             const limit = new Date();
-            limit.setDate(limit.getDate() - 2); 
+            limit.setDate(limit.getDate() - 3); 
             limit.setHours(0,0,0,0);
             
             return articleTime >= limit.getTime();
@@ -1042,26 +1042,24 @@ function NewsWidget({ lang }) {
         }
     };
 
-    const getGoogleNewsUrl = (cat, language) => {
+    /* Engine gewisseld naar Bing News voor onbeperkte toegang mét afbeeldingen */
+    const getNewsUrl = (cat, language) => {
         if (cat.startsWith('http')) return cat;
-        const h = language === 'nl' ? 'nl' : 'en-US';
-        const g = language === 'nl' ? 'NL' : 'US';
-        const c = cat.toLowerCase();
-        if (c === 'top nieuws' || c === 'headlines') return `https://news.google.com/rss?hl=${h}&gl=${g}`;
-        if (c === 'wereld' || c === 'europa' || c === 'usa') return `https://news.google.com/rss/headlines/section/topic/WORLD?hl=${h}&gl=${g}&q=${encodeURIComponent(cat)}`;
-        return `https://news.google.com/rss/search?q=${encodeURIComponent(cat)}&hl=${h}&gl=${g}`;
+        const mkt = language === 'nl' ? 'nl-NL' : 'en-US';
+        return `https://www.bing.com/news/search?q=${encodeURIComponent(cat)}&setmkt=${mkt}&format=rss`;
     };
 
     const extractImage = (item) => {
         let imageUrl = null;
-        const desc = item.querySelector("description")?.textContent || "";
-        const imgMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
-        if (imgMatch && imgMatch[1]) {
-            imageUrl = imgMatch[1];
-        } else {
-            const itemStr = item.innerHTML || "";
-            const mediaMatch = itemStr.match(/url=["']([^"']+(?:jpg|jpeg|png|webp|gif)[^"']*)["']/i);
-            if (mediaMatch && mediaMatch[1]) imageUrl = mediaMatch[1];
+        const imgTag = item.getElementsByTagName("image")[0];
+        if (imgTag) {
+            const urlTag = imgTag.getElementsByTagName("url")[0];
+            if (urlTag) imageUrl = urlTag.textContent;
+        }
+        if (!imageUrl) {
+            const desc = item.querySelector("description")?.textContent || "";
+            const imgMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
         }
         return imageUrl;
     };
@@ -1086,38 +1084,40 @@ function NewsWidget({ lang }) {
             for (const cat of cols) {
                 if (!isMounted) break;
                 try {
-                    const rssUrl = getGoogleNewsUrl(cat, lang);
-                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`;
+                    const rssUrl = getNewsUrl(cat, lang);
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
                     
                     const res = await fetch(proxyUrl, { cache: 'no-store' });
-                    const text = await res.text();
+                    const data = await res.json();
                     
-                    const parser = new DOMParser();
-                    const xmlDoc = parser.parseFromString(text, "text/xml");
-                    const items = xmlDoc.querySelectorAll("item");
-                    const parsedItems = [];
-                    
-                    const maxItems = Math.min(items.length, 35);
-                    for(let i = 0; i < maxItems; i++) {
-                        const item = items[i];
-                        const title = item.querySelector("title")?.textContent || "";
-                        const link = item.querySelector("link")?.textContent || "";
-                        const pubDate = item.querySelector("pubDate")?.textContent || "";
-                        const source = item.querySelector("source")?.textContent || "";
-                        const description = item.querySelector("description")?.textContent || "";
+                    if (data.contents) {
+                        const parser = new DOMParser();
+                        const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                        const items = xmlDoc.querySelectorAll("item");
+                        const parsedItems = [];
                         
-                        const imageUrl = extractImage(item);
-                        parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: cat });
-                    }
-                    
-                    liveData[cat + '_xml'] = parsedItems;
-                    
-                    if (isMounted) {
-                        setNewsData(prev => {
-                            const updated = {...prev, [cat + '_xml']: parsedItems};
-                            sessionStorage.setItem('michael_news_cache', JSON.stringify({ time: Date.now(), data: updated }));
-                            return updated;
-                        });
+                        const maxItems = Math.min(items.length, 35);
+                        for(let i = 0; i < maxItems; i++) {
+                            const item = items[i];
+                            const title = item.querySelector("title")?.textContent || "";
+                            const link = item.querySelector("link")?.textContent || "";
+                            const pubDate = item.querySelector("pubDate")?.textContent || "";
+                            const source = item.querySelector("source")?.textContent || "Nieuwsbron";
+                            let description = item.querySelector("description")?.textContent || "";
+                            
+                            const imageUrl = extractImage(item);
+                            parsedItems.push({ title, link, pubDate, source, description, imageUrl, _feedCategory: cat });
+                        }
+                        
+                        liveData[cat + '_xml'] = parsedItems;
+                        
+                        if (isMounted) {
+                            setNewsData(prev => {
+                                const updated = {...prev, [cat + '_xml']: parsedItems};
+                                sessionStorage.setItem('michael_news_cache', JSON.stringify({ time: Date.now(), data: updated }));
+                                return updated;
+                            });
+                        }
                     }
                 } catch (e) {
                     console.error("Fout bij laden van categorie:", cat);
@@ -1132,28 +1132,26 @@ function NewsWidget({ lang }) {
     useEffect(() => {
         if (!debouncedSearch) { setSearchResults([]); return; }
         setIsSearching(true);
-        const h = lang === 'nl' ? 'nl' : 'en-US';
-        const g = lang === 'nl' ? 'NL' : 'US';
-        const query = `${debouncedSearch} when:2d`; 
         
-        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${h}&gl=${g}`;
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`;
+        const rssUrl = getNewsUrl(debouncedSearch, lang);
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
         
         fetch(proxyUrl)
-        .then(r => r.text())
-        .then(text => { 
-            if(text && text.includes('<rss')) {
+        .then(r => r.json())
+        .then(data => { 
+            if(data.contents) {
                 const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(text, "text/xml");
+                const xmlDoc = parser.parseFromString(data.contents, "text/xml");
                 const items = xmlDoc.querySelectorAll("item");
                 const parsedItems = [];
-                const maxItems = Math.min(items.length, 30);
+                const maxItems = Math.min(items.length, 40);
+                
                 for(let i=0; i<maxItems; i++) {
                     const item = items[i];
                     const title = item.querySelector("title")?.textContent || "";
                     const link = item.querySelector("link")?.textContent || "";
                     const pubDate = item.querySelector("pubDate")?.textContent || "";
-                    const source = item.querySelector("source")?.textContent || "";
+                    const source = item.querySelector("source")?.textContent || "Nieuwsbron";
                     const description = item.querySelector("description")?.textContent || "";
                     
                     const imageUrl = extractImage(item);
@@ -1253,8 +1251,8 @@ function NewsWidget({ lang }) {
         });
 
         filtered.sort((a, b) => {
-            const timeA = new Date(a.pubDate).getTime();
-            const timeB = new Date(b.pubDate).getTime();
+            const timeA = new Date(a.pubDate).getTime() || 0;
+            const timeB = new Date(b.pubDate).getTime() || 0;
             
             if (sortMode === 'tijd') return timeB - timeA;
 
@@ -1294,9 +1292,8 @@ function NewsWidget({ lang }) {
         if (titleParts.length > 1) {
             const possibleSource = titleParts.pop().trim();
             displayTitle = titleParts.join(' - ');
-            if (!sourceName || sourceName === 'RSS') sourceName = possibleSource;
+            if (!sourceName || sourceName === 'Nieuwsbron') sourceName = possibleSource;
         }
-        if (!sourceName || sourceName === 'RSS') sourceName = 'NIEUWSBRON';
 
         let cleanDesc = item.description?.replace(/<[^>]+>/g, '').trim() || '';
         const srcRegex = new RegExp(`[\\-\\|]?\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
@@ -1304,7 +1301,6 @@ function NewsWidget({ lang }) {
         if (isDescriptionRedundant(displayTitle, cleanDesc)) cleanDesc = '';
 
         const isPriorityItem = priority.some(p => (sourceName + ' ' + displayTitle).toLowerCase().includes(p));
-        
         let finalImageUrl = item.imageUrl || null;
 
         return (
