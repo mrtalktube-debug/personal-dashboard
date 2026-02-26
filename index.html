@@ -1073,7 +1073,6 @@ function NewsWidget({ lang }) {
     const [priority, setPriority] = useState(() => S.load('news_priority', []));
     const [sortMode, setSortMode] = useState(() => S.load('news_sort', 'tijd'));
     
-    // Nieuwe FeedMode: 'alles' (Algemeen + Voor jou) of 'voorjou' (Alleen eigen)
     const [feedMode, setFeedMode] = useState(() => S.load('news_feedmode', 'alles'));
 
     const [newCol, setNewCol] = useState('');
@@ -1212,7 +1211,6 @@ function NewsWidget({ lang }) {
         let merged = [];
 
         const loadCats = async () => {
-            // ALTIJD Algemeen nieuws + persoonlijke categorieën inladen
             const fetchList = ['ALGEMEEN', ...cols];
             for (const cat of fetchList) {
                 if (!alive) return;
@@ -1268,12 +1266,16 @@ function NewsWidget({ lang }) {
         searchTimer.current = setTimeout(() => doSearch(val), 400);
     };
 
+    const isSearchActive = search.trim().length > 0;
+
+    /* NIEUW: filterSort logica aangepast voor 'Algemeen' modus */
     const filterSort = (items) => {
         let f = items.filter(a => {
-            const txt = (a.title + ' ' + a.source + ' ' + a.desc).toLowerCase();
-            if (blocked.some(b => txt.includes(b))) return false;
+            if (!(feedMode === 'alles' && !isSearchActive)) {
+                const txt = (a.title + ' ' + a.source + ' ' + a.desc).toLowerCase();
+                if (blocked.some(b => txt.includes(b))) return false;
+            }
             
-            // Toon of verberg Algemeen nieuws afhankelijk van de toggle
             if (!isSearchActive && feedMode === 'voorjou' && a.cat === 'ALGEMEEN') return false;
 
             return true;
@@ -1282,6 +1284,11 @@ function NewsWidget({ lang }) {
         f.sort((a, b) => {
             const tA = new Date(a.pubDate).getTime() || 0;
             const tB = new Date(b.pubDate).getTime() || 0;
+            
+            if (feedMode === 'alles' && !isSearchActive) {
+                return tB - tA;
+            }
+
             if (sortMode === 'bron') {
                 let iA = priority.findIndex(p => (a.source||'').toLowerCase().includes(p)); if (iA===-1) iA=9999;
                 let iB = priority.findIndex(p => (b.source||'').toLowerCase().includes(p)); if (iB===-1) iB=9999;
@@ -1297,7 +1304,6 @@ function NewsWidget({ lang }) {
         return f;
     };
 
-    const isSearchActive = search.trim().length > 0;
     const displayItems = filterSort(isSearchActive ? searchResults : allArticles).slice(0, visibleCount);
     const totalFiltered = filterSort(isSearchActive ? searchResults : allArticles).length;
 
@@ -1323,22 +1329,26 @@ function NewsWidget({ lang }) {
 
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
-            <div className="p-3 bg-[#f8f9fa] border-b border-gray-200 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-2 text-gray-600 font-black tracking-widest text-[11px] uppercase">
+            {/* NIEUW: flex-wrap en gap-2 toegevoegd voor responsiviteit in Chrome */}
+            <div className="p-3 bg-[#f8f9fa] border-b border-gray-200 flex flex-wrap justify-between items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 text-gray-600 font-black tracking-widest text-[11px] uppercase shrink-0">
                     <Ico.Nws/> NEWS
                 </div>
-                <div className="flex gap-2 flex-1 justify-end items-center">
-                    <div className="hidden sm:flex bg-[#eef0f2] p-1 rounded-md border border-gray-200 shrink-0">
-                        {['tijd','bron','onderwerp'].map(m => (
-                            <button key={m} onClick={()=>handleSortChange(m)} className={`px-3 py-1 text-[9px] font-bold rounded uppercase transition ${sortMode===m?'bg-white shadow-sm text-blue-700':'text-gray-500 hover:bg-gray-200'}`}>{m}</button>
-                        ))}
-                    </div>
+                <div className="flex flex-wrap gap-2 flex-1 justify-end items-center">
+                    {/* NIEUW: Sorteerknoppen verbergen indien in Algemeen modus zonder zoekopdracht */}
+                    {!(feedMode === 'alles' && !isSearchActive) && (
+                        <div className="hidden sm:flex bg-[#eef0f2] p-1 rounded-md border border-gray-200 shrink-0">
+                            {['tijd','bron','onderwerp'].map(m => (
+                                <button key={m} onClick={()=>handleSortChange(m)} className={`px-3 py-1 text-[9px] font-bold rounded uppercase transition ${sortMode===m?'bg-white shadow-sm text-blue-700':'text-gray-500 hover:bg-gray-200'}`}>{m}</button>
+                            ))}
+                        </div>
+                    )}
                     <input
                         type="text"
                         placeholder="Zoek nieuws..."
                         value={search}
                         onChange={e => handleSearchInput(e.target.value)}
-                        className="w-full max-w-[250px] px-3 py-1.5 text-[16px] md:text-[11px] font-medium border border-gray-200 rounded-md bg-white outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition"
+                        className="flex-1 min-w-[120px] max-w-[250px] px-3 py-1.5 text-[16px] md:text-[11px] font-medium border border-gray-200 rounded-md bg-white outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition"
                     />
                     <button onClick={()=>setManage(!manage)} className="px-3 py-1.5 bg-white border border-gray-200 shadow-sm text-[10px] font-bold rounded text-gray-600 hover:text-blue-600 transition shrink-0">Beheer</button>
                 </div>
