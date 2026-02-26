@@ -1268,15 +1268,16 @@ function NewsWidget({ lang }) {
 
     const isSearchActive = search.trim().length > 0;
 
-    /* NIEUW: filterSort logica aangepast voor 'Algemeen' modus */
+    /* NIEUW v1.3: Harde datascheiding tussen Algemeen en Voor Jou */
     const filterSort = (items) => {
         let f = items.filter(a => {
-            if (!(feedMode === 'alles' && !isSearchActive)) {
-                const txt = (a.title + ' ' + a.source + ' ' + a.desc).toLowerCase();
-                if (blocked.some(b => txt.includes(b))) return false;
-            }
+            const txt = (a.title + ' ' + a.source + ' ' + a.desc).toLowerCase();
+            if (blocked.some(b => txt.includes(b))) return false;
             
-            if (!isSearchActive && feedMode === 'voorjou' && a.cat === 'ALGEMEEN') return false;
+            if (!isSearchActive) {
+                if (feedMode === 'alles' && a.cat !== 'ALGEMEEN') return false;
+                if (feedMode === 'voorjou' && a.cat === 'ALGEMEEN') return false;
+            }
 
             return true;
         });
@@ -1285,10 +1286,6 @@ function NewsWidget({ lang }) {
             const tA = new Date(a.pubDate).getTime() || 0;
             const tB = new Date(b.pubDate).getTime() || 0;
             
-            if (feedMode === 'alles' && !isSearchActive) {
-                return tB - tA;
-            }
-
             if (sortMode === 'bron') {
                 let iA = priority.findIndex(p => (a.source||'').toLowerCase().includes(p)); if (iA===-1) iA=9999;
                 let iB = priority.findIndex(p => (b.source||'').toLowerCase().includes(p)); if (iB===-1) iB=9999;
@@ -1329,20 +1326,17 @@ function NewsWidget({ lang }) {
 
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
-            {/* NIEUW: flex-wrap en gap-2 toegevoegd voor responsiviteit in Chrome */}
+            {/* NIEUW v1.3: Sorteerknoppen permanent zichtbaar, flex-wrap behouden voor correcte Chrome weergave */}
             <div className="p-3 bg-[#f8f9fa] border-b border-gray-200 flex flex-wrap justify-between items-center gap-2 shrink-0">
                 <div className="flex items-center gap-2 text-gray-600 font-black tracking-widest text-[11px] uppercase shrink-0">
                     <Ico.Nws/> NEWS
                 </div>
                 <div className="flex flex-wrap gap-2 flex-1 justify-end items-center">
-                    {/* NIEUW: Sorteerknoppen verbergen indien in Algemeen modus zonder zoekopdracht */}
-                    {!(feedMode === 'alles' && !isSearchActive) && (
-                        <div className="hidden sm:flex bg-[#eef0f2] p-1 rounded-md border border-gray-200 shrink-0">
-                            {['tijd','bron','onderwerp'].map(m => (
-                                <button key={m} onClick={()=>handleSortChange(m)} className={`px-3 py-1 text-[9px] font-bold rounded uppercase transition ${sortMode===m?'bg-white shadow-sm text-blue-700':'text-gray-500 hover:bg-gray-200'}`}>{m}</button>
-                            ))}
-                        </div>
-                    )}
+                    <div className="hidden sm:flex bg-[#eef0f2] p-1 rounded-md border border-gray-200 shrink-0">
+                        {['tijd','bron','onderwerp'].map(m => (
+                            <button key={m} onClick={()=>handleSortChange(m)} className={`px-3 py-1 text-[9px] font-bold rounded uppercase transition ${sortMode===m?'bg-white shadow-sm text-blue-700':'text-gray-500 hover:bg-gray-200'}`}>{m}</button>
+                        ))}
+                    </div>
                     <input
                         type="text"
                         placeholder="Zoek nieuws..."
