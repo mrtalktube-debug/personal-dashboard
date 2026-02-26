@@ -993,15 +993,14 @@ function AgendaWidget({ lang }) {
 function NewsWidget({ lang }) {
     const defaultCols = ['🌍 WERELD', 'AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
     const [cols, setCols] = useState(() => {
-    const saved = S.load('newscats', defaultCols);
-    // Auto-voeg wereldnieuws toe als het ontbreekt
-    if (!saved.some(c => c.includes('WERELD') || c.includes('WORLD'))) {
-        const updated = ['🌍 WERELD', ...saved];
-        S.save('newscats', updated);
-        return updated;
-    }
-    return saved;
-});
+        const saved = S.load('newscats', defaultCols);
+        if (!saved.some(c => c.includes('WERELD') || c.includes('WORLD'))) {
+            const updated = ['🌍 WERELD', ...saved];
+            S.save('newscats', updated);
+            return updated;
+        }
+        return saved;
+    });
     const [manage, setManage] = useState(false);
     const [allArticles, setAllArticles] = useState([]);
     const [feedReady, setFeedReady] = useState(false);
@@ -1035,7 +1034,6 @@ function NewsWidget({ lang }) {
         const tid = setTimeout(() => ctrl.abort(), 8000);
         
         try {
-            // Stap 1: Eigen Vercel API
             const apiUrl = '/api/news?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
             const r = await fetch(apiUrl, { signal: ctrl.signal });
             if (r.ok) {
@@ -1044,7 +1042,6 @@ function NewsWidget({ lang }) {
             }
             throw new Error('API failed');
         } catch(e) {
-            // Stap 2: Veilige fallback
             try {
                 const gUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
                 const proxy1 = 'https://corsproxy.io/?' + encodeURIComponent(gUrl);
@@ -1097,34 +1094,28 @@ function NewsWidget({ lang }) {
             if (cleanDesc.toLowerCase().startsWith(title.toLowerCase().substring(0, 30))) cleanDesc = '';
 
             let img = null;
+            const urlM = desc.match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif|avif)(?:\?[^"'\s<>]*)?)/i);
+            if (urlM) img = urlM[1];
 
-// Methode 1: Zoek direct image URL in description
-const urlM = desc.match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif|avif)(?:\?[^"'\s<>]*)?)/i);
-if (urlM) img = urlM[1];
+            if (!img) {
+                const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (imgM) img = imgM[1];
+            }
 
-// Methode 2: Parse img tag
-if (!img) {
-    const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
-    if (imgM) img = imgM[1];
-}
+            if (!img && desc.includes('CDATA')) {
+                const cdataM = desc.match(/\[CDATA\[(.*?)\]\]/s);
+                if (cdataM) {
+                    const cdataImg = cdataM[1].match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif))/i);
+                    if (cdataImg) img = cdataImg[1];
+                }
+            }
 
-// Methode 3: Zoek in CDATA
-if (!img && desc.includes('CDATA')) {
-    const cdataM = desc.match(/\[CDATA\[(.*?)\]\]/s);
-    if (cdataM) {
-        const cdataImg = cdataM[1].match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif))/i);
-        if (cdataImg) img = cdataImg[1];
-    }
-}
-
-// Methode 4: Google News specifieke afbeelding tag
-if (!img) {
-    const item = items[i];
-    const mediaContent = item.querySelector('media\\:content, content');
-    if (mediaContent) {
-        img = mediaContent.getAttribute('url');
-    }
-}
+            if (!img) {
+                const mediaContent = item.querySelector('media\\:content, content');
+                if (mediaContent) {
+                    img = mediaContent.getAttribute('url');
+                }
+            }
 
             if (!img && srcUrl) { try { img = 'https://logo.clearbit.com/' + new URL(srcUrl).hostname.replace('www.','') + '?size=80'; } catch(e){} }
             if (!img && link) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(link).hostname.replace('www.','') + '&sz=64'; } catch(e){} }
@@ -1144,7 +1135,7 @@ if (!img) {
 
     useEffect(() => {
         let alive = true;
-        const cached = sessionStorage.getItem('nws_cache_v7');
+        const cached = sessionStorage.getItem('nws_cache_v9');
         if (cached) {
             try {
                 const { t, d } = JSON.parse(cached);
@@ -1173,7 +1164,7 @@ if (!img) {
                 });
                 
                 setAllArticles([...merged]);
-                sessionStorage.setItem('nws_cache_v7', JSON.stringify({ t: Date.now(), d: merged }));
+                sessionStorage.setItem('nws_cache_v9', JSON.stringify({ t: Date.now(), d: merged }));
             }
             if (alive) setFeedReady(true);
         };
@@ -1294,96 +1285,96 @@ if (!img) {
             {manage && (
                 <div className="p-4 bg-gray-50 border-b border-gray-200 space-y-3 shrink-0 max-h-[200px] overflow-y-auto">
                     <div>
-    <div className="text-[9px] font-black uppercase text-gray-500 mb-1.5">Categorieën 📌 Sleep om prioriteit te bepalen (Links = Hoogste)</div>
-    <div className="flex flex-wrap gap-1.5">
-        {cols.map((c, idx) => (
-            <span 
-                key={c} 
-                draggable 
-                onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('catIndex', idx); }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                    e.preventDefault();
-                    const fromIdx = parseInt(e.dataTransfer.getData('catIndex'));
-                    if (fromIdx === idx) return;
-                    const newCols = [...cols];
-                    const [moved] = newCols.splice(fromIdx, 1);
-                    newCols.splice(idx, 0, moved);
-                    setCols(newCols); S.save('newscats', newCols); syncSettings();
-                }}
-                className="px-2.5 py-1.5 bg-blue-50 text-blue-700 text-[9px] font-bold rounded border-2 border-blue-200 flex items-center gap-1.5 cursor-move hover:border-blue-400 hover:shadow-sm transition-all"
-                style={{ borderLeftWidth: idx === 0 ? '4px' : '2px', borderLeftColor: idx === 0 ? '#0073b1' : undefined }}
-            >
-                <span className="opacity-40">☰</span> {c} 
-                <button onClick={(e) => { e.stopPropagation(); removeCol(c); }} className="text-red-400 hover:text-red-600 ml-1">×</button>
-            </span>
-        ))}
-    </div>
+                        <div className="text-[9px] font-black uppercase text-gray-500 mb-1.5">Categorieën 📌 Sleep om prioriteit te bepalen (Links = Hoogste)</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {cols.map((c, idx) => (
+                                <span 
+                                    key={c} 
+                                    draggable 
+                                    onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('catIndex', idx); }}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        const fromIdx = parseInt(e.dataTransfer.getData('catIndex'));
+                                        if (fromIdx === idx) return;
+                                        const newCols = [...cols];
+                                        const [moved] = newCols.splice(fromIdx, 1);
+                                        newCols.splice(idx, 0, moved);
+                                        setCols(newCols); S.save('newscats', newCols); syncSettings();
+                                    }}
+                                    className="px-2.5 py-1.5 bg-blue-50 text-blue-700 text-[9px] font-bold rounded border-2 border-blue-200 flex items-center gap-1.5 cursor-move hover:border-blue-400 hover:shadow-sm transition-all"
+                                    style={{ borderLeftWidth: idx === 0 ? '4px' : '2px', borderLeftColor: idx === 0 ? '#0073b1' : undefined }}
+                                >
+                                    <span className="opacity-40">☰</span> {c} 
+                                    <button onClick={(e) => { e.stopPropagation(); removeCol(c); }} className="text-red-400 hover:text-red-600 ml-1">×</button>
+                                </span>
+                            ))}
+                        </div>
                         <div className="flex gap-1 mt-1.5">
                             <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addCol()} placeholder="+ Categorie" className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
                             <button onClick={addCol} className="px-2 py-1 bg-blue-500 text-white text-[9px] font-bold rounded">+</button>
                         </div>
                     </div>
                     <div>
-    <div className="text-[9px] font-black uppercase text-gray-500 mb-1.5">🚫 Geblokkeerde woorden - Sleep om te sorteren</div>
-    <div className="flex flex-wrap gap-1.5">
-        {blocked.map((b, idx) => (
-            <span 
-                key={b}
-                draggable
-                onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('blockIndex', idx); }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                    e.preventDefault();
-                    const fromIdx = parseInt(e.dataTransfer.getData('blockIndex'));
-                    if (fromIdx === idx) return;
-                    const newBlock = [...blocked];
-                    const [moved] = newBlock.splice(fromIdx, 1);
-                    newBlock.splice(idx, 0, moved);
-                    setBlocked(newBlock); S.save('news_blocked', newBlock); syncSettings();
-                }}
-                className="px-2.5 py-1.5 bg-red-50 text-red-600 text-[9px] font-bold rounded border-2 border-red-200 flex items-center gap-1.5 cursor-move hover:border-red-400 hover:shadow-sm transition-all"
-            >
-                <span className="opacity-40">☰</span> {b} 
-                <button onClick={(e) => { e.stopPropagation(); removeBlock(b); }} className="hover:text-red-800 ml-1">×</button>
-            </span>
-        ))}
-    </div>
+                        <div className="text-[9px] font-black uppercase text-gray-500 mb-1.5">🚫 Geblokkeerde woorden - Sleep om te sorteren</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {blocked.map((b, idx) => (
+                                <span 
+                                    key={b}
+                                    draggable
+                                    onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('blockIndex', idx); }}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        const fromIdx = parseInt(e.dataTransfer.getData('blockIndex'));
+                                        if (fromIdx === idx) return;
+                                        const newBlock = [...blocked];
+                                        const [moved] = newBlock.splice(fromIdx, 1);
+                                        newBlock.splice(idx, 0, moved);
+                                        setBlocked(newBlock); S.save('news_blocked', newBlock); syncSettings();
+                                    }}
+                                    className="px-2.5 py-1.5 bg-red-50 text-red-600 text-[9px] font-bold rounded border-2 border-red-200 flex items-center gap-1.5 cursor-move hover:border-red-400 hover:shadow-sm transition-all"
+                                >
+                                    <span className="opacity-40">☰</span> {b} 
+                                    <button onClick={(e) => { e.stopPropagation(); removeBlock(b); }} className="hover:text-red-800 ml-1">×</button>
+                                </span>
+                            ))}
+                        </div>
                         <div className="flex gap-1 mt-1.5">
                             <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addBlock()} placeholder="+ Blokkeer woord" className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
                             <button onClick={addBlock} className="px-2 py-1 bg-red-500 text-white text-[9px] font-bold rounded">+</button>
                         </div>
                     </div>
                     <div>
-    <div className="text-[9px] font-black uppercase text-gray-500 mb-1.5">⭐ Prioriteit bronnen - Sleep om ranking te bepalen (Links = Hoogste)</div>
-    <div className="flex flex-wrap gap-1.5">
-        {priority.map((p, idx) => (
-            <span 
-                key={p}
-                draggable
-                onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('prioIndex', idx); }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                    e.preventDefault();
-                    const fromIdx = parseInt(e.dataTransfer.getData('prioIndex'));
-                    if (fromIdx === idx) return;
-                    const newPrio = [...priority];
-                    const [moved] = newPrio.splice(fromIdx, 1);
-                    newPrio.splice(idx, 0, moved);
-                    setPriority(newPrio); S.save('news_priority', newPrio); syncSettings();
-                }}
-                className="px-2.5 py-1.5 bg-green-50 text-green-700 text-[9px] font-bold rounded border-2 border-green-200 flex items-center gap-1.5 cursor-move hover:border-green-400 hover:shadow-sm transition-all"
-                style={{ 
-                    borderLeftWidth: idx === 0 ? '4px' : '2px', 
-                    borderLeftColor: idx === 0 ? '#16a34a' : undefined,
-                    opacity: 1 - (idx * 0.1) // Visuele afname van prioriteit
-                }}
-            >
-                <span className="opacity-40">☰</span> #{idx + 1} {p} 
-                <button onClick={(e) => { e.stopPropagation(); removePriority(p); }} className="hover:text-red-600 ml-1">×</button>
-            </span>
-        ))}
-    </div>
+                        <div className="text-[9px] font-black uppercase text-gray-500 mb-1.5">⭐ Prioriteit bronnen - Sleep om ranking te bepalen (Links = Hoogste)</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {priority.map((p, idx) => (
+                                <span 
+                                    key={p}
+                                    draggable
+                                    onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('prioIndex', idx); }}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        const fromIdx = parseInt(e.dataTransfer.getData('prioIndex'));
+                                        if (fromIdx === idx) return;
+                                        const newPrio = [...priority];
+                                        const [moved] = newPrio.splice(fromIdx, 1);
+                                        newPrio.splice(idx, 0, moved);
+                                        setPriority(newPrio); S.save('news_priority', newPrio); syncSettings();
+                                    }}
+                                    className="px-2.5 py-1.5 bg-green-50 text-green-700 text-[9px] font-bold rounded border-2 border-green-200 flex items-center gap-1.5 cursor-move hover:border-green-400 hover:shadow-sm transition-all"
+                                    style={{ 
+                                        borderLeftWidth: idx === 0 ? '4px' : '2px', 
+                                        borderLeftColor: idx === 0 ? '#16a34a' : undefined,
+                                        opacity: 1 - (idx * 0.1)
+                                    }}
+                                >
+                                    <span className="opacity-40">☰</span> #{idx + 1} {p} 
+                                    <button onClick={(e) => { e.stopPropagation(); removePriority(p); }} className="hover:text-red-600 ml-1">×</button>
+                                </span>
+                            ))}
+                        </div>
                         <div className="flex gap-1 mt-1.5">
                             <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addPriority()} placeholder="+ Prioriteit bron" className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
                             <button onClick={addPriority} className="px-2 py-1 bg-green-500 text-white text-[9px] font-bold rounded">+</button>
@@ -1393,144 +1384,80 @@ if (!img) {
             )}
 
             <div className="flex-1 overflow-y-auto hide-scroll">
-    {displayItems.length === 0 ? (
-        <div className="flex items-center justify-center h-full">
-            {(isSearching || (!feedReady && !isSearchActive)) ? (
-                <div className="text-xs font-bold text-blue-500 animate-pulse">
-                    {isSearchActive ? `Zoeken naar "${search}"...` : 'Nieuws ophalen...'}
-                </div>
-            ) : (
-                <div className="text-xs font-bold text-gray-400">
-                    {isSearchActive && searchDone ? `Geen resultaten voor "${search}"` : 'Geen artikelen gevonden'}
-                </div>
-            )}
-        </div>
-    ) : isSearchActive ? (
-        /* ZOEKRESULTATEN - Lijst weergave */
-        <div className="space-y-0">
-            {displayItems.map((a, i) => {
-                const isPri = priority.some(p => (a.source||'').toLowerCase().includes(p));
-                return (
-                    <a href={a.link} target="_blank" rel="noopener" key={a.link+i}
-                        className={`flex gap-3 px-4 py-3.5 border-b border-gray-100 hover:bg-gray-50 transition group ${isPri && sortMode==='bron' ? 'bg-green-50/30' : ''}`}
-                    >
-                        <div className="flex-1 flex flex-col justify-between min-w-0">
-                            <div>
-                                <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition line-clamp-2">{a.title}</p>
-                                {a.desc && <p className="text-[#0b57d0] font-semibold text-[11px] line-clamp-2 mt-1 leading-snug">{a.desc}</p>}
+                {displayItems.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                        {(isSearching || (!feedReady && !isSearchActive)) ? (
+                            <div className="text-xs font-bold text-blue-500 animate-pulse">
+                                {isSearchActive ? `Zoeken naar "${search}"...` : 'Nieuws ophalen...'}
                             </div>
-                            <div className="flex justify-between items-center mt-2.5 flex-wrap gap-1.5">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase">{a.cat}</span>
-                                    <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-0.5" style={{color: srcColor(a.source)}}>
-                                        {isPri && '⭐'}{a.source}
-                                    </span>
-                                </div>
-                                <span className="text-[10px] font-bold text-gray-400 shrink-0">{formatDate(a.pubDate)}</span>
-                            </div>
-                        </div>
-                        {a.img && (
-                            <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
-                                <img src={a.img} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" loading="lazy"
-                                    onError={(e) => {
-                                        const el = e.target;
-                                        const retryCount = parseInt(el.dataset.retry || '0');
-                                        if (retryCount === 0) {
-                                            el.dataset.retry = '1';
-                                            el.src = `https://images.weserv.nl/?url=${encodeURIComponent(a.img)}&w=200&h=200&fit=cover`;
-                                        } else if (retryCount === 1) {
-                                            el.dataset.retry = '2';
-                                            try { 
-                                                const domain = new URL(a.link).hostname.replace('www.','');
-                                                el.src = `https://logo.clearbit.com/${domain}?size=80`;
-                                            } catch(err) { 
-                                                el.dataset.retry = '3';
-                                                el.src = 'https://www.google.com/s2/favicons?sz=128'; 
-                                            }
-                                        } else {
-                                            el.parentElement.classList.add('hidden');
-                                        }
-                                    }}
-                                />
+                        ) : (
+                            <div className="text-xs font-bold text-gray-400">
+                                {isSearchActive && searchDone ? `Geen resultaten voor "${search}"` : 'Geen artikelen gevonden'}
                             </div>
                         )}
-                    </a>
-                );
-            })}
-            {displayItems.length < totalFiltered && (
-                <div className="p-3 text-center border-t border-gray-100">
-                    <button onClick={()=>setVisibleCount(v=>v+40)} className="px-6 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold hover:bg-blue-100 transition">
-                        Meer laden ({totalFiltered - displayItems.length} resterend)
-                    </button>
-                </div>
-            )}
-        </div>
-    ) : (
-        /* NORMALE WEERGAVE - Kolommen per categorie */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-            {cols.filter(cat => filterSort(allArticles).some(a => a.cat === cat)).map(cat => {
-                const catArticles = filterSort(allArticles).filter(a => a.cat === cat).slice(0, 10);
-                if (catArticles.length === 0) return null;
-                
-                return (
-                    <div key={cat} className="flex flex-col bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-                        <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-3 py-2.5 font-black text-[10px] uppercase tracking-widest flex items-center justify-between">
-                            <span>{cat}</span>
-                            <span className="bg-white/20 px-2 py-0.5 rounded-full text-[8px]">{catArticles.length}</span>
-                        </div>
-                        <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto hide-scroll">
-                            {catArticles.map((a, i) => {
-                                const isPri = priority.some(p => (a.source||'').toLowerCase().includes(p));
-                                return (
-                                    <a href={a.link} target="_blank" rel="noopener" key={a.link+i}
-                                        className={`block p-3 hover:bg-blue-50 transition group ${isPri ? 'bg-green-50/30' : ''}`}
-                                    >
-                                        <div className="flex gap-2.5">
-                                            {a.img && (
-                                                <div className="shrink-0 w-14 h-14 bg-gray-100 rounded overflow-hidden">
-                                                    <img src={a.img} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" loading="lazy"
-                                                        onError={(e) => {
-                                                            const el = e.target;
-                                                            const retryCount = parseInt(el.dataset.retry || '0');
-                                                            if (retryCount === 0) {
-                                                                el.dataset.retry = '1';
-                                                                el.src = `https://images.weserv.nl/?url=${encodeURIComponent(a.img)}&w=200&h=200&fit=cover`;
-                                                            } else if (retryCount === 1) {
-                                                                el.dataset.retry = '2';
-                                                                try { 
-                                                                    const domain = new URL(a.link).hostname.replace('www.','');
-                                                                    el.src = `https://logo.clearbit.com/${domain}?size=80`;
-                                                                } catch(err) { 
-                                                                    el.dataset.retry = '3';
-                                                                    el.src = 'https://www.google.com/s2/favicons?sz=128'; 
-                                                                }
-                                                            } else {
-                                                                el.parentElement.classList.add('hidden');
-                                                            }
-                                                        }}
-                                                    />
-                                                </div>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-[12px] font-bold leading-tight text-gray-900 group-hover:text-blue-700 transition line-clamp-3 mb-1.5">{a.title}</p>
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="text-[9px] font-black uppercase tracking-wide truncate" style={{color: srcColor(a.source)}}>
-                                                        {isPri && '⭐'}{a.source}
-                                                    </span>
-                                                    <span className="text-[8px] font-bold text-gray-400 shrink-0">{formatDate(a.pubDate).split('|')[0]}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                );
-                            })}
-                        </div>
                     </div>
-                );
-            })}
-        </div>
-    )}
-</div>
+                ) : (
+                    <div className="space-y-0">
+                        {displayItems.map((a, i) => {
+                            const isPri = priority.some(p => (a.source||'').toLowerCase().includes(p));
+                            return (
+                                <a href={a.link} target="_blank" rel="noopener" key={a.link+i}
+                                    className={`flex gap-3 px-4 py-3.5 border-b border-gray-100 hover:bg-gray-50 transition group ${isPri && sortMode==='bron' ? 'bg-green-50/30' : ''}`}
+                                >
+                                    <div className="flex-1 flex flex-col justify-between min-w-0">
+                                        <div>
+                                            <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition line-clamp-2">{a.title}</p>
+                                            {a.desc && <p className="text-[#0b57d0] font-semibold text-[11px] line-clamp-2 mt-1 leading-snug">{a.desc}</p>}
+                                        </div>
+                                        <div className="flex justify-between items-center mt-2.5 flex-wrap gap-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase">{a.cat}</span>
+                                                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-0.5" style={{color: srcColor(a.source)}}>
+                                                    {isPri && '⭐'}{a.source}
+                                                </span>
+                                            </div>
+                                            <span className="text-[10px] font-bold text-gray-400 shrink-0">{formatDate(a.pubDate)}</span>
+                                        </div>
+                                    </div>
+                                    {a.img && (
+                                        <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+                                            <img src={a.img} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" loading="lazy"
+                                                onError={(e) => {
+                                                    const el = e.target;
+                                                    const retryCount = parseInt(el.dataset.retry || '0');
+                                                    
+                                                    if (retryCount === 0) {
+                                                        el.dataset.retry = '1';
+                                                        el.src = `https://images.weserv.nl/?url=${encodeURIComponent(a.img)}&w=200&h=200&fit=cover`;
+                                                    } else if (retryCount === 1) {
+                                                        el.dataset.retry = '2';
+                                                        try { 
+                                                            const domain = new URL(a.link).hostname.replace('www.','');
+                                                            el.src = `https://logo.clearbit.com/${domain}?size=80`;
+                                                        } catch(err) { 
+                                                            el.dataset.retry = '3';
+                                                            el.src = 'https://www.google.com/s2/favicons?sz=128'; 
+                                                        }
+                                                    } else {
+                                                        el.parentElement.classList.add('hidden');
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </a>
+                            );
+                        })}
+                        {displayItems.length < totalFiltered && (
+                            <div className="p-3 text-center border-t border-gray-100">
+                                <button onClick={()=>setVisibleCount(v=>v+40)} className="px-6 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold hover:bg-blue-100 transition">
+                                    Meer laden ({totalFiltered - displayItems.length} resterend)
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
