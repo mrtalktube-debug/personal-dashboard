@@ -1805,18 +1805,51 @@ function SparkWidget({ lang }) {
     const [isLoading, setIsLoading] = useState(true);
     const [apiError, setApiError] = useState('');
     
-    // States voor interactie (1-klik resultaat)
-    const [triviaPick, setTriviaPick] = useState(null);
+    // State voor interactie (1-klik resultaat)
     const [iqPick, setIqPick] = useState(null);
 
     const todayStr = new Date().toLocaleDateString('nl-NL');
+
+    // UI Vertalingen
+    const UI = {
+        nl: {
+            title: '💡 DENKTANK',
+            btnNew: 'Nieuw',
+            tReflect: 'DagVraag',
+            tIq: 'IQ',
+            tFact: 'Feiten',
+            loading: 'Data ophalen...',
+            subReflect: 'Reflectie',
+            subFact: 'Wist je dat?',
+            correct: '🎉 Correct!',
+            wrong: '❌ Fout!',
+            genHover: 'Genereer direct een nieuwe set'
+        },
+        en: {
+            title: '💡 THINK TANK',
+            btnNew: 'New',
+            tReflect: 'Daily',
+            tIq: 'IQ',
+            tFact: 'Facts',
+            loading: 'Fetching data...',
+            subReflect: 'Reflection',
+            subFact: 'Did you know?',
+            correct: '🎉 Correct!',
+            wrong: '❌ Incorrect!',
+            genHover: 'Generate a new set immediately'
+        }
+    };
+    const t = UI[lang] || UI.nl;
 
     const fetchDailySpark = async (forceNew = false) => {
         setIsLoading(true);
         setApiError('');
         
+        // Cache sleutel afhankelijk van taal zodat wisselen direct werkt
+        const cacheKey = `spark_daily_v6_${lang}`;
+
         if (!forceNew) {
-            const cached = S.load('spark_daily_v5', null);
+            const cached = S.load(cacheKey, null);
             if (cached && cached.date === todayStr && cached.data) {
                 setDailyData(cached.data);
                 setIsLoading(false);
@@ -1826,28 +1859,20 @@ function SparkWidget({ lang }) {
 
         const groqKey = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'))?.val;
         if (!groqKey) {
-            setApiError('Geen Groq API key.');
-            setDailyData(getFallbackData());
+            setApiError('No Groq API key.');
+            setDailyData(getFallbackData(lang));
             setIsLoading(false);
             return;
         }
 
         try {
-            // 1. Haal ECHTE wiskunde en trivia uit databases (4000+ vragen)
-            let tQ = "What is the capital of Australia?", tC = "Canberra", tI = ["Sydney", "Melbourne", "Perth"];
-            try {
-                const resT = await fetch('https://the-trivia-api.com/v2/questions?limit=1');
-                const datT = await resT.json();
-                tQ = datT[0].question.text; tC = datT[0].correctAnswer; tI = datT[0].incorrectAnswers;
-            } catch(e) {}
-
+            // 1. Haal ECHTE wiskunde en feiten uit databases
             let iQ = "What is 15% of 120?", iC = "18", iI = ["12", "15", "20"];
             try {
                 // Category 19 is Mathematics in OpenTDB
                 const resI = await fetch('https://opentdb.com/api.php?amount=1&category=19&type=multiple');
                 const datI = await resI.json();
                 if (datI.results && datI.results.length > 0) {
-                    // OpenTDB gebruikt soms HTML entities, we decoden de ruwe strings
                     const dec = (str) => { const txt = document.createElement("textarea"); txt.innerHTML = str; return txt.value; };
                     iQ = dec(datI.results[0].question);
                     iC = dec(datI.results[0].correct_answer);
@@ -1862,19 +1887,25 @@ function SparkWidget({ lang }) {
                 fText = datF.text;
             } catch(e) {}
 
-            // 2. Laat Groq vertalen en formatteren (Verzint NIETS zelf over de sommen)
-            const prompt = `Je bent de strikte vertaler voor een dashboard.
-            TAAK 1: Bedenk een prikkelende, diepgaande persoonlijke reflectievraag (DagVraag).
-            TAAK 2: Vertaal dit feit naar het Nederlands: "${fText}". Begin met "Wist je dat ".
-            TAAK 3: Vertaal deze feitelijke trivia vraag: "${tQ}". Het JUISTE antwoord is "${tC}". De foute zijn "${tI.join(', ')}". Vertaal alles, hussel de 4 opties, geef de index (0-3) van de juiste, en geef 1 zin feitelijke uitleg.
-            TAAK 4: Vertaal deze wiskundige IQ vraag: "${iQ}". Het JUISTE antwoord is "${iC}". De foute zijn "${iI.join(', ')}". Vertaal alles exact, hussel de opties, geef de correcte index (0-3) en geef 1 zin zuivere wiskundige uitleg. VERANDER NIETS AAN DE GETALLEN.
+            // 2. Laat Groq vertalen en formatteren (Strikte lokalisatie instructies)
+            const targetLang = lang === 'nl' ? 'Nederlands' : 'English';
+            const factPrefix = lang === 'nl' ? 'Wist je dat ' : 'Did you know ';
+            
+            const prompt = `Je bent de strikte data-vertaler voor een dashboard. Doeltaal: ${targetLang}.
+            TAAK 1: Bedenk een prikkelende, diepgaande persoonlijke reflectievraag.
+            TAAK 2: Vertaal dit feit naar het ${targetLang}: "${fText}". Begin de zin met EXACT "${factPrefix}".
+            TAAK 3: Beoordeel deze wiskundige IQ-vraag: "${iQ}". Het antwoord is "${iC}", de foute opties zijn "${iI.join(', ')}".
+            BELANGRIJKE REGELS VOOR TAAK 3:
+            - Als de vraag imperiale eenheden bevat (inches, miles, gallons, pounds) of leunt op onvertaalbare Amerikaanse cultuur, NEGEER DE VRAAG DAN VOLLEDIG. Verzin in de plaats daarvan ZELF een universele, foutloze logische getallenreeks (zoals 2, 4, 8, 16...).
+            - Zorg dat de vraag in vlekkeloos en natuurlijk ${targetLang} is geschreven. Gebruik bij getallen het metrische systeem (cm, km).
+            - Maak een array van 4 opties, hussel ze, en geef de index (0-3) van de juiste. 
+            - Schrijf 1 heldere zin wiskundige uitleg in het ${targetLang}.
 
             LET OP: Gebruik NOOIT dubbele aanhalingstekens binnenin je zinnen (gebruik enkele ').
-            Geef UITSLUITEND dit JSON object terug:
+            Geef UITSLUITEND dit JSON object terug, zonder enige markdown:
             {
                 "dagvraag": "...",
                 "feit": "...",
-                "trivia": {"q": "...", "opts": ["...","...","...","..."], "a": 0, "uitleg": "..."},
                 "iq": {"q": "...", "opts": ["...","...","...","..."], "a": 0, "uitleg": "..."}
             }`;
 
@@ -1884,8 +1915,8 @@ function SparkWidget({ lang }) {
                 body: JSON.stringify({
                     model: 'llama-3.3-70b-versatile',
                     messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.2, // Zeer laag om feitelijk te blijven
-                    max_tokens: 800
+                    temperature: 0.2, // Laag voor feitelijke stabiliteit
+                    max_tokens: 600
                 })
             });
             
@@ -1897,7 +1928,7 @@ function SparkWidget({ lang }) {
                     const parsed = JSON.parse(jsonMatch[0]);
                     setDailyData(parsed);
                     if (!forceNew) {
-                        S.save('spark_daily_v5', { date: todayStr, data: parsed });
+                        S.save(cacheKey, { date: todayStr, data: parsed });
                     }
                     setApiError('');
                 } else {
@@ -1906,28 +1937,28 @@ function SparkWidget({ lang }) {
             }
         } catch (e) {
             console.error("DenkTank AI Error:", e);
-            if (!dailyData) setDailyData(getFallbackData());
-            setApiError('Fallback modus.');
+            if (!dailyData) setDailyData(getFallbackData(lang));
+            setApiError('Fallback mode.');
         }
         
         setIsLoading(false);
-        setTriviaPick(null);
         setIqPick(null);
     };
 
     useEffect(() => {
         fetchDailySpark();
-    }, [todayStr]);
+    }, [todayStr, lang]); // Voer opnieuw uit als taal wijzigt
 
-    const getFallbackData = () => {
-        const fallbackQs = [
-            "Welke kleine beslissing heeft ooit een grote impact op je leven gehad?",
-            "Waar ben je de afgelopen week het meest dankbaar voor geweest?",
-            "Als je geld en tijd geen rol speelden, wat zou je dan vandaag doen?"
-        ];
+    const getFallbackData = (currentLang) => {
+        if (currentLang === 'en') {
+            return {
+                dagvraag: "What small decision has had a massive impact on your life?",
+                iq: { q: "What number follows in this sequence: 2, 6, 12, 20, 30, ...?", opts: ["38", "40", "42", "44"], a: 2, uitleg: "The difference increases by 2 each time (+4, +6, +8, +10). The next step is 30 + 12 = 42." },
+                feit: "Did you know that octopuses have three hearts and their blood is blue?"
+            };
+        }
         return {
-            dagvraag: fallbackQs[new Date().getDay() % 3],
-            trivia: { q: "Wat is de hoofdstad van Australië?", opts: ["Sydney", "Melbourne", "Canberra", "Brisbane"], a: 2, uitleg: "Canberra is in 1913 speciaal gebouwd als compromis tussen rivalen Sydney en Melbourne." },
+            dagvraag: "Welke kleine beslissing heeft ooit een grote impact op je leven gehad?",
             iq: { q: "Welk getal volgt in deze reeks: 2, 6, 12, 20, 30, ...?", opts: ["38", "40", "42", "44"], a: 2, uitleg: "De toename stijgt steeds met 2 (+4, +6, +8, +10). De volgende stap is dus 30 + 12 = 42." },
             feit: "Wist je dat octopussen drie harten hebben en dat hun bloed blauw is in plaats van rood?"
         };
@@ -1937,7 +1968,6 @@ function SparkWidget({ lang }) {
         <div className="flex flex-col w-full">
             <h4 className="text-[13px] md:text-sm font-bold text-center text-gray-800 mb-6 leading-snug">{quizData?.q}</h4>
             
-            {/* 2x2 Raster voor Antwoorden (Anti-Scroll) */}
             <div className="grid grid-cols-2 gap-2 w-full">
                 {quizData?.opts.map((opt, i) => {
                     let btnClass = "bg-white border border-gray-200 text-gray-700 hover:border-[#0073b1] hover:bg-blue-50";
@@ -1959,11 +1989,10 @@ function SparkWidget({ lang }) {
                 })}
             </div>
 
-            {/* Directe Uitleg Box (1-klik) */}
             {pickState !== null && (
                 <div className={`mt-4 p-3 rounded border text-xs leading-relaxed animate-fade-in ${pickState === quizData.a ? 'bg-green-50/50 border-green-100 text-green-900' : 'bg-red-50/50 border-red-100 text-red-900'}`}>
                     <span className={`font-black uppercase tracking-wider block mb-1 ${pickState === quizData.a ? 'text-green-600' : 'text-red-600'}`}>
-                        {pickState === quizData.a ? '🎉 Correct!' : '❌ Fout!'}
+                        {pickState === quizData.a ? t.correct : t.wrong}
                     </span>
                     <span className="text-gray-700">{quizData.uitleg}</span>
                 </div>
@@ -1975,7 +2004,7 @@ function SparkWidget({ lang }) {
         <div className="widget h-[450px] flex flex-col bg-white">
             <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-gray-600 font-black tracking-widest text-[11px] uppercase">
-                    <span className="text-lg leading-none grayscale opacity-80">💡</span> DENKTANK
+                    <span className="text-lg leading-none grayscale opacity-80">💡</span> {t.title}
                 </div>
                 <div className="flex items-center gap-2">
                     {apiError && <span className="text-[8px] text-red-500 font-bold bg-white px-2 py-0.5 rounded border border-red-100 hidden sm:inline-block">{apiError}</span>}
@@ -1983,40 +2012,33 @@ function SparkWidget({ lang }) {
                         onClick={() => fetchDailySpark(true)} 
                         disabled={isLoading}
                         className="px-2.5 py-1.5 bg-white border border-gray-200 text-[#0073b1] hover:bg-[#0073b1] hover:text-white hover:border-[#0073b1] text-[9px] font-bold uppercase rounded transition shadow-sm flex items-center gap-1 disabled:opacity-50"
-                        title="Genereer direct een nieuwe set"
+                        title={t.genHover}
                     >
-                        <span className={isLoading ? "animate-spin inline-block" : ""}>↻</span> Nieuw
+                        <span className={isLoading ? "animate-spin inline-block" : ""}>↻</span> {t.btnNew}
                     </button>
                 </div>
             </div>
             
             <div className="flex border-b border-gray-200 bg-white shrink-0">
-                <button onClick={() => setTab('dagvraag')} className={`tab-btn ${tab === 'dagvraag' ? 'active' : ''}`}>DagVraag</button>
-                <button onClick={() => setTab('trivia')} className={`tab-btn ${tab === 'trivia' ? 'active' : ''}`}>Trivia</button>
-                <button onClick={() => setTab('iq')} className={`tab-btn ${tab === 'iq' ? 'active' : ''}`}>IQ</button>
-                <button onClick={() => setTab('feiten')} className={`tab-btn ${tab === 'feiten' ? 'active' : ''}`}>Feiten</button>
+                <button onClick={() => setTab('dagvraag')} className={`tab-btn ${tab === 'dagvraag' ? 'active' : ''}`}>{t.tReflect}</button>
+                <button onClick={() => setTab('iq')} className={`tab-btn ${tab === 'iq' ? 'active' : ''}`}>{t.tIq}</button>
+                <button onClick={() => setTab('feiten')} className={`tab-btn ${tab === 'feiten' ? 'active' : ''}`}>{t.tFact}</button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 bg-white hide-scroll relative flex flex-col">
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-full space-y-4 my-auto">
                         <div className="w-8 h-8 border-4 border-gray-100 border-t-[#0073b1] rounded-full animate-spin"></div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Data ophalen...</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">{t.loading}</span>
                     </div>
                 ) : (
                     <>
                         {tab === 'dagvraag' && (
                             <div className="flex flex-col flex-1 items-center justify-center text-center px-2">
-                                <h4 className="text-[10px] font-black text-[#0073b1] uppercase tracking-widest mb-6">Reflectie</h4>
+                                <h4 className="text-[10px] font-black text-[#0073b1] uppercase tracking-widest mb-6">{t.subReflect}</h4>
                                 <p className="text-lg md:text-xl font-bold text-gray-800 leading-snug">
                                     "{dailyData?.dagvraag}"
                                 </p>
-                            </div>
-                        )}
-
-                        {tab === 'trivia' && (
-                            <div className="flex flex-col flex-1 justify-center items-center w-full max-w-md mx-auto">
-                                {renderQuiz(dailyData?.trivia, triviaPick, setTriviaPick)}
                             </div>
                         )}
 
@@ -2028,7 +2050,7 @@ function SparkWidget({ lang }) {
 
                         {tab === 'feiten' && (
                             <div className="flex flex-col flex-1 items-center justify-center text-center px-4">
-                                <h4 className="text-[10px] font-black text-[#0073b1] uppercase tracking-widest mb-6">Wist je dat?</h4>
+                                <h4 className="text-[10px] font-black text-[#0073b1] uppercase tracking-widest mb-6">{t.subFact}</h4>
                                 <p className="text-sm md:text-base font-bold text-gray-800 leading-relaxed">
                                     {dailyData?.feit}
                                 </p>
