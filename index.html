@@ -1090,16 +1090,17 @@ function NewsWidget({ lang }) {
         fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ALLOWED_EMAIL, settings: s }) }).catch(()=>{});
     };
 
-    async function fastFetch(query, hlParam, glParam) {
+    /* NIEUW v1.4: ceidParam toegevoegd voor harde NL/US lock */
+    async function fastFetch(query, hlParam, glParam, ceidParam) {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 8000);
         
         const gUrl = query === 'ALGEMEEN' 
-            ? `https://news.google.com/rss?hl=${hlParam}&gl=${glParam}`
-            : `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hlParam}&gl=${glParam}`;
+            ? `https://news.google.com/rss?hl=${hlParam}&gl=${glParam}&ceid=${ceidParam}`
+            : `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hlParam}&gl=${glParam}&ceid=${ceidParam}`;
 
         try {
-            const apiUrl = '/api/news?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
+            const apiUrl = `/api/news?q=${encodeURIComponent(query)}&hl=${hlParam}&gl=${glParam}&ceid=${ceidParam}`;
             const r = await fetch(apiUrl, { signal: ctrl.signal });
             if (r.ok) {
                 clearTimeout(tid);
@@ -1198,7 +1199,8 @@ function NewsWidget({ lang }) {
 
     useEffect(() => {
         let alive = true;
-        const cached = sessionStorage.getItem('nws_cache_v12');
+        /* NIEUW v1.4: Cache key gewijzigd naar v14 om oude engelse artikelen direct te forceren te updaten */
+        const cached = sessionStorage.getItem('nws_cache_v14');
         if (cached) {
             try {
                 const { t, d } = JSON.parse(cached);
@@ -1216,7 +1218,8 @@ function NewsWidget({ lang }) {
                 if (!alive) return;
                 const h = lang === 'nl' ? 'nl' : 'en-US';
                 const g = lang === 'nl' ? 'NL' : 'US';
-                const xml = await fastFetch(cat, h, g);
+                const c = lang === 'nl' ? 'NL:nl' : 'US:en'; // NIEUW v1.4
+                const xml = await fastFetch(cat, h, g, c);
                 if (!xml || !alive) continue;
                 
                 const items = parseRSS(xml, cat);
@@ -1228,7 +1231,7 @@ function NewsWidget({ lang }) {
                 });
                 
                 setAllArticles([...merged]);
-                sessionStorage.setItem('nws_cache_v12', JSON.stringify({ t: Date.now(), d: merged }));
+                sessionStorage.setItem('nws_cache_v14', JSON.stringify({ t: Date.now(), d: merged }));
             }
             if (alive) setFeedReady(true);
         };
@@ -1244,7 +1247,8 @@ function NewsWidget({ lang }) {
         setSearchDone(false);
         const h = lang === 'nl' ? 'nl' : 'en-US';
         const g = lang === 'nl' ? 'NL' : 'US';
-        const xml = await fastFetch(q.trim(), h, g);
+        const c = lang === 'nl' ? 'NL:nl' : 'US:en'; // NIEUW v1.4
+        const xml = await fastFetch(q.trim(), h, g, c);
         if (xml) {
             const items = parseRSS(xml, 'ZOEKEN');
             const unique = []; const urls = new Set();
@@ -1268,7 +1272,6 @@ function NewsWidget({ lang }) {
 
     const isSearchActive = search.trim().length > 0;
 
-    /* NIEUW v1.3: Harde datascheiding tussen Algemeen en Voor Jou */
     const filterSort = (items) => {
         let f = items.filter(a => {
             const txt = (a.title + ' ' + a.source + ' ' + a.desc).toLowerCase();
@@ -1286,6 +1289,9 @@ function NewsWidget({ lang }) {
             const tA = new Date(a.pubDate).getTime() || 0;
             const tB = new Date(b.pubDate).getTime() || 0;
             
+            /* NIEUW v1.4: De logica die Algemeen dwong op 'tijd' te sorteren is VERWIJDERD, 
+               waardoor Bron en Onderwerp nu werken in Algemeen. */
+
             if (sortMode === 'bron') {
                 let iA = priority.findIndex(p => (a.source||'').toLowerCase().includes(p)); if (iA===-1) iA=9999;
                 let iB = priority.findIndex(p => (b.source||'').toLowerCase().includes(p)); if (iB===-1) iB=9999;
@@ -1326,7 +1332,6 @@ function NewsWidget({ lang }) {
 
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
-            {/* NIEUW v1.3: Sorteerknoppen permanent zichtbaar, flex-wrap behouden voor correcte Chrome weergave */}
             <div className="p-3 bg-[#f8f9fa] border-b border-gray-200 flex flex-wrap justify-between items-center gap-2 shrink-0">
                 <div className="flex items-center gap-2 text-gray-600 font-black tracking-widest text-[11px] uppercase shrink-0">
                     <Ico.Nws/> NEWS
