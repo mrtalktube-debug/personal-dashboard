@@ -1805,11 +1805,13 @@ function SparkWidget({ lang }) {
     const [isLoading, setIsLoading] = useState(true);
     const [apiError, setApiError] = useState('');
     
-    // States voor interactie
-    const [reflectAnswer, setReflectAnswer] = useState('');
-    const [savedAnswers, setSavedAnswers] = useState(() => S.load('spark_answers', {}));
+    // States voor interactie (logboek verwijderd)
     const [triviaPick, setTriviaPick] = useState(null);
     const [iqPick, setIqPick] = useState(null);
+    
+    // States voor de nieuwe uitleg-knoppen
+    const [showTriviaExpl, setShowTriviaExpl] = useState(false);
+    const [showIqExpl, setShowIqExpl] = useState(false);
 
     const todayStr = new Date().toLocaleDateString('nl-NL');
 
@@ -1819,7 +1821,7 @@ function SparkWidget({ lang }) {
         
         // 1. Check of we vandaag al iets hebben gegenereerd (tenzij we forceren)
         if (!forceNew) {
-            const cached = S.load('spark_daily_ai_v2', null);
+            const cached = S.load('spark_daily_ai_v3', null);
             if (cached && cached.date === todayStr && cached.data) {
                 setDailyData(cached.data);
                 setIsLoading(false);
@@ -1830,22 +1832,22 @@ function SparkWidget({ lang }) {
         // 2. Haal Groq API key op
         const groqKey = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'))?.val;
         if (!groqKey) {
-            setApiError('Geen Groq API key gevonden.');
+            setApiError('Geen Groq API key.');
             setDailyData(getFallbackData());
             setIsLoading(false);
             return;
         }
 
-        // 3. Genereer verse data via AI
+        // 3. Genereer verse data via AI (Nu MET verplichte uitleg)
         try {
             const prompt = `Je bent een assistent voor een DenkTank dashboard. Genereer in het Nederlands een JSON object met 4 elementen. Verzin elke keer iets compleet nieuws!
-            1. "dagvraag": Een unieke, verrassende of diepgaande reflectievraag over persoonlijke ontwikkeling, gewoontes, relaties of dagelijks leven.
-            2. "trivia": Een leuke algemene kennis quizvraag. Geef de vraag "q", een array van 4 antwoord-opties "opts", en de index van het juiste antwoord "a" (0-3).
-            3. "iq": Een logische puzzel, wiskundig raadsel of patroon (zoals in een IQ test). Geef de vraag "q", een array van 4 opties "opts", en de index van het juiste antwoord "a" (0-3).
+            1. "dagvraag": Een unieke, verrassende of diepgaande reflectievraag om even bij stil te staan. Geen introductie.
+            2. "trivia": Een leuke algemene kennis quizvraag. Geef de vraag "q", een array van 4 opties "opts", de index van het juiste antwoord "a" (0-3), en een fascinerende "uitleg" waarom dit klopt.
+            3. "iq": Een logische puzzel, wiskundig raadsel of patroon. Geef de vraag "q", een array van 4 opties "opts", de index van het juiste antwoord "a" (0-3), en een heldere "uitleg" van de logica.
             4. "feit": Een bizar, fascinerend of grappig weetje dat begint met "Wist je dat...".
             
             Geef UITSLUITEND het JSON object terug, zonder markdown of extra tekst.
-            Formaat: {"dagvraag": "...", "trivia": {"q": "...", "opts": ["A","B","C","D"], "a": 0}, "iq": {"q": "...", "opts": ["A","B","C","D"], "a": 0}, "feit": "..."}`;
+            Formaat: {"dagvraag": "...", "trivia": {"q": "...", "opts": ["A","B","C","D"], "a": 0, "uitleg": "..."}, "iq": {"q": "...", "opts": ["A","B","C","D"], "a": 0, "uitleg": "..."}, "feit": "..."}`;
 
             const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
@@ -1865,9 +1867,8 @@ function SparkWidget({ lang }) {
                 if (jsonMatch) {
                     const parsed = JSON.parse(jsonMatch[0]);
                     setDailyData(parsed);
-                    // Sla alleen op als dagelijkse cache als het géén geforceerde nieuwe is
                     if (!forceNew) {
-                        S.save('spark_daily_ai_v2', { date: todayStr, data: parsed });
+                        S.save('spark_daily_ai_v3', { date: todayStr, data: parsed });
                     }
                     setApiError('');
                 } else {
@@ -1877,11 +1878,15 @@ function SparkWidget({ lang }) {
         } catch (e) {
             console.error("DenkTank AI Error:", e);
             if (!dailyData) setDailyData(getFallbackData());
-            setApiError('AI generatie mislukt. Offline modus.');
+            setApiError('Offline modus.');
         }
+        
+        // Reset alle interacties
         setIsLoading(false);
         setTriviaPick(null);
         setIqPick(null);
+        setShowTriviaExpl(false);
+        setShowIqExpl(false);
     };
 
     useEffect(() => {
@@ -1890,28 +1895,13 @@ function SparkWidget({ lang }) {
 
     const getFallbackData = () => ({
         dagvraag: "Als je één moment van de afgelopen week opnieuw zou mogen beleven, welk moment zou dat zijn?",
-        trivia: { q: "Hoeveel harten heeft een octopus?", opts: ["1", "2", "3", "4"], a: 2 },
-        iq: { q: "Welk getal volgt in deze reeks: 2, 6, 12, 20, ...?", opts: ["28", "30", "32", "36"], a: 1 },
+        trivia: { q: "Hoeveel harten heeft een octopus?", opts: ["1", "2", "3", "4"], a: 2, uitleg: "Een octopus heeft één hoofd-hart dat bloed door het hele lichaam pompt, en twee extra harten die bloed specifiek langs de kieuwen pompen." },
+        iq: { q: "Welk getal volgt in deze reeks: 2, 6, 12, 20, ...?", opts: ["28", "30", "32", "36"], a: 1, uitleg: "De reeks telt er steeds het volgende even getal bij op (+4, +6, +8). De volgende stap is dus 20 + 10 = 30." },
         feit: "Wist je dat octopussen drie harten hebben en dat hun bloed blauw is in plaats van rood?"
     });
 
-    const saveReflect = () => {
-        if(!reflectAnswer.trim() || !dailyData) return;
-        const newAnswers = { ...savedAnswers, [todayStr]: { q: dailyData.dagvraag, a: reflectAnswer } };
-        setSavedAnswers(newAnswers);
-        S.save('spark_answers', newAnswers);
-        setReflectAnswer('');
-    };
-
-    const deleteAnswer = (dateKey) => {
-        const newAnswers = { ...savedAnswers };
-        delete newAnswers[dateKey];
-        setSavedAnswers(newAnswers);
-        S.save('spark_answers', newAnswers);
-    };
-
     const renderQuizOptions = (quizData, pickState, setPickState) => (
-        <div className="grid grid-cols-1 gap-2.5">
+        <div className="grid grid-cols-1 gap-2.5 w-full">
             {quizData?.opts.map((opt, i) => {
                 let btnClass = "bg-white border border-gray-200 text-gray-700 hover:border-purple-400 hover:bg-purple-50";
                 if (pickState !== null) {
@@ -1935,11 +1925,22 @@ function SparkWidget({ lang }) {
 
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
+            {/* Titelbalk met Genereer-knop rechtsboven */}
             <div className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-purple-700 font-black tracking-widest text-[11px] uppercase">
                     💡 DENKTANK
                 </div>
-                {apiError && <span className="text-[8px] text-red-500 font-bold bg-white px-2 py-0.5 rounded shadow-sm">{apiError}</span>}
+                <div className="flex items-center gap-2">
+                    {apiError && <span className="text-[8px] text-red-500 font-bold bg-white px-2 py-0.5 rounded shadow-sm hidden sm:inline-block">{apiError}</span>}
+                    <button 
+                        onClick={() => fetchDailySpark(true)} 
+                        disabled={isLoading}
+                        className="px-2.5 py-1.5 bg-white border border-purple-200 text-purple-600 hover:bg-purple-600 hover:text-white text-[9px] font-bold uppercase rounded transition shadow-sm flex items-center gap-1 disabled:opacity-50"
+                        title="Verzin direct iets nieuws"
+                    >
+                        <span className={isLoading ? "animate-spin inline-block" : ""}>↻</span> Nieuw
+                    </button>
+                </div>
             </div>
             
             <div className="flex border-b bg-white shrink-0">
@@ -1957,82 +1958,81 @@ function SparkWidget({ lang }) {
                     </div>
                 ) : (
                     <>
+                        {/* Tab: DagVraag (Puur reflectie, geen logboek) */}
                         {tab === 'dagvraag' && (
-                            <div className="flex flex-col flex-1">
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Vraag van de Dag</h4>
-                                <p className="text-lg font-bold text-purple-800 leading-tight mb-4">"{dailyData?.dagvraag}"</p>
-                                
-                                <textarea 
-                                    value={reflectAnswer} 
-                                    onChange={e=>setReflectAnswer(e.target.value)}
-                                    placeholder="Type hier je antwoord..."
-                                    className="w-full h-20 p-3 border border-gray-200 rounded-lg resize-none outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-100 bg-gray-50 mb-3 text-sm shadow-inner"
-                                />
-                                <button onClick={saveReflect} className="bg-purple-600 text-white text-[11px] uppercase tracking-wider font-bold py-2.5 px-4 rounded-lg hover:bg-purple-700 transition w-full shadow-sm mb-4">
-                                    Opslaan in Logboek
-                                </button>
-
-                                {Object.keys(savedAnswers).length > 0 && (
-                                    <div className="border-t border-gray-100 pt-4 mb-4">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Jouw Logboek</h4>
-                                        <div className="space-y-3">
-                                            {Object.entries(savedAnswers).reverse().map(([date, item]) => (
-                                                <div key={date} className="bg-gray-50 p-3 rounded-lg border border-gray-100 relative group">
-                                                    <button onClick={()=>deleteAnswer(date)} className="absolute top-2 right-2 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition text-xs">✕</button>
-                                                    <div className="text-[9px] font-bold text-purple-400 mb-1">{date}</div>
-                                                    <div className="text-[11px] font-bold text-gray-700 mb-1 leading-snug">{item.q}</div>
-                                                    <div className="text-sm text-gray-600 italic">"{item.a}"</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                            <div className="flex flex-col flex-1 items-center justify-center text-center px-2">
+                                <span className="text-5xl mb-6 opacity-80">🪞</span>
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Vraag van de Dag</h4>
+                                <p className="text-xl font-bold text-purple-800 leading-relaxed mb-8">
+                                    "{dailyData?.dagvraag}"
+                                </p>
                             </div>
                         )}
 
+                        {/* Tab: Trivia met uitleg-knop */}
                         {tab === 'trivia' && (
-                            <div className="flex flex-col flex-1 justify-center">
+                            <div className="flex flex-col flex-1 justify-center items-center w-full max-w-md mx-auto">
                                 <h4 className="text-lg font-bold text-center text-gray-800 mb-8 px-2 leading-snug">{dailyData?.trivia?.q}</h4>
                                 {renderQuizOptions(dailyData?.trivia, triviaPick, setTriviaPick)}
+                                
                                 {triviaPick !== null && (
-                                    <div className="mt-6 text-center animate-fade-in mb-4">
-                                        <span className={`text-[13px] font-black uppercase tracking-wider ${triviaPick === dailyData?.trivia?.a ? 'text-green-600' : 'text-red-500'}`}>
+                                    <div className="mt-6 text-center w-full animate-fade-in mb-4">
+                                        <div className={`text-[13px] font-black uppercase tracking-wider mb-3 ${triviaPick === dailyData?.trivia?.a ? 'text-green-600' : 'text-red-500'}`}>
                                             {triviaPick === dailyData?.trivia?.a ? '🎉 Helemaal goed!' : '❌ Helaas! Het juiste antwoord was ' + dailyData?.trivia?.opts[dailyData?.trivia?.a] + '.'}
-                                        </span>
+                                        </div>
+                                        
+                                        {!showTriviaExpl ? (
+                                            <button onClick={() => setShowTriviaExpl(true)} className="px-4 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition shadow-sm">
+                                                💡 Bekijk uitleg
+                                            </button>
+                                        ) : (
+                                            <div className="p-3.5 bg-purple-50 border border-purple-100 rounded-lg text-xs text-purple-900 text-left shadow-inner leading-relaxed">
+                                                <span className="font-bold uppercase text-[9px] text-purple-500 block mb-1">UITLEG</span>
+                                                {dailyData?.trivia?.uitleg}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
                         )}
 
+                        {/* Tab: IQ met uitleg-knop */}
                         {tab === 'iq' && (
-                            <div className="flex flex-col flex-1 justify-center">
+                            <div className="flex flex-col flex-1 justify-center items-center w-full max-w-md mx-auto">
                                 <h4 className="text-lg font-bold text-center text-gray-800 mb-8 px-2 leading-snug">{dailyData?.iq?.q}</h4>
                                 {renderQuizOptions(dailyData?.iq, iqPick, setIqPick)}
+                                
                                 {iqPick !== null && (
-                                    <div className="mt-6 text-center animate-fade-in mb-4">
-                                        <span className={`text-[13px] font-black uppercase tracking-wider ${iqPick === dailyData?.iq?.a ? 'text-green-600' : 'text-red-500'}`}>
+                                    <div className="mt-6 text-center w-full animate-fade-in mb-4">
+                                        <div className={`text-[13px] font-black uppercase tracking-wider mb-3 ${iqPick === dailyData?.iq?.a ? 'text-green-600' : 'text-red-500'}`}>
                                             {iqPick === dailyData?.iq?.a ? '🧠 Briljant!' : '❌ Fout! Het antwoord was ' + dailyData?.iq?.opts[dailyData?.iq?.a] + '.'}
-                                        </span>
+                                        </div>
+
+                                        {!showIqExpl ? (
+                                            <button onClick={() => setShowIqExpl(true)} className="px-4 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition shadow-sm">
+                                                💡 Bekijk logica
+                                            </button>
+                                        ) : (
+                                            <div className="p-3.5 bg-purple-50 border border-purple-100 rounded-lg text-xs text-purple-900 text-left shadow-inner leading-relaxed">
+                                                <span className="font-bold uppercase text-[9px] text-purple-500 block mb-1">LOGICA</span>
+                                                {dailyData?.iq?.uitleg}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
                         )}
 
+                        {/* Tab: Feiten */}
                         {tab === 'feiten' && (
                             <div className="flex flex-col flex-1 items-center justify-center text-center px-4">
+                                <span className="text-5xl mb-6">🤯</span>
                                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Wist je dat...</h4>
                                 <p className="text-base font-bold text-gray-800 leading-relaxed mb-8">
                                     {dailyData?.feit}
                                 </p>
                             </div>
                         )}
-
-                        {/* Uniforme Genereer knop onderaan de content-laag */}
-                        <div className="mt-auto pt-4 border-t border-gray-100 shrink-0">
-                            <button onClick={() => fetchDailySpark(true)} className="w-full px-6 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-600 text-[10px] uppercase tracking-widest font-black rounded-lg transition shadow-sm">
-                                ↻ Genereer een nieuwe
-                            </button>
-                        </div>
                     </>
                 )}
             </div>
