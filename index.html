@@ -992,7 +992,16 @@ function AgendaWidget({ lang }) {
     
 function NewsWidget({ lang }) {
     const defaultCols = ['🌍 WERELD', 'AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
-    const [cols, setCols] = useState(() => S.load('newscats', defaultCols));
+    const [cols, setCols] = useState(() => {
+    const saved = S.load('newscats', defaultCols);
+    // Auto-voeg wereldnieuws toe als het ontbreekt
+    if (!saved.some(c => c.includes('WERELD') || c.includes('WORLD'))) {
+        const updated = ['🌍 WERELD', ...saved];
+        S.save('newscats', updated);
+        return updated;
+    }
+    return saved;
+});
     const [manage, setManage] = useState(false);
     const [allArticles, setAllArticles] = useState([]);
     const [feedReady, setFeedReady] = useState(false);
@@ -1088,13 +1097,34 @@ function NewsWidget({ lang }) {
             if (cleanDesc.toLowerCase().startsWith(title.toLowerCase().substring(0, 30))) cleanDesc = '';
 
             let img = null;
-            const urlM = desc.match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif)(?:\?[^"'\s<>]*)?)/i);
-            if (urlM) {
-                img = urlM[1];
-            } else {
-                const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
-                if (imgM) img = imgM[1];
-            }
+
+// Methode 1: Zoek direct image URL in description
+const urlM = desc.match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif|avif)(?:\?[^"'\s<>]*)?)/i);
+if (urlM) img = urlM[1];
+
+// Methode 2: Parse img tag
+if (!img) {
+    const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (imgM) img = imgM[1];
+}
+
+// Methode 3: Zoek in CDATA
+if (!img && desc.includes('CDATA')) {
+    const cdataM = desc.match(/\[CDATA\[(.*?)\]\]/s);
+    if (cdataM) {
+        const cdataImg = cdataM[1].match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif))/i);
+        if (cdataImg) img = cdataImg[1];
+    }
+}
+
+// Methode 4: Google News specifieke afbeelding tag
+if (!img) {
+    const item = items[i];
+    const mediaContent = item.querySelector('media\\:content, content');
+    if (mediaContent) {
+        img = mediaContent.getAttribute('url');
+    }
+}
 
             if (!img && srcUrl) { try { img = 'https://logo.clearbit.com/' + new URL(srcUrl).hostname.replace('www.','') + '?size=80'; } catch(e){} }
             if (!img && link) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(link).hostname.replace('www.','') + '&sz=64'; } catch(e){} }
@@ -1363,7 +1393,144 @@ function NewsWidget({ lang }) {
             )}
 
             <div className="flex-1 overflow-y-auto hide-scroll">
-                {displayItems.length === 0 ? (
+    {displayItems.length === 0 ? (
+        <div className="flex items-center justify-center h-full">
+            {(isSearching || (!feedReady && !isSearchActive)) ? (
+                <div className="text-xs font-bold text-blue-500 animate-pulse">
+                    {isSearchActive ? `Zoeken naar "${search}"...` : 'Nieuws ophalen...'}
+                </div>
+            ) : (
+                <div className="text-xs font-bold text-gray-400">
+                    {isSearchActive && searchDone ? `Geen resultaten voor "${search}"` : 'Geen artikelen gevonden'}
+                </div>
+            )}
+        </div>
+    ) : isSearchActive ? (
+        /* ZOEKRESULTATEN - Lijst weergave */
+        <div className="space-y-0">
+            {displayItems.map((a, i) => {
+                const isPri = priority.some(p => (a.source||'').toLowerCase().includes(p));
+                return (
+                    <a href={a.link} target="_blank" rel="noopener" key={a.link+i}
+                        className={`flex gap-3 px-4 py-3.5 border-b border-gray-100 hover:bg-gray-50 transition group ${isPri && sortMode==='bron' ? 'bg-green-50/30' : ''}`}
+                    >
+                        <div className="flex-1 flex flex-col justify-between min-w-0">
+                            <div>
+                                <p className="text-[13px] font-bold leading-snug text-gray-900 group-hover:text-blue-700 transition line-clamp-2">{a.title}</p>
+                                {a.desc && <p className="text-[#0b57d0] font-semibold text-[11px] line-clamp-2 mt-1 leading-snug">{a.desc}</p>}
+                            </div>
+                            <div className="flex justify-between items-center mt-2.5 flex-wrap gap-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase">{a.cat}</span>
+                                    <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-0.5" style={{color: srcColor(a.source)}}>
+                                        {isPri && '⭐'}{a.source}
+                                    </span>
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-400 shrink-0">{formatDate(a.pubDate)}</span>
+                            </div>
+                        </div>
+                        {a.img && (
+                            <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+                                <img src={a.img} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" loading="lazy"
+                                    onError={(e) => {
+                                        const el = e.target;
+                                        const retryCount = parseInt(el.dataset.retry || '0');
+                                        if (retryCount === 0) {
+                                            el.dataset.retry = '1';
+                                            el.src = `https://images.weserv.nl/?url=${encodeURIComponent(a.img)}&w=200&h=200&fit=cover`;
+                                        } else if (retryCount === 1) {
+                                            el.dataset.retry = '2';
+                                            try { 
+                                                const domain = new URL(a.link).hostname.replace('www.','');
+                                                el.src = `https://logo.clearbit.com/${domain}?size=80`;
+                                            } catch(err) { 
+                                                el.dataset.retry = '3';
+                                                el.src = 'https://www.google.com/s2/favicons?sz=128'; 
+                                            }
+                                        } else {
+                                            el.parentElement.classList.add('hidden');
+                                        }
+                                    }}
+                                />
+                            </div>
+                        )}
+                    </a>
+                );
+            })}
+            {displayItems.length < totalFiltered && (
+                <div className="p-3 text-center border-t border-gray-100">
+                    <button onClick={()=>setVisibleCount(v=>v+40)} className="px-6 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold hover:bg-blue-100 transition">
+                        Meer laden ({totalFiltered - displayItems.length} resterend)
+                    </button>
+                </div>
+            )}
+        </div>
+    ) : (
+        /* NORMALE WEERGAVE - Kolommen per categorie */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+            {cols.filter(cat => filterSort(allArticles).some(a => a.cat === cat)).map(cat => {
+                const catArticles = filterSort(allArticles).filter(a => a.cat === cat).slice(0, 10);
+                if (catArticles.length === 0) return null;
+                
+                return (
+                    <div key={cat} className="flex flex-col bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-3 py-2.5 font-black text-[10px] uppercase tracking-widest flex items-center justify-between">
+                            <span>{cat}</span>
+                            <span className="bg-white/20 px-2 py-0.5 rounded-full text-[8px]">{catArticles.length}</span>
+                        </div>
+                        <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto hide-scroll">
+                            {catArticles.map((a, i) => {
+                                const isPri = priority.some(p => (a.source||'').toLowerCase().includes(p));
+                                return (
+                                    <a href={a.link} target="_blank" rel="noopener" key={a.link+i}
+                                        className={`block p-3 hover:bg-blue-50 transition group ${isPri ? 'bg-green-50/30' : ''}`}
+                                    >
+                                        <div className="flex gap-2.5">
+                                            {a.img && (
+                                                <div className="shrink-0 w-14 h-14 bg-gray-100 rounded overflow-hidden">
+                                                    <img src={a.img} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" loading="lazy"
+                                                        onError={(e) => {
+                                                            const el = e.target;
+                                                            const retryCount = parseInt(el.dataset.retry || '0');
+                                                            if (retryCount === 0) {
+                                                                el.dataset.retry = '1';
+                                                                el.src = `https://images.weserv.nl/?url=${encodeURIComponent(a.img)}&w=200&h=200&fit=cover`;
+                                                            } else if (retryCount === 1) {
+                                                                el.dataset.retry = '2';
+                                                                try { 
+                                                                    const domain = new URL(a.link).hostname.replace('www.','');
+                                                                    el.src = `https://logo.clearbit.com/${domain}?size=80`;
+                                                                } catch(err) { 
+                                                                    el.dataset.retry = '3';
+                                                                    el.src = 'https://www.google.com/s2/favicons?sz=128'; 
+                                                                }
+                                                            } else {
+                                                                el.parentElement.classList.add('hidden');
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[12px] font-bold leading-tight text-gray-900 group-hover:text-blue-700 transition line-clamp-3 mb-1.5">{a.title}</p>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="text-[9px] font-black uppercase tracking-wide truncate" style={{color: srcColor(a.source)}}>
+                                                        {isPri && '⭐'}{a.source}
+                                                    </span>
+                                                    <span className="text-[8px] font-bold text-gray-400 shrink-0">{formatDate(a.pubDate).split('|')[0]}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    )}
+</div>
                     <div className="flex items-center justify-center h-full">
                         {(isSearching || (!feedReady && !isSearchActive)) ? (
                             <div className="text-xs font-bold text-blue-500 animate-pulse">
