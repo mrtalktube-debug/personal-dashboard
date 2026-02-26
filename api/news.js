@@ -5,7 +5,11 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing query parameter' });
     }
 
-    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${hl}&gl=${gl}`;
+    // Als de app om 'ALGEMEEN' vraagt, pak de landelijke hoofdpagina in plaats van te zoeken
+    let url = `https://news.google.com/rss?hl=${hl}&gl=${gl}`;
+    if (q !== 'ALGEMEEN') {
+        url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${hl}&gl=${gl}`;
+    }
     
     try {
         const response = await fetch(url);
