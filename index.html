@@ -1798,66 +1798,106 @@ function SportsWidget({ lang }) {
 }
     
 function SparkWidget({ lang }) {
-    const [tab, setTab] = useState('reflect');
-
-    // Lokale, robuuste database
-    const reflections = [
-        "Heb je vandaag iemand beledigd?",
-        "Van welk soort snoep ben je helemaal gek?",
-        "Met wie kun je het hardst lachen?",
-        "Wie zou je meenemen naar een onbewoond eiland?",
-        "Welke kleur zou je de dag van vandaag geven?",
-        "Wat vind je op dit moment geweldig aan je leven?",
-        "Wat zie je echt als je in een spiegel kijkt?",
-        "Hoe zou de titel van jouw biografie luiden?",
-        "Welke zin of welk stopwoord heb je vandaag het meest gezegd?",
-        "Ga je eigenlijk steeds meer op je moeder/vader lijken?",
-        "Welke gewoonte zou je direct willen afleren?",
-        "Waar heb je je vandaag het meest over verbaasd?",
-        "Wat is de meest waardevolle les die je onlangs hebt geleerd?",
-        "Als je een dag lang een dier zou kunnen zijn, welk dier zou je kiezen?"
-    ];
-
-    const trivias = [
-        { q: "Wat is de hoofdstad van Australië?", opts: ["Sydney", "Melbourne", "Canberra", "Perth"], a: 2 },
-        { q: "Hoeveel harten heeft een octopus?", opts: ["1", "2", "3", "4"], a: 2 },
-        { q: "Welke planeet staat het dichtst bij de zon?", opts: ["Venus", "Mars", "Mercurius", "Aarde"], a: 2 },
-        { q: "Wat is het kleinste land ter wereld?", opts: ["Monaco", "Vaticaanstad", "San Marino", "Liechtenstein"], a: 1 },
-        { q: "Uit hoeveel kleuren bestaat een regenboog?", opts: ["5", "6", "7", "8"], a: 2 },
-        { q: "Wie schilderde de Nachtwacht?", opts: ["Vincent van Gogh", "Rembrandt van Rijn", "Johannes Vermeer", "Piet Mondriaan"], a: 1 },
-        { q: "Welk element is het meest aanwezig in het universum?", opts: ["Zuurstof", "Koolstof", "Waterstof", "Stikstof"], a: 2 },
-        { q: "Hoeveel botten heeft een volwassen mens?", opts: ["186", "206", "226", "246"], a: 1 }
-    ];
-
-    const facts = [
-        "Wist je dat honing nooit bederft? Archeologen hebben potten honing in oude Egyptische graven gevonden die meer dan 3000 jaar oud zijn en nog steeds perfect eetbaar zijn.",
-        "Wist je dat bananen krom groeien omdat ze naar de zon toe groeien? Dit heet negatieve geotropie.",
-        "Wist je dat een gemiddelde wolk wel een miljoen kilo weegt? De waterdruppels bij elkaar zijn loodzwaar.",
-        "Wist je dat aardbeien genetisch gezien geen bessen zijn, maar bananen en watermeloenen wel?",
-        "Wist je dat je in de ochtend ongeveer 1 centimeter langer bent dan in de avond? Je kraakbeen drukt gedurende de dag in elkaar.",
-        "Wist je dat varkens fysiek niet recht omhoog naar de lucht kunnen kijken?",
-        "Wist je dat de Tyrannosaurus rex dichter in de tijd bij de iPad leefde, dan bij de Stegosaurus?"
-    ];
-
-    const getDayOfYear = () => {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), 0, 0);
-        return Math.floor((now - start) / (1000 * 60 * 60 * 24));
-    };
-
-    const dayIdx = getDayOfYear();
-    const todayReflect = reflections[dayIdx % reflections.length];
-    const todayTrivia = trivias[dayIdx % trivias.length];
+    const [tab, setTab] = useState('dagvraag');
     
+    // States voor dagelijkse AI data
+    const [dailyData, setDailyData] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [apiError, setApiError] = useState('');
+    
+    // States voor interactie
     const [reflectAnswer, setReflectAnswer] = useState('');
     const [savedAnswers, setSavedAnswers] = useState(() => S.load('spark_answers', {}));
     const [triviaPick, setTriviaPick] = useState(null);
-    const [factIdx, setFactIdx] = useState(dayIdx % facts.length);
+    const [iqPick, setIqPick] = useState(null);
+
+    const todayStr = new Date().toLocaleDateString('nl-NL');
+
+    const fetchDailySpark = async (forceNew = false) => {
+        setIsLoading(true);
+        setApiError('');
+        
+        // 1. Check of we vandaag al iets hebben gegenereerd (tenzij we forceren)
+        if (!forceNew) {
+            const cached = S.load('spark_daily_ai_v2', null);
+            if (cached && cached.date === todayStr && cached.data) {
+                setDailyData(cached.data);
+                setIsLoading(false);
+                return;
+            }
+        }
+
+        // 2. Haal Groq API key op
+        const groqKey = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'))?.val;
+        if (!groqKey) {
+            setApiError('Geen Groq API key gevonden.');
+            setDailyData(getFallbackData());
+            setIsLoading(false);
+            return;
+        }
+
+        // 3. Genereer verse data via AI
+        try {
+            const prompt = `Je bent een assistent voor een DenkTank dashboard. Genereer in het Nederlands een JSON object met 4 elementen. Verzin elke keer iets compleet nieuws!
+            1. "dagvraag": Een unieke, verrassende of diepgaande reflectievraag over persoonlijke ontwikkeling, gewoontes, relaties of dagelijks leven.
+            2. "trivia": Een leuke algemene kennis quizvraag. Geef de vraag "q", een array van 4 antwoord-opties "opts", en de index van het juiste antwoord "a" (0-3).
+            3. "iq": Een logische puzzel, wiskundig raadsel of patroon (zoals in een IQ test). Geef de vraag "q", een array van 4 opties "opts", en de index van het juiste antwoord "a" (0-3).
+            4. "feit": Een bizar, fascinerend of grappig weetje dat begint met "Wist je dat...".
+            
+            Geef UITSLUITEND het JSON object terug, zonder markdown of extra tekst.
+            Formaat: {"dagvraag": "...", "trivia": {"q": "...", "opts": ["A","B","C","D"], "a": 0}, "iq": {"q": "...", "opts": ["A","B","C","D"], "a": 0}, "feit": "..."}`;
+
+            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'llama-3.3-70b-versatile',
+                    messages: [{ role: 'user', content: prompt }],
+                    temperature: 0.9, 
+                    max_tokens: 600
+                })
+            });
+            
+            const data = await res.json();
+            if (data.choices && data.choices[0]) {
+                const content = data.choices[0].message.content;
+                const jsonMatch = content.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    setDailyData(parsed);
+                    // Sla alleen op als dagelijkse cache als het géén geforceerde nieuwe is
+                    if (!forceNew) {
+                        S.save('spark_daily_ai_v2', { date: todayStr, data: parsed });
+                    }
+                    setApiError('');
+                } else {
+                    throw new Error("Ongeldig JSON formaat");
+                }
+            }
+        } catch (e) {
+            console.error("DenkTank AI Error:", e);
+            if (!dailyData) setDailyData(getFallbackData());
+            setApiError('AI generatie mislukt. Offline modus.');
+        }
+        setIsLoading(false);
+        setTriviaPick(null);
+        setIqPick(null);
+    };
+
+    useEffect(() => {
+        fetchDailySpark();
+    }, [todayStr]);
+
+    const getFallbackData = () => ({
+        dagvraag: "Als je één moment van de afgelopen week opnieuw zou mogen beleven, welk moment zou dat zijn?",
+        trivia: { q: "Hoeveel harten heeft een octopus?", opts: ["1", "2", "3", "4"], a: 2 },
+        iq: { q: "Welk getal volgt in deze reeks: 2, 6, 12, 20, ...?", opts: ["28", "30", "32", "36"], a: 1 },
+        feit: "Wist je dat octopussen drie harten hebben en dat hun bloed blauw is in plaats van rood?"
+    });
 
     const saveReflect = () => {
-        if(!reflectAnswer.trim()) return;
-        const todayStr = new Date().toLocaleDateString('nl-NL');
-        const newAnswers = { ...savedAnswers, [todayStr]: { q: todayReflect, a: reflectAnswer } };
+        if(!reflectAnswer.trim() || !dailyData) return;
+        const newAnswers = { ...savedAnswers, [todayStr]: { q: dailyData.dagvraag, a: reflectAnswer } };
         setSavedAnswers(newAnswers);
         S.save('spark_answers', newAnswers);
         setReflectAnswer('');
@@ -1870,101 +1910,130 @@ function SparkWidget({ lang }) {
         S.save('spark_answers', newAnswers);
     };
 
+    const renderQuizOptions = (quizData, pickState, setPickState) => (
+        <div className="grid grid-cols-1 gap-2.5">
+            {quizData?.opts.map((opt, i) => {
+                let btnClass = "bg-white border border-gray-200 text-gray-700 hover:border-purple-400 hover:bg-purple-50";
+                if (pickState !== null) {
+                    if (i === quizData.a) btnClass = "bg-green-50 border border-green-500 text-green-800 font-bold shadow-sm";
+                    else if (i === pickState) btnClass = "bg-red-50 border border-red-400 text-red-800";
+                    else btnClass = "bg-gray-50 border border-gray-100 text-gray-400 opacity-50";
+                }
+                return (
+                    <button 
+                        key={i} 
+                        onClick={() => setPickState(i)}
+                        disabled={pickState !== null}
+                        className={`p-3.5 rounded-lg text-sm transition-all duration-300 text-left ${btnClass}`}
+                    >
+                        <span className="font-mono font-bold opacity-50 mr-2">{['A','B','C','D'][i]}</span> {opt}
+                    </button>
+                );
+            })}
+        </div>
+    );
+
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
             <div className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-purple-700 font-black tracking-widest text-[11px] uppercase">
-                    💡 DAILY SPARK
+                    💡 DENKTANK
                 </div>
+                {apiError && <span className="text-[8px] text-red-500 font-bold bg-white px-2 py-0.5 rounded shadow-sm">{apiError}</span>}
             </div>
             
             <div className="flex border-b bg-white shrink-0">
-                <button onClick={() => setTab('reflect')} className={`tab-btn ${tab === 'reflect' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>🪞 Reflectie</button>
-                <button onClick={() => setTab('trivia')} className={`tab-btn ${tab === 'trivia' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>🧠 Trivia</button>
-                <button onClick={() => setTab('fact')} className={`tab-btn ${tab === 'fact' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>🌍 Feitjes</button>
+                <button onClick={() => setTab('dagvraag')} className={`tab-btn ${tab === 'dagvraag' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>DagVraag</button>
+                <button onClick={() => setTab('trivia')} className={`tab-btn ${tab === 'trivia' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>Trivia</button>
+                <button onClick={() => setTab('iq')} className={`tab-btn ${tab === 'iq' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>IQ</button>
+                <button onClick={() => setTab('feiten')} className={`tab-btn ${tab === 'feiten' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>Feiten</button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 bg-white hide-scroll">
-                {tab === 'reflect' && (
-                    <div className="flex flex-col h-full">
-                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Vraag van de Dag</h4>
-                        <p className="text-lg font-bold text-purple-800 leading-tight mb-4">"{todayReflect}"</p>
-                        
-                        <textarea 
-                            value={reflectAnswer} 
-                            onChange={e=>setReflectAnswer(e.target.value)}
-                            placeholder="Type hier je antwoord..."
-                            className="w-full h-20 p-3 border border-gray-200 rounded-lg resize-none outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-100 bg-gray-50 mb-3 text-sm shadow-inner"
-                        />
-                        <button onClick={saveReflect} className="bg-purple-600 text-white text-[11px] uppercase tracking-wider font-bold py-2.5 px-4 rounded-lg hover:bg-purple-700 transition w-full shadow-sm">
-                            Opslaan in Logboek
-                        </button>
+            <div className="flex-1 overflow-y-auto p-5 bg-white hide-scroll relative flex flex-col">
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center h-full space-y-4 my-auto">
+                        <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                        <span className="text-xs font-bold text-purple-600 animate-pulse">Nieuwe content genereren...</span>
+                    </div>
+                ) : (
+                    <>
+                        {tab === 'dagvraag' && (
+                            <div className="flex flex-col flex-1">
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Vraag van de Dag</h4>
+                                <p className="text-lg font-bold text-purple-800 leading-tight mb-4">"{dailyData?.dagvraag}"</p>
+                                
+                                <textarea 
+                                    value={reflectAnswer} 
+                                    onChange={e=>setReflectAnswer(e.target.value)}
+                                    placeholder="Type hier je antwoord..."
+                                    className="w-full h-20 p-3 border border-gray-200 rounded-lg resize-none outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-100 bg-gray-50 mb-3 text-sm shadow-inner"
+                                />
+                                <button onClick={saveReflect} className="bg-purple-600 text-white text-[11px] uppercase tracking-wider font-bold py-2.5 px-4 rounded-lg hover:bg-purple-700 transition w-full shadow-sm mb-4">
+                                    Opslaan in Logboek
+                                </button>
 
-                        {Object.keys(savedAnswers).length > 0 && (
-                            <div className="mt-6 border-t border-gray-100 pt-4">
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Jouw Logboek</h4>
-                                <div className="space-y-3">
-                                    {Object.entries(savedAnswers).reverse().map(([date, item]) => (
-                                        <div key={date} className="bg-gray-50 p-3 rounded-lg border border-gray-100 relative group">
-                                            <button onClick={()=>deleteAnswer(date)} className="absolute top-2 right-2 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition text-xs">✕</button>
-                                            <div className="text-[9px] font-bold text-purple-400 mb-1">{date}</div>
-                                            <div className="text-[11px] font-bold text-gray-700 mb-1 leading-snug">{item.q}</div>
-                                            <div className="text-sm text-gray-600 italic">"{item.a}"</div>
+                                {Object.keys(savedAnswers).length > 0 && (
+                                    <div className="border-t border-gray-100 pt-4 mb-4">
+                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Jouw Logboek</h4>
+                                        <div className="space-y-3">
+                                            {Object.entries(savedAnswers).reverse().map(([date, item]) => (
+                                                <div key={date} className="bg-gray-50 p-3 rounded-lg border border-gray-100 relative group">
+                                                    <button onClick={()=>deleteAnswer(date)} className="absolute top-2 right-2 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition text-xs">✕</button>
+                                                    <div className="text-[9px] font-bold text-purple-400 mb-1">{date}</div>
+                                                    <div className="text-[11px] font-bold text-gray-700 mb-1 leading-snug">{item.q}</div>
+                                                    <div className="text-sm text-gray-600 italic">"{item.a}"</div>
+                                                </div>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                )}
                             </div>
                         )}
-                    </div>
-                )}
 
-                {tab === 'trivia' && (
-                    <div className="flex flex-col h-full justify-center">
-                        <div className="text-center mb-6">
-                            <span className="text-[9px] font-black bg-purple-100 text-purple-700 px-3 py-1 rounded-full uppercase tracking-widest">Dagelijkse Quiz</span>
-                        </div>
-                        <h4 className="text-lg font-bold text-center text-gray-800 mb-8 px-2 leading-snug">{todayTrivia.q}</h4>
-                        <div className="grid grid-cols-1 gap-2.5">
-                            {todayTrivia.opts.map((opt, i) => {
-                                let btnClass = "bg-white border border-gray-200 text-gray-700 hover:border-purple-400 hover:bg-purple-50";
-                                if (triviaPick !== null) {
-                                    if (i === todayTrivia.a) btnClass = "bg-green-50 border border-green-500 text-green-800 font-bold shadow-sm";
-                                    else if (i === triviaPick) btnClass = "bg-red-50 border border-red-400 text-red-800";
-                                    else btnClass = "bg-gray-50 border border-gray-100 text-gray-400 opacity-50";
-                                }
-                                return (
-                                    <button 
-                                        key={i} 
-                                        onClick={() => setTriviaPick(i)}
-                                        disabled={triviaPick !== null}
-                                        className={`p-3.5 rounded-lg text-sm transition-all duration-300 text-left ${btnClass}`}
-                                    >
-                                        <span className="font-mono font-bold opacity-50 mr-2">{['A','B','C','D'][i]}</span> {opt}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        {triviaPick !== null && (
-                            <div className="mt-6 text-center animate-fade-in">
-                                <span className={`text-[13px] font-black uppercase tracking-wider ${triviaPick === todayTrivia.a ? 'text-green-600' : 'text-red-500'}`}>
-                                    {triviaPick === todayTrivia.a ? '🎉 Helemaal goed!' : '❌ Helaas! Het juiste antwoord was ' + todayTrivia.opts[todayTrivia.a] + '.'}
-                                </span>
+                        {tab === 'trivia' && (
+                            <div className="flex flex-col flex-1 justify-center">
+                                <h4 className="text-lg font-bold text-center text-gray-800 mb-8 px-2 leading-snug">{dailyData?.trivia?.q}</h4>
+                                {renderQuizOptions(dailyData?.trivia, triviaPick, setTriviaPick)}
+                                {triviaPick !== null && (
+                                    <div className="mt-6 text-center animate-fade-in mb-4">
+                                        <span className={`text-[13px] font-black uppercase tracking-wider ${triviaPick === dailyData?.trivia?.a ? 'text-green-600' : 'text-red-500'}`}>
+                                            {triviaPick === dailyData?.trivia?.a ? '🎉 Helemaal goed!' : '❌ Helaas! Het juiste antwoord was ' + dailyData?.trivia?.opts[dailyData?.trivia?.a] + '.'}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         )}
-                    </div>
-                )}
 
-                {tab === 'fact' && (
-                    <div className="flex flex-col h-full items-center justify-center text-center px-4">
-                        <span className="text-5xl mb-6">🤯</span>
-                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Wist je dat...</h4>
-                        <p className="text-base font-bold text-gray-800 leading-relaxed mb-8">
-                            {facts[factIdx]}
-                        </p>
-                        <button onClick={() => setFactIdx((prev) => (prev + 1) % facts.length)} className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-600 text-[10px] uppercase tracking-widest font-black rounded-full transition shadow-sm">
-                            Geef me er nog één! 🎲
-                        </button>
-                    </div>
+                        {tab === 'iq' && (
+                            <div className="flex flex-col flex-1 justify-center">
+                                <h4 className="text-lg font-bold text-center text-gray-800 mb-8 px-2 leading-snug">{dailyData?.iq?.q}</h4>
+                                {renderQuizOptions(dailyData?.iq, iqPick, setIqPick)}
+                                {iqPick !== null && (
+                                    <div className="mt-6 text-center animate-fade-in mb-4">
+                                        <span className={`text-[13px] font-black uppercase tracking-wider ${iqPick === dailyData?.iq?.a ? 'text-green-600' : 'text-red-500'}`}>
+                                            {iqPick === dailyData?.iq?.a ? '🧠 Briljant!' : '❌ Fout! Het antwoord was ' + dailyData?.iq?.opts[dailyData?.iq?.a] + '.'}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {tab === 'feiten' && (
+                            <div className="flex flex-col flex-1 items-center justify-center text-center px-4">
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Wist je dat...</h4>
+                                <p className="text-base font-bold text-gray-800 leading-relaxed mb-8">
+                                    {dailyData?.feit}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Uniforme Genereer knop onderaan de content-laag */}
+                        <div className="mt-auto pt-4 border-t border-gray-100 shrink-0">
+                            <button onClick={() => fetchDailySpark(true)} className="w-full px-6 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-600 text-[10px] uppercase tracking-widest font-black rounded-lg transition shadow-sm">
+                                ↻ Genereer een nieuwe
+                            </button>
+                        </div>
+                    </>
                 )}
             </div>
         </div>
