@@ -1800,18 +1800,14 @@ function SportsWidget({ lang }) {
 function SparkWidget({ lang }) {
     const [tab, setTab] = useState('dagvraag');
     
-    // States voor dagelijkse AI data
+    // States voor data en laden
     const [dailyData, setDailyData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [apiError, setApiError] = useState('');
     
-    // States voor interactie (logboek verwijderd)
+    // States voor interactie (1-klik resultaat)
     const [triviaPick, setTriviaPick] = useState(null);
     const [iqPick, setIqPick] = useState(null);
-    
-    // States voor de nieuwe uitleg-knoppen
-    const [showTriviaExpl, setShowTriviaExpl] = useState(false);
-    const [showIqExpl, setShowIqExpl] = useState(false);
 
     const todayStr = new Date().toLocaleDateString('nl-NL');
 
@@ -1819,9 +1815,8 @@ function SparkWidget({ lang }) {
         setIsLoading(true);
         setApiError('');
         
-        // 1. Check of we vandaag al iets hebben gegenereerd (tenzij we forceren)
         if (!forceNew) {
-            const cached = S.load('spark_daily_ai_v3', null);
+            const cached = S.load('spark_daily_v5', null);
             if (cached && cached.date === todayStr && cached.data) {
                 setDailyData(cached.data);
                 setIsLoading(false);
@@ -1829,7 +1824,6 @@ function SparkWidget({ lang }) {
             }
         }
 
-        // 2. Haal Groq API key op
         const groqKey = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'))?.val;
         if (!groqKey) {
             setApiError('Geen Groq API key.');
@@ -1838,16 +1832,51 @@ function SparkWidget({ lang }) {
             return;
         }
 
-        // 3. Genereer verse data via AI (Nu MET verplichte uitleg)
         try {
-            const prompt = `Je bent een assistent voor een DenkTank dashboard. Genereer in het Nederlands een JSON object met 4 elementen. Verzin elke keer iets compleet nieuws!
-            1. "dagvraag": Een unieke, verrassende of diepgaande reflectievraag om even bij stil te staan. Geen introductie.
-            2. "trivia": Een leuke algemene kennis quizvraag. Geef de vraag "q", een array van 4 opties "opts", de index van het juiste antwoord "a" (0-3), en een fascinerende "uitleg" waarom dit klopt.
-            3. "iq": Een logische of wiskundige puzzel. Kies willekeurig één categorie: (A) kansrekening/statistiek, (B) logisch redeneren, (C) getallenreeksen of algebra. Zorg dat de vraag 100% wiskundig correct is — verifieer dit zelf vóór je het geeft. Geef de vraag "q", een array van 4 opties "opts", de index van het juiste antwoord "a" (0-3), en een stap-voor-stap "uitleg" van de logica. VOORBEELD CATEGORIE A: "In een zak zitten 3 rode en 2 blauwe knikkers. Je pakt er 2. Hoe groot is de kans dat beide rood zijn?" antwoord: 3/10. VOORBEELD CATEGORIE B: "Als alle Bloops Razzies zijn, en alle Razzies Lazzies, zijn dan alle Bloops Lazzies?" antwoord: Ja.
-            4. "feit": Een bizar, fascinerend of grappig weetje dat begint met "Wist je dat...".
-            
-            Geef UITSLUITEND het JSON object terug, zonder markdown of extra tekst.
-            Formaat: {"dagvraag": "...", "trivia": {"q": "...", "opts": ["A","B","C","D"], "a": 0, "uitleg": "..."}, "iq": {"q": "...", "opts": ["A","B","C","D"], "a": 0, "uitleg": "..."}, "feit": "..."}`;
+            // 1. Haal ECHTE wiskunde en trivia uit databases (4000+ vragen)
+            let tQ = "What is the capital of Australia?", tC = "Canberra", tI = ["Sydney", "Melbourne", "Perth"];
+            try {
+                const resT = await fetch('https://the-trivia-api.com/v2/questions?limit=1');
+                const datT = await resT.json();
+                tQ = datT[0].question.text; tC = datT[0].correctAnswer; tI = datT[0].incorrectAnswers;
+            } catch(e) {}
+
+            let iQ = "What is 15% of 120?", iC = "18", iI = ["12", "15", "20"];
+            try {
+                // Category 19 is Mathematics in OpenTDB
+                const resI = await fetch('https://opentdb.com/api.php?amount=1&category=19&type=multiple');
+                const datI = await resI.json();
+                if (datI.results && datI.results.length > 0) {
+                    // OpenTDB gebruikt soms HTML entities, we decoden de ruwe strings
+                    const dec = (str) => { const txt = document.createElement("textarea"); txt.innerHTML = str; return txt.value; };
+                    iQ = dec(datI.results[0].question);
+                    iC = dec(datI.results[0].correct_answer);
+                    iI = datI.results[0].incorrect_answers.map(dec);
+                }
+            } catch(e) {}
+
+            let fText = "Bananas grow pointing upwards towards the sun.";
+            try {
+                const resF = await fetch('https://uselessfacts.jsph.pl/api/v2/facts/random');
+                const datF = await resF.json();
+                fText = datF.text;
+            } catch(e) {}
+
+            // 2. Laat Groq vertalen en formatteren (Verzint NIETS zelf over de sommen)
+            const prompt = `Je bent de strikte vertaler voor een dashboard.
+            TAAK 1: Bedenk een prikkelende, diepgaande persoonlijke reflectievraag (DagVraag).
+            TAAK 2: Vertaal dit feit naar het Nederlands: "${fText}". Begin met "Wist je dat ".
+            TAAK 3: Vertaal deze feitelijke trivia vraag: "${tQ}". Het JUISTE antwoord is "${tC}". De foute zijn "${tI.join(', ')}". Vertaal alles, hussel de 4 opties, geef de index (0-3) van de juiste, en geef 1 zin feitelijke uitleg.
+            TAAK 4: Vertaal deze wiskundige IQ vraag: "${iQ}". Het JUISTE antwoord is "${iC}". De foute zijn "${iI.join(', ')}". Vertaal alles exact, hussel de opties, geef de correcte index (0-3) en geef 1 zin zuivere wiskundige uitleg. VERANDER NIETS AAN DE GETALLEN.
+
+            LET OP: Gebruik NOOIT dubbele aanhalingstekens binnenin je zinnen (gebruik enkele ').
+            Geef UITSLUITEND dit JSON object terug:
+            {
+                "dagvraag": "...",
+                "feit": "...",
+                "trivia": {"q": "...", "opts": ["...","...","...","..."], "a": 0, "uitleg": "..."},
+                "iq": {"q": "...", "opts": ["...","...","...","..."], "a": 0, "uitleg": "..."}
+            }`;
 
             const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
@@ -1855,7 +1884,7 @@ function SparkWidget({ lang }) {
                 body: JSON.stringify({
                     model: 'llama-3.3-70b-versatile',
                     messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.9, 
+                    temperature: 0.2, // Zeer laag om feitelijk te blijven
                     max_tokens: 800
                 })
             });
@@ -1868,7 +1897,7 @@ function SparkWidget({ lang }) {
                     const parsed = JSON.parse(jsonMatch[0]);
                     setDailyData(parsed);
                     if (!forceNew) {
-                        S.save('spark_daily_ai_v3', { date: todayStr, data: parsed });
+                        S.save('spark_daily_v5', { date: todayStr, data: parsed });
                     }
                     setApiError('');
                 } else {
@@ -1878,15 +1907,12 @@ function SparkWidget({ lang }) {
         } catch (e) {
             console.error("DenkTank AI Error:", e);
             if (!dailyData) setDailyData(getFallbackData());
-            setApiError('Offline modus.');
+            setApiError('Fallback modus.');
         }
         
-        // Reset alle interacties
         setIsLoading(false);
         setTriviaPick(null);
         setIqPick(null);
-        setShowTriviaExpl(false);
-        setShowIqExpl(false);
     };
 
     useEffect(() => {
@@ -1894,175 +1920,116 @@ function SparkWidget({ lang }) {
     }, [todayStr]);
 
     const getFallbackData = () => {
-        const dagvragen = [
-            "Als je één moment van de afgelopen week opnieuw zou mogen beleven, welk moment zou dat zijn?",
-            "Wat is iets dat je vroeger moeilijk vond, maar nu makkelijk gaat?",
-            "Als je morgen alles opnieuw kon beginnen, wat zou je anders doen?",
-            "Wat geeft jou de meeste energie op een dag?",
-            "Welke gewoonte wil je dit jaar aanleren of afbreken?"
+        const fallbackQs = [
+            "Welke kleine beslissing heeft ooit een grote impact op je leven gehad?",
+            "Waar ben je de afgelopen week het meest dankbaar voor geweest?",
+            "Als je geld en tijd geen rol speelden, wat zou je dan vandaag doen?"
         ];
-        const trivia = [
-            { q: "Hoeveel harten heeft een octopus?", opts: ["1", "2", "3", "4"], a: 2, uitleg: "Een octopus heeft één hoofd-hart en twee extra harten die bloed langs de kieuwen pompen." },
-            { q: "Welk land heeft de meeste tijdzones?", opts: ["Rusland", "VS", "China", "Frankrijk"], a: 3, uitleg: "Frankrijk heeft 12 tijdzones door al zijn overzeese gebieden wereldwijd." },
-            { q: "Hoeveel botten heeft een menselijk lichaam bij geboorte?", opts: ["206", "270", "300", "350"], a: 1, uitleg: "Baby's worden geboren met ~270 botten. Veel ervan groeien samen tot de volwassen 206 botten." }
-        ];
-        const iqVragen = [
-            { q: "Welk getal volgt: 2, 6, 12, 20, 30, ...?", opts: ["38", "40", "42", "44"], a: 2, uitleg: "Verschil groeit steeds met 2: +4, +6, +8, +10, +12. Dus 30 + 12 = 42." },
-            { q: "In een zak: 3 rode en 2 blauwe knikkers. Je pakt er 2. Kans dat beide rood zijn?", opts: ["1/5", "3/10", "1/3", "2/5"], a: 1, uitleg: "P = (3/5) × (2/4) = 6/20 = 3/10. Er zijn 3 rode knikkers van de 5, dan 2 van de 4." },
-            { q: "Als alle A's B's zijn en alle B's C's, zijn dan alle A's C's?", opts: ["Ja", "Nee", "Soms", "Onmogelijk te zeggen"], a: 0, uitleg: "Transitieve logica: A→B en B→C, dus A→C. Alle A's zijn inderdaad C's." },
-            { q: "Een boer heeft 17 schapen. Alle behalve 9 sterven. Hoeveel zijn er over?", opts: ["8", "9", "17", "0"], a: 1, uitleg: "De truc zit in 'alle behalve 9': er blijven dus precies 9 schapen over." },
-            { q: "Welk getal hoort hier: 1, 1, 2, 3, 5, 8, ...?", opts: ["11", "12", "13", "14"], a: 2, uitleg: "Fibonacci: elk getal is de som van de twee ervoor. 5+8=13." },
-            { q: "Je gooit 2 dobbelstenen. Kans op een totaal van 7?", opts: ["1/6", "5/36", "1/9", "7/36"], a: 0, uitleg: "Er zijn 6 combinaties die 7 geven (1+6, 2+5, 3+4, enz.) van de 36 mogelijk. 6/36 = 1/6." },
-            { q: "Als 5 machines 5 widgets maken in 5 minuten, hoelang doen 100 machines over 100 widgets?", opts: ["100 min", "5 min", "20 min", "1 min"], a: 1, uitleg: "Elke machine maakt 1 widget per 5 minuten. 100 machines = 100 widgets in 5 minuten." },
-            { q: "Welk getal mist: 4, 9, 16, 25, ?, 49", opts: ["30", "35", "36", "40"], a: 2, uitleg: "Dit zijn kwadraten: 2², 3², 4², 5², 6², 7². Het missende getal is 6² = 36." },
-            { q: "Een ladder heeft 10 sporten. Je staat op sport 5. Je gaat 3 omhoog, dan 4 omlaag. Waar sta je?", opts: ["Sport 3", "Sport 4", "Sport 5", "Sport 6"], a: 1, uitleg: "5 + 3 = 8, dan 8 - 4 = 4. Je staat op sport 4." },
-            { q: "Hoeveel seconden heeft een dag?", opts: ["84.600", "86.400", "88.000", "90.000"], a: 1, uitleg: "24 uur × 60 min × 60 sec = 86.400 seconden per dag." }
-        ];
-        const feiten = [
-            "Wist je dat octopussen drie harten hebben en dat hun bloed blauw is?",
-            "Wist je dat een groep flamingo's een 'flamboyance' heet?",
-            "Wist je dat bananen licht radioactief zijn door kalium-40?",
-            "Wist je dat honing nooit bederft? Archeoloog vonden 3000 jaar oude eetbare honing.",
-            "Wist je dat een dag op Venus langer duurt dan een jaar op Venus?"
-        ];
-        const d = new Date().getDate();
         return {
-            dagvraag: dagvragen[d % dagvragen.length],
-            trivia: trivia[d % trivia.length],
-            iq: iqVragen[d % iqVragen.length],
-            feit: feiten[d % feiten.length]
+            dagvraag: fallbackQs[new Date().getDay() % 3],
+            trivia: { q: "Wat is de hoofdstad van Australië?", opts: ["Sydney", "Melbourne", "Canberra", "Brisbane"], a: 2, uitleg: "Canberra is in 1913 speciaal gebouwd als compromis tussen rivalen Sydney en Melbourne." },
+            iq: { q: "Welk getal volgt in deze reeks: 2, 6, 12, 20, 30, ...?", opts: ["38", "40", "42", "44"], a: 2, uitleg: "De toename stijgt steeds met 2 (+4, +6, +8, +10). De volgende stap is dus 30 + 12 = 42." },
+            feit: "Wist je dat octopussen drie harten hebben en dat hun bloed blauw is in plaats van rood?"
         };
     };
 
-    const renderQuizOptions = (quizData, pickState, setPickState) => (
-        <div className="grid grid-cols-1 gap-2.5 w-full">
-            {quizData?.opts.map((opt, i) => {
-                let btnClass = "bg-white border border-gray-200 text-gray-700 hover:border-purple-400 hover:bg-purple-50";
-                if (pickState !== null) {
-                    if (i === quizData.a) btnClass = "bg-green-50 border border-green-500 text-green-800 font-bold shadow-sm";
-                    else if (i === pickState) btnClass = "bg-red-50 border border-red-400 text-red-800";
-                    else btnClass = "bg-gray-50 border border-gray-100 text-gray-400 opacity-50";
-                }
-                return (
-                    <button 
-                        key={i} 
-                        onClick={() => setPickState(i)}
-                        disabled={pickState !== null}
-                        className={`p-3.5 rounded-lg text-sm transition-all duration-300 text-left ${btnClass}`}
-                    >
-                        <span className="font-mono font-bold opacity-50 mr-2">{['A','B','C','D'][i]}</span> {opt}
-                    </button>
-                );
-            })}
+    const renderQuiz = (quizData, pickState, setPickState) => (
+        <div className="flex flex-col w-full">
+            <h4 className="text-[13px] md:text-sm font-bold text-center text-gray-800 mb-6 leading-snug">{quizData?.q}</h4>
+            
+            {/* 2x2 Raster voor Antwoorden (Anti-Scroll) */}
+            <div className="grid grid-cols-2 gap-2 w-full">
+                {quizData?.opts.map((opt, i) => {
+                    let btnClass = "bg-white border border-gray-200 text-gray-700 hover:border-[#0073b1] hover:bg-blue-50";
+                    if (pickState !== null) {
+                        if (i === quizData.a) btnClass = "bg-green-50 border border-green-400 text-green-800 font-bold shadow-sm";
+                        else if (i === pickState) btnClass = "bg-red-50 border border-red-300 text-red-800";
+                        else btnClass = "bg-gray-50 border border-gray-100 text-gray-400 opacity-50";
+                    }
+                    return (
+                        <button 
+                            key={i} 
+                            onClick={() => setPickState(i)}
+                            disabled={pickState !== null}
+                            className={`px-3 py-2.5 rounded text-[11px] md:text-xs transition-all duration-200 text-center ${btnClass}`}
+                        >
+                            {opt}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Directe Uitleg Box (1-klik) */}
+            {pickState !== null && (
+                <div className={`mt-4 p-3 rounded border text-xs leading-relaxed animate-fade-in ${pickState === quizData.a ? 'bg-green-50/50 border-green-100 text-green-900' : 'bg-red-50/50 border-red-100 text-red-900'}`}>
+                    <span className={`font-black uppercase tracking-wider block mb-1 ${pickState === quizData.a ? 'text-green-600' : 'text-red-600'}`}>
+                        {pickState === quizData.a ? '🎉 Correct!' : '❌ Fout!'}
+                    </span>
+                    <span className="text-gray-700">{quizData.uitleg}</span>
+                </div>
+            )}
         </div>
     );
 
     return (
         <div className="widget h-[450px] flex flex-col bg-white">
-            {/* Titelbalk met Genereer-knop rechtsboven */}
-            <div className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-2 text-purple-700 font-black tracking-widest text-[11px] uppercase">
-                    💡 DENKTANK
+            <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-2 text-gray-600 font-black tracking-widest text-[11px] uppercase">
+                    <span className="text-lg leading-none grayscale opacity-80">💡</span> DENKTANK
                 </div>
                 <div className="flex items-center gap-2">
-                    {apiError && <span className="text-[8px] text-red-500 font-bold bg-white px-2 py-0.5 rounded shadow-sm hidden sm:inline-block">{apiError}</span>}
+                    {apiError && <span className="text-[8px] text-red-500 font-bold bg-white px-2 py-0.5 rounded border border-red-100 hidden sm:inline-block">{apiError}</span>}
                     <button 
                         onClick={() => fetchDailySpark(true)} 
                         disabled={isLoading}
-                        className="px-2.5 py-1.5 bg-white border border-purple-200 text-purple-600 hover:bg-purple-600 hover:text-white text-[9px] font-bold uppercase rounded transition shadow-sm flex items-center gap-1 disabled:opacity-50"
-                        title="Verzin direct iets nieuws"
+                        className="px-2.5 py-1.5 bg-white border border-gray-200 text-[#0073b1] hover:bg-[#0073b1] hover:text-white hover:border-[#0073b1] text-[9px] font-bold uppercase rounded transition shadow-sm flex items-center gap-1 disabled:opacity-50"
+                        title="Genereer direct een nieuwe set"
                     >
                         <span className={isLoading ? "animate-spin inline-block" : ""}>↻</span> Nieuw
                     </button>
                 </div>
             </div>
             
-            <div className="flex border-b bg-white shrink-0">
-                <button onClick={() => setTab('dagvraag')} className={`tab-btn ${tab === 'dagvraag' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>DagVraag</button>
-                <button onClick={() => setTab('trivia')} className={`tab-btn ${tab === 'trivia' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>Trivia</button>
-                <button onClick={() => setTab('iq')} className={`tab-btn ${tab === 'iq' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>IQ</button>
-                <button onClick={() => setTab('feiten')} className={`tab-btn ${tab === 'feiten' ? 'active !text-purple-600 !border-purple-600 bg-purple-50/50' : ''}`}>Feiten</button>
+            <div className="flex border-b border-gray-200 bg-white shrink-0">
+                <button onClick={() => setTab('dagvraag')} className={`tab-btn ${tab === 'dagvraag' ? 'active' : ''}`}>DagVraag</button>
+                <button onClick={() => setTab('trivia')} className={`tab-btn ${tab === 'trivia' ? 'active' : ''}`}>Trivia</button>
+                <button onClick={() => setTab('iq')} className={`tab-btn ${tab === 'iq' ? 'active' : ''}`}>IQ</button>
+                <button onClick={() => setTab('feiten')} className={`tab-btn ${tab === 'feiten' ? 'active' : ''}`}>Feiten</button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 bg-white hide-scroll relative flex flex-col">
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-full space-y-4 my-auto">
-                        <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-                        <span className="text-xs font-bold text-purple-600 animate-pulse">Nieuwe content genereren...</span>
+                        <div className="w-8 h-8 border-4 border-gray-100 border-t-[#0073b1] rounded-full animate-spin"></div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Data ophalen...</span>
                     </div>
                 ) : (
                     <>
-                        {/* Tab: DagVraag (Puur reflectie, geen logboek) */}
                         {tab === 'dagvraag' && (
                             <div className="flex flex-col flex-1 items-center justify-center text-center px-2">
-                                <span className="text-5xl mb-6 opacity-80">🪞</span>
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Vraag van de Dag</h4>
-                                <p className="text-xl font-bold text-purple-800 leading-relaxed mb-8">
+                                <h4 className="text-[10px] font-black text-[#0073b1] uppercase tracking-widest mb-6">Reflectie</h4>
+                                <p className="text-lg md:text-xl font-bold text-gray-800 leading-snug">
                                     "{dailyData?.dagvraag}"
                                 </p>
                             </div>
                         )}
 
-                        {/* Tab: Trivia met uitleg-knop */}
                         {tab === 'trivia' && (
                             <div className="flex flex-col flex-1 justify-center items-center w-full max-w-md mx-auto">
-                                <h4 className="text-lg font-bold text-center text-gray-800 mb-8 px-2 leading-snug">{dailyData?.trivia?.q}</h4>
-                                {renderQuizOptions(dailyData?.trivia, triviaPick, setTriviaPick)}
-                                
-                                {triviaPick !== null && (
-                                    <div className="mt-6 text-center w-full animate-fade-in mb-4">
-                                        <div className={`text-[13px] font-black uppercase tracking-wider mb-3 ${triviaPick === dailyData?.trivia?.a ? 'text-green-600' : 'text-red-500'}`}>
-                                            {triviaPick === dailyData?.trivia?.a ? '🎉 Helemaal goed!' : '❌ Helaas! Het juiste antwoord was ' + dailyData?.trivia?.opts[dailyData?.trivia?.a] + '.'}
-                                        </div>
-                                        
-                                        {!showTriviaExpl ? (
-                                            <button onClick={() => setShowTriviaExpl(true)} className="px-4 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition shadow-sm">
-                                                💡 Bekijk uitleg
-                                            </button>
-                                        ) : (
-                                            <div className="p-3.5 bg-purple-50 border border-purple-100 rounded-lg text-xs text-purple-900 text-left shadow-inner leading-relaxed">
-                                                <span className="font-bold uppercase text-[9px] text-purple-500 block mb-1">UITLEG</span>
-                                                {dailyData?.trivia?.uitleg}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                {renderQuiz(dailyData?.trivia, triviaPick, setTriviaPick)}
                             </div>
                         )}
 
-                        {/* Tab: IQ met uitleg-knop */}
                         {tab === 'iq' && (
                             <div className="flex flex-col flex-1 justify-center items-center w-full max-w-md mx-auto">
-                                <h4 className="text-lg font-bold text-center text-gray-800 mb-8 px-2 leading-snug">{dailyData?.iq?.q}</h4>
-                                {renderQuizOptions(dailyData?.iq, iqPick, setIqPick)}
-                                
-                                {iqPick !== null && (
-                                    <div className="mt-6 text-center w-full animate-fade-in mb-4">
-                                        <div className={`text-[13px] font-black uppercase tracking-wider mb-3 ${iqPick === dailyData?.iq?.a ? 'text-green-600' : 'text-red-500'}`}>
-                                            {iqPick === dailyData?.iq?.a ? '🧠 Briljant!' : '❌ Fout! Het antwoord was ' + dailyData?.iq?.opts[dailyData?.iq?.a] + '.'}
-                                        </div>
-
-                                        {!showIqExpl ? (
-                                            <button onClick={() => setShowIqExpl(true)} className="px-4 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition shadow-sm">
-                                                💡 Bekijk logica
-                                            </button>
-                                        ) : (
-                                            <div className="p-3.5 bg-purple-50 border border-purple-100 rounded-lg text-xs text-purple-900 text-left shadow-inner leading-relaxed">
-                                                <span className="font-bold uppercase text-[9px] text-purple-500 block mb-1">LOGICA</span>
-                                                {dailyData?.iq?.uitleg}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                {renderQuiz(dailyData?.iq, iqPick, setIqPick)}
                             </div>
                         )}
 
-                        {/* Tab: Feiten */}
                         {tab === 'feiten' && (
                             <div className="flex flex-col flex-1 items-center justify-center text-center px-4">
-                                <span className="text-5xl mb-6">🤯</span>
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Wist je dat...</h4>
-                                <p className="text-base font-bold text-gray-800 leading-relaxed mb-8">
+                                <h4 className="text-[10px] font-black text-[#0073b1] uppercase tracking-widest mb-6">Wist je dat?</h4>
+                                <p className="text-sm md:text-base font-bold text-gray-800 leading-relaxed">
                                     {dailyData?.feit}
                                 </p>
                             </div>
