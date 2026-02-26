@@ -1307,11 +1307,21 @@ function NewsWidget({ lang }) {
                 let iA = priority.findIndex(p => (a.source||'').toLowerCase().includes(p)); if (iA===-1) iA=9999;
                 let iB = priority.findIndex(p => (b.source||'').toLowerCase().includes(p)); if (iB===-1) iB=9999;
                 if (iA !== iB) return iA - iB;
+                // NIEUW: Als ze niet in favorieten staan, sorteer secondair op alfabet (A-Z)
+                const srcA = (a.source || '').toLowerCase();
+                const srcB = (b.source || '').toLowerCase();
+                if (srcA < srcB) return -1;
+                if (srcA > srcB) return 1;
             }
             if (effectiveSort === 'onderwerp') {
                 let iA = cols.findIndex(c => c.toLowerCase() === (a.cat||'').toLowerCase()); if (iA===-1) iA=9999;
                 let iB = cols.findIndex(c => c.toLowerCase() === (b.cat||'').toLowerCase()); if (iB===-1) iB=9999;
                 if (iA !== iB) return iA - iB;
+                // NIEUW: Sorteer secondair alfabetisch op categorie (A-Z)
+                const catA = (a.cat || '').toLowerCase();
+                const catB = (b.cat || '').toLowerCase();
+                if (catA < catB) return -1;
+                if (catA > catB) return 1;
             }
             return tB - tA;
         });
