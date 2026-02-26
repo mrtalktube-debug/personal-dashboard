@@ -991,7 +991,7 @@ function AgendaWidget({ lang }) {
 }
     
 function NewsWidget({ lang }) {
-    const defaultCols = ['AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
+    const defaultCols = ['🌍 WERELD', 'AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
     const [cols, setCols] = useState(() => S.load('newscats', defaultCols));
     const [manage, setManage] = useState(false);
     const [allArticles, setAllArticles] = useState([]);
@@ -1264,42 +1264,96 @@ function NewsWidget({ lang }) {
             {manage && (
                 <div className="p-4 bg-gray-50 border-b border-gray-200 space-y-3 shrink-0 max-h-[200px] overflow-y-auto">
                     <div>
-                        <div className="text-[9px] font-black uppercase text-gray-500 mb-1">Categorieën (sleep om te ordenen)</div>
-                        <div className="flex flex-wrap gap-1.5">
-                            {cols.map(c => (
-                                <span key={c} className="px-2 py-1 bg-blue-50 text-blue-700 text-[9px] font-bold rounded border border-blue-200 flex items-center gap-1">
-                                    {c} <button onClick={()=>removeCol(c)} className="text-red-400 hover:text-red-600">×</button>
-                                </span>
-                            ))}
-                        </div>
+    <div className="text-[9px] font-black uppercase text-gray-500 mb-1.5">Categorieën 📌 Sleep om prioriteit te bepalen (Links = Hoogste)</div>
+    <div className="flex flex-wrap gap-1.5">
+        {cols.map((c, idx) => (
+            <span 
+                key={c} 
+                draggable 
+                onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('catIndex', idx); }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    const fromIdx = parseInt(e.dataTransfer.getData('catIndex'));
+                    if (fromIdx === idx) return;
+                    const newCols = [...cols];
+                    const [moved] = newCols.splice(fromIdx, 1);
+                    newCols.splice(idx, 0, moved);
+                    setCols(newCols); S.save('newscats', newCols); syncSettings();
+                }}
+                className="px-2.5 py-1.5 bg-blue-50 text-blue-700 text-[9px] font-bold rounded border-2 border-blue-200 flex items-center gap-1.5 cursor-move hover:border-blue-400 hover:shadow-sm transition-all"
+                style={{ borderLeftWidth: idx === 0 ? '4px' : '2px', borderLeftColor: idx === 0 ? '#0073b1' : undefined }}
+            >
+                <span className="opacity-40">☰</span> {c} 
+                <button onClick={(e) => { e.stopPropagation(); removeCol(c); }} className="text-red-400 hover:text-red-600 ml-1">×</button>
+            </span>
+        ))}
+    </div>
                         <div className="flex gap-1 mt-1.5">
                             <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addCol()} placeholder="+ Categorie" className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
                             <button onClick={addCol} className="px-2 py-1 bg-blue-500 text-white text-[9px] font-bold rounded">+</button>
                         </div>
                     </div>
                     <div>
-                        <div className="text-[9px] font-black uppercase text-gray-500 mb-1">Geblokkeerde woorden</div>
-                        <div className="flex flex-wrap gap-1.5">
-                            {blocked.map(b => (
-                                <span key={b} className="px-2 py-1 bg-red-50 text-red-600 text-[9px] font-bold rounded border border-red-200 flex items-center gap-1">
-                                    {b} <button onClick={()=>removeBlock(b)} className="hover:text-red-800">×</button>
-                                </span>
-                            ))}
-                        </div>
+    <div className="text-[9px] font-black uppercase text-gray-500 mb-1.5">🚫 Geblokkeerde woorden - Sleep om te sorteren</div>
+    <div className="flex flex-wrap gap-1.5">
+        {blocked.map((b, idx) => (
+            <span 
+                key={b}
+                draggable
+                onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('blockIndex', idx); }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    const fromIdx = parseInt(e.dataTransfer.getData('blockIndex'));
+                    if (fromIdx === idx) return;
+                    const newBlock = [...blocked];
+                    const [moved] = newBlock.splice(fromIdx, 1);
+                    newBlock.splice(idx, 0, moved);
+                    setBlocked(newBlock); S.save('news_blocked', newBlock); syncSettings();
+                }}
+                className="px-2.5 py-1.5 bg-red-50 text-red-600 text-[9px] font-bold rounded border-2 border-red-200 flex items-center gap-1.5 cursor-move hover:border-red-400 hover:shadow-sm transition-all"
+            >
+                <span className="opacity-40">☰</span> {b} 
+                <button onClick={(e) => { e.stopPropagation(); removeBlock(b); }} className="hover:text-red-800 ml-1">×</button>
+            </span>
+        ))}
+    </div>
                         <div className="flex gap-1 mt-1.5">
                             <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addBlock()} placeholder="+ Blokkeer woord" className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
                             <button onClick={addBlock} className="px-2 py-1 bg-red-500 text-white text-[9px] font-bold rounded">+</button>
                         </div>
                     </div>
                     <div>
-                        <div className="text-[9px] font-black uppercase text-gray-500 mb-1">⭐ Prioriteit bronnen</div>
-                        <div className="flex flex-wrap gap-1.5">
-                            {priority.map(p => (
-                                <span key={p} className="px-2 py-1 bg-green-50 text-green-700 text-[9px] font-bold rounded border border-green-200 flex items-center gap-1">
-                                    ⭐ {p} <button onClick={()=>removePriority(p)} className="hover:text-red-600">×</button>
-                                </span>
-                            ))}
-                        </div>
+    <div className="text-[9px] font-black uppercase text-gray-500 mb-1.5">⭐ Prioriteit bronnen - Sleep om ranking te bepalen (Links = Hoogste)</div>
+    <div className="flex flex-wrap gap-1.5">
+        {priority.map((p, idx) => (
+            <span 
+                key={p}
+                draggable
+                onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('prioIndex', idx); }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    const fromIdx = parseInt(e.dataTransfer.getData('prioIndex'));
+                    if (fromIdx === idx) return;
+                    const newPrio = [...priority];
+                    const [moved] = newPrio.splice(fromIdx, 1);
+                    newPrio.splice(idx, 0, moved);
+                    setPriority(newPrio); S.save('news_priority', newPrio); syncSettings();
+                }}
+                className="px-2.5 py-1.5 bg-green-50 text-green-700 text-[9px] font-bold rounded border-2 border-green-200 flex items-center gap-1.5 cursor-move hover:border-green-400 hover:shadow-sm transition-all"
+                style={{ 
+                    borderLeftWidth: idx === 0 ? '4px' : '2px', 
+                    borderLeftColor: idx === 0 ? '#16a34a' : undefined,
+                    opacity: 1 - (idx * 0.1) // Visuele afname van prioriteit
+                }}
+            >
+                <span className="opacity-40">☰</span> #{idx + 1} {p} 
+                <button onClick={(e) => { e.stopPropagation(); removePriority(p); }} className="hover:text-red-600 ml-1">×</button>
+            </span>
+        ))}
+    </div>
                         <div className="flex gap-1 mt-1.5">
                             <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addPriority()} placeholder="+ Prioriteit bron" className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
                             <button onClick={addPriority} className="px-2 py-1 bg-green-500 text-white text-[9px] font-bold rounded">+</button>
@@ -1345,16 +1399,31 @@ function NewsWidget({ lang }) {
                                 </div>
                                 {a.img && (
                                     <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
-                                        <img src={a.img} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" loading="lazy"
-                                            onError={(e) => {
-                                                const el = e.target;
-                                                if (!el.dataset.retried) {
-                                                    el.dataset.retried = '1';
-                                                    try { el.src = 'https://www.google.com/s2/favicons?domain=' + new URL(a.link).hostname.replace('www.','') + '&sz=64'; }
-                                                    catch(err) { el.parentElement.style.display='none'; }
-                                                } else { el.parentElement.style.display='none'; }
-                                            }}
-                                        />
+                                        <img src={a.img} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" loading="lazy"
+    onError={(e) => {
+        const el = e.target;
+        const retryCount = parseInt(el.dataset.retry || '0');
+        
+        if (retryCount === 0) {
+            // Eerste retry: probeer via imgproxy
+            el.dataset.retry = '1';
+            el.src = `https://images.weserv.nl/?url=${encodeURIComponent(a.img)}&w=200&h=200&fit=cover`;
+        } else if (retryCount === 1) {
+            // Tweede retry: favicon als fallback
+            el.dataset.retry = '2';
+            try { 
+                const domain = new URL(a.link).hostname.replace('www.','');
+                el.src = `https://logo.clearbit.com/${domain}?size=80`;
+            } catch(err) { 
+                el.dataset.retry = '3';
+                el.src = 'https://www.google.com/s2/favicons?sz=128'; 
+            }
+        } else {
+            // Laatste fallback: verberg afbeelding
+            el.parentElement.classList.add('hidden');
+        }
+    }}
+/>
                                     </div>
                                 )}
                             </a>
