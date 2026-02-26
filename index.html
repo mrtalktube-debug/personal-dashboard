@@ -991,16 +991,8 @@ function AgendaWidget({ lang }) {
 }
     
 function NewsWidget({ lang }) {
-    const defaultCols = ['🌍 WERELD', 'AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
-    const [cols, setCols] = useState(() => {
-        const saved = S.load('newscats', defaultCols);
-        if (!saved.some(c => c.includes('WERELD') || c.includes('WORLD'))) {
-            const updated = ['🌍 WERELD', ...saved];
-            S.save('newscats', updated);
-            return updated;
-        }
-        return saved;
-    });
+    const defaultCols = ['AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
+    const [cols, setCols] = useState(() => S.load('newscats', defaultCols));
     const [manage, setManage] = useState(false);
     const [allArticles, setAllArticles] = useState([]);
     const [feedReady, setFeedReady] = useState(false);
@@ -1014,6 +1006,10 @@ function NewsWidget({ lang }) {
     const [blocked, setBlocked] = useState(() => S.load('news_blocked', []));
     const [priority, setPriority] = useState(() => S.load('news_priority', []));
     const [sortMode, setSortMode] = useState(() => S.load('news_sort', 'tijd'));
+    
+    // Nieuwe FeedMode: 'alles' (Algemeen + Voor jou) of 'voorjou' (Alleen eigen)
+    const [feedMode, setFeedMode] = useState(() => S.load('news_feedmode', 'alles'));
+
     const [newCol, setNewCol] = useState('');
     const [newBlock, setNewBlock] = useState('');
     const [newPriority, setNewPriority] = useState('');
@@ -1033,6 +1029,10 @@ function NewsWidget({ lang }) {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 8000);
         
+        const gUrl = query === 'ALGEMEEN' 
+            ? `https://news.google.com/rss?hl=${hlParam}&gl=${glParam}`
+            : `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hlParam}&gl=${glParam}`;
+
         try {
             const apiUrl = '/api/news?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
             const r = await fetch(apiUrl, { signal: ctrl.signal });
@@ -1043,7 +1043,6 @@ function NewsWidget({ lang }) {
             throw new Error('API failed');
         } catch(e) {
             try {
-                const gUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
                 const proxy1 = 'https://corsproxy.io/?' + encodeURIComponent(gUrl);
                 const r2 = await fetch(proxy1, { signal: ctrl.signal });
                 if (r2.ok) {
@@ -1053,7 +1052,6 @@ function NewsWidget({ lang }) {
                 throw new Error('Proxy 1 failed');
             } catch(e2) {
                 try {
-                    const gUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=' + hlParam + '&gl=' + glParam;
                     const proxy2 = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(gUrl);
                     const r3 = await fetch(proxy2, { signal: ctrl.signal });
                     if (r3.ok) {
@@ -1135,7 +1133,7 @@ function NewsWidget({ lang }) {
 
     useEffect(() => {
         let alive = true;
-        const cached = sessionStorage.getItem('nws_cache_v9');
+        const cached = sessionStorage.getItem('nws_cache_v12');
         if (cached) {
             try {
                 const { t, d } = JSON.parse(cached);
@@ -1148,7 +1146,9 @@ function NewsWidget({ lang }) {
         let merged = [];
 
         const loadCats = async () => {
-            for (const cat of cols) {
+            // ALTIJD Algemeen nieuws + persoonlijke categorieën inladen
+            const fetchList = ['ALGEMEEN', ...cols];
+            for (const cat of fetchList) {
                 if (!alive) return;
                 const h = lang === 'nl' ? 'nl' : 'en-US';
                 const g = lang === 'nl' ? 'NL' : 'US';
@@ -1164,7 +1164,7 @@ function NewsWidget({ lang }) {
                 });
                 
                 setAllArticles([...merged]);
-                sessionStorage.setItem('nws_cache_v9', JSON.stringify({ t: Date.now(), d: merged }));
+                sessionStorage.setItem('nws_cache_v12', JSON.stringify({ t: Date.now(), d: merged }));
             }
             if (alive) setFeedReady(true);
         };
@@ -1205,7 +1205,12 @@ function NewsWidget({ lang }) {
     const filterSort = (items) => {
         let f = items.filter(a => {
             const txt = (a.title + ' ' + a.source + ' ' + a.desc).toLowerCase();
-            return !blocked.some(b => txt.includes(b));
+            if (blocked.some(b => txt.includes(b))) return false;
+            
+            // Toon of verberg Algemeen nieuws afhankelijk van de toggle
+            if (!isSearchActive && feedMode === 'voorjou' && a.cat === 'ALGEMEEN') return false;
+
+            return true;
         });
 
         f.sort((a, b) => {
@@ -1273,13 +1278,19 @@ function NewsWidget({ lang }) {
                 </div>
             </div>
 
-            <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-100 flex justify-between items-center text-[9px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
-                {isSearchActive ? (
-                    <span className="text-amber-500">🔍 Zoekresultaten: "{search}" {isSearching && <span className="animate-pulse ml-1">laden...</span>}</span>
+            <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-2 justify-between items-center shrink-0">
+                {!isSearchActive ? (
+                    <div className="flex gap-1 bg-white p-0.5 rounded-md border border-gray-200 shadow-sm">
+                        <button onClick={() => { setFeedMode('alles'); S.save('news_feedmode', 'alles'); syncSettings(); }} className={`px-3 py-1 text-[9px] font-bold rounded transition ${feedMode === 'alles' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}>Algemeen</button>
+                        <button onClick={() => { setFeedMode('voorjou'); S.save('news_feedmode', 'voorjou'); syncSettings(); }} className={`px-3 py-1 text-[9px] font-bold rounded transition ${feedMode === 'voorjou' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}>Voor Jou</button>
+                    </div>
                 ) : (
-                    <span>Feed — {allArticles.length} artikelen {!feedReady && <span className="text-blue-500 animate-pulse ml-1">laden...</span>}</span>
+                    <span className="text-amber-500 text-[9px] font-bold uppercase tracking-wider">🔍 Zoekresultaten: "{search}" {isSearching && <span className="animate-pulse ml-1">laden...</span>}</span>
                 )}
-                <span className="text-blue-500">{displayItems.length} / {totalFiltered} getoond</span>
+                <div className="flex items-center gap-4 text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                    {!isSearchActive && <span>{!feedReady && <span className="text-blue-500 animate-pulse mr-2">laden...</span>}</span>}
+                    <span className="text-blue-500">{displayItems.length} / {totalFiltered} getoond</span>
+                </div>
             </div>
 
             {manage && (
@@ -1385,14 +1396,14 @@ function NewsWidget({ lang }) {
 
             <div className="flex-1 overflow-y-auto hide-scroll">
                 {displayItems.length === 0 ? (
-                    <div className="flex items-center justify-center h-full">
+                    <div className="flex flex-col items-center justify-center h-full py-10">
                         {(isSearching || (!feedReady && !isSearchActive)) ? (
                             <div className="text-xs font-bold text-blue-500 animate-pulse">
-                                {isSearchActive ? `Zoeken naar "${search}"...` : 'Nieuws ophalen...'}
+                                {isSearchActive ? `Zoeken naar "${search}"...` : 'Nieuws synchroniseren...'}
                             </div>
                         ) : (
                             <div className="text-xs font-bold text-gray-400">
-                                {isSearchActive && searchDone ? `Geen resultaten voor "${search}"` : 'Geen artikelen gevonden'}
+                                {isSearchActive && searchDone ? `Geen resultaten voor "${search}"` : 'Geen artikelen gevonden.'}
                             </div>
                         )}
                     </div>
@@ -1411,7 +1422,9 @@ function NewsWidget({ lang }) {
                                         </div>
                                         <div className="flex justify-between items-center mt-2.5 flex-wrap gap-1.5">
                                             <div className="flex items-center gap-1.5">
-                                                <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase">{a.cat}</span>
+                                                <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase">
+                                                    {a.cat === 'ALGEMEEN' ? 'TOPNIEUWS' : a.cat}
+                                                </span>
                                                 <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-0.5" style={{color: srcColor(a.source)}}>
                                                     {isPri && '⭐'}{a.source}
                                                 </span>
@@ -1420,7 +1433,7 @@ function NewsWidget({ lang }) {
                                         </div>
                                     </div>
                                     {a.img && (
-                                        <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+                                        <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden shadow-sm flex items-center justify-center">
                                             <img src={a.img} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" loading="lazy"
                                                 onError={(e) => {
                                                     const el = e.target;
