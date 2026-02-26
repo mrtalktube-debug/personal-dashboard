@@ -825,6 +825,43 @@ function CryptoWidget({ lang }) {
     );
 }
 
+/* v4.3 NIEUW: Error Boundary – vangt crashes op in production React */
+class WidgetErrorBoundary extends React.Component {
+    constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+    static getDerivedStateFromError(error) { return { hasError: true, error }; }
+    componentDidCatch(err, info) { console.error(`[${this.props.name}] Widget crash:`, err, info); }
+    render() {
+        if (this.state.hasError) return (
+            <div className="widget p-4">
+                <div className="bg-red-50 border border-red-200 rounded p-3 text-center">
+                    <p className="text-red-600 font-bold text-xs mb-1">⚠️ {this.props.name} – Fout</p>
+                    <p className="text-red-500 text-[10px] mb-2">{this.state.error?.message || 'Onbekende fout'}</p>
+                    <button onClick={() => this.setState({ hasError: false, error: null })} className="bg-red-600 text-white px-3 py-1 rounded text-[10px] font-bold hover:bg-red-700">Opnieuw proberen</button>
+                </div>
+            </div>
+        );
+        return this.props.children;
+    }
+}
+
+/* v4.3 NIEUW: fetchWithRetry – 1x retry na 2s bij 502/503 (Vercel cold start) */
+async function fetchWithRetry(url, options, retries = 1) {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const res = await fetch(url, options);
+            if (res.ok || i === retries) return res;
+            if (res.status === 502 || res.status === 503) {
+                await new Promise(r => setTimeout(r, 2000));
+                continue;
+            }
+            return res;
+        } catch (e) {
+            if (i === retries) throw e;
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+}
+
 function AgendaWidget({ lang }) {
     const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
     const cals = (Array.isArray(rawCals)?rawCals:[]).map(c=>c?.name).filter(Boolean);
@@ -844,13 +881,23 @@ function AgendaWidget({ lang }) {
     useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => (c||'').toLowerCase().includes((e.detail.payload||'').toLowerCase())); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
     useEffect(() => { setF(cals); }, [JSON.stringify(cals)]);
 
+    /* v4.3: Parallel laden (Promise.all) + sessionStorage cache (15 min) + retry bij 502 */
     useEffect(() => {
         const fetchCals = async () => {
             setLoading(true);
-            let allEvs = [];
+            const cacheKey = 'agenda_cache_v3';
+            const sig = JSON.stringify(rawCals);
+            const cached = sessionStorage.getItem(cacheKey);
+            if (cached) {
+                try {
+                    const { t, d: cachedEvs, s } = JSON.parse(cached);
+                    if (Date.now() - t < 900000 && s === sig) { setItems(cachedEvs); setLoading(false); return; }
+                } catch(e) {}
+            }
+
             const parseICalDate = (line) => {
                 const parts = (line||'').split(':'); if (parts.length < 2) return null;
-                const params = parts[0]; const val = parts[parts.length - 1].trim();
+                const val = parts[parts.length - 1].trim();
                 const isUTC = val.endsWith('Z'); const m = val.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?Z?)?/);
                 if (!m) return null;
                 const year = parseInt(m[1]); const month = parseInt(m[2]) - 1; const day = parseInt(m[3]);
@@ -860,10 +907,12 @@ function AgendaWidget({ lang }) {
                 return { date: getLocalYYYYMMDD(dateObj), time: isAllDay ? 'Hele dag' : dateObj.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }), dateObj, isAllDay };
             };
 
-            for (let c of (Array.isArray(rawCals)?rawCals:[])) {
-                if (!c?.val) continue;
+            /* v4.3: Promise.all – alle kalenders tegelijk ophalen i.p.v. sequentieel */
+            const fetchPromises = (Array.isArray(rawCals) ? rawCals : []).map(async (c) => {
+                if (!c?.val) return [];
+                const calEvs = [];
                 try {
-                    const res = await fetch('/api/ical', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: c.val }) });
+                    const res = await fetchWithRetry('/api/ical', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: c.val }) });
                     let txt = '';
                     if (res.ok) { if ((res.headers.get('content-type') || '').includes('application/json')) throw new Error('Proxy fout'); txt = await res.text(); } 
                     else throw new Error(`HTTP ${res.status}`);
@@ -880,7 +929,6 @@ function AgendaWidget({ lang }) {
                         else if (l.startsWith('RRULE:')) { rrule = l; }
                         else if (l.startsWith('END:VEVENT') && cur.t && cur.date) {
                             if (rrule && cur.dateObj) {
-                                const expanded = [];
                                 const params = {}; rrule.replace('RRULE:', '').split(';').forEach(p => { const [k, v] = p.split('='); params[k] = v; });
                                 const freq = params.FREQ; const count = params.COUNT ? parseInt(params.COUNT) : 200;
                                 const untilMatch = params.UNTIL ? params.UNTIL.match(/(\d{4})(\d{2})(\d{2})/) : null;
@@ -891,7 +939,7 @@ function AgendaWidget({ lang }) {
                                 let current = new Date(cur.dateObj); let generated = 0;
                                 for (let i = 0; i < 500 && generated < count; i++) {
                                     if (until && current > until) break; if (current > rangeEnd) break;
-                                    if (current >= rangeStart) { expanded.push({ t: cur.t, p: c.name, time: cur.time, endTime: cur.endTime, date: getLocalYYYYMMDD(current) }); }
+                                    if (current >= rangeStart) { calEvs.push({ t: cur.t, p: c.name, time: cur.time, endTime: cur.endTime, date: getLocalYYYYMMDD(current) }); }
                                     generated++;
                                     if (freq === 'DAILY') current.setDate(current.getDate() + interval);
                                     else if (freq === 'WEEKLY') current.setDate(current.getDate() + (7 * interval));
@@ -899,15 +947,21 @@ function AgendaWidget({ lang }) {
                                     else if (freq === 'YEARLY') current.setFullYear(current.getFullYear() + interval);
                                     else break; 
                                 }
-                                allEvs.push(...expanded);
                             } else {
-                                allEvs.push({ t: cur.t, p: c.name, date: cur.date, time: cur.time, endTime: cur.endTime });
+                                calEvs.push({ t: cur.t, p: c.name, date: cur.date, time: cur.time, endTime: cur.endTime });
                             }
                         }
                     }
-                } catch (e) { allEvs.push({ t: `⚠ ${c.name} fout`, p: c.name, date: d, time: '00:00' }); }
-            }
+                } catch (e) { calEvs.push({ t: `⚠ ${c.name} fout`, p: c.name, date: d, time: '00:00' }); }
+                return calEvs;
+            });
+
+            const results = await Promise.all(fetchPromises);
+            let allEvs = [];
+            results.forEach(res => allEvs.push(...res));
             if (allEvs.length === 0) allEvs = [{ t: 'Geen afspraken', p: cals[0] || 'Systeem', date: d, time: '00:00' }];
+            
+            try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), d: allEvs, s: sig })); } catch(e) {}
             setItems(allEvs); setLoading(false);
         };
         fetchCals();
@@ -1592,10 +1646,20 @@ function RadarWidget({ lang }) {
     const [recs, setRecs] = useState([]);
     const [recsLoading, setRecsLoading] = useState(true);
 
+    /* v4.3: sessionStorage cache (2 min) + retry bij 502 + snellere refresh */
     useEffect(() => {
         const fetchStockData = async () => {
+            const cacheKey = 'radar_stocks_v3';
+            const sig = JSON.stringify(assets);
+            const cached = sessionStorage.getItem(cacheKey);
+            if (cached) {
+                try {
+                    const { t, data, s } = JSON.parse(cached);
+                    if (Date.now() - t < 120000 && s === sig) { setLiveData(data); setLoading(false); return; }
+                } catch(e) {}
+            }
             try {
-                const res = await fetch('/api/stocks', {
+                const res = await fetchWithRetry('/api/stocks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ symbols: assets })
@@ -1605,20 +1669,30 @@ function RadarWidget({ lang }) {
                     const dataMap = {};
                     data.forEach(item => { if (item && item.name) dataMap[item.name] = item; });
                     setLiveData(dataMap);
+                    try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), data: dataMap, s: sig })); } catch(e) {}
                 }
             } catch (e) { console.error("Beursfout:", e); }
             finally { setLoading(false); }
         };
         fetchStockData();
-        const interval = setInterval(fetchStockData, 300000);
+        const interval = setInterval(fetchStockData, 120000);
         return () => clearInterval(interval);
     }, [assets]);
 
+    /* v4.3: Aanbevelingen cache (10 min) + retry */
     useEffect(() => {
         const fetchRecs = async () => {
             setRecsLoading(true);
+            const cacheKey = 'radar_recs_v3';
+            const cached = sessionStorage.getItem(cacheKey);
+            if (cached) {
+                try {
+                    const { t, data } = JSON.parse(cached);
+                    if (Date.now() - t < 600000) { setRecs(data); setRecsLoading(false); return; }
+                } catch(e) {}
+            }
             try {
-                const res = await fetch('/api/stocks', {
+                const res = await fetchWithRetry('/api/stocks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mode: 'recommendations' })
@@ -1626,6 +1700,7 @@ function RadarWidget({ lang }) {
                 const data = await res.json();
                 if (Array.isArray(data)) {
                     setRecs(data);
+                    try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), data })); } catch(e) {}
                 }
             } catch (e) { console.error("Aanbevelingen fout:", e); }
             finally { setRecsLoading(false); }
@@ -2362,14 +2437,15 @@ function App() {
         );
     }
 
+    /* v4.3: Alle widgets gewrapt in Error Boundaries */
     const widgets = { 
-        ai: <div className="col-span-12 lg:col-span-8"><AIWidget lang={lang} /></div>, 
-        crypto: <div className="col-span-12 lg:col-span-4"><CryptoWidget lang={lang} /></div>, 
-        agenda: <div className="col-span-12 lg:col-span-4"><AgendaWidget lang={lang} /></div>, 
-        news: <div className="col-span-12 lg:col-span-8"><NewsWidget lang={lang} /></div>, 
-        spark: <div className="col-span-12 lg:col-span-4"><SparkWidget lang={lang} /></div>, // Nieuwe Spark Widget
-        radar: <div className="col-span-12 lg:col-span-4"><RadarWidget lang={lang} /></div>, 
-        sports: <div className="col-span-12 lg:col-span-4"><SportsWidget lang={lang} /></div> 
+        ai: <div className="col-span-12 lg:col-span-8"><WidgetErrorBoundary name="AI Chat"><AIWidget lang={lang} /></WidgetErrorBoundary></div>, 
+        crypto: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Crypto"><CryptoWidget lang={lang} /></WidgetErrorBoundary></div>, 
+        agenda: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Agenda"><AgendaWidget lang={lang} /></WidgetErrorBoundary></div>, 
+        news: <div className="col-span-12 lg:col-span-8"><WidgetErrorBoundary name="Nieuws"><NewsWidget lang={lang} /></WidgetErrorBoundary></div>, 
+        spark: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Spark"><SparkWidget lang={lang} /></WidgetErrorBoundary></div>,
+        radar: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Beurs Radar"><RadarWidget lang={lang} /></WidgetErrorBoundary></div>, 
+        sports: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Sport"><SportsWidget lang={lang} /></WidgetErrorBoundary></div> 
     };
 
     const hour = new Date().getHours();
@@ -2411,6 +2487,7 @@ function App() {
     );
 }
 
+/* v4.3: React 18 createRoot() i.p.v. deprecated ReactDOM.render() */
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
 </script>
