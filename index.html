@@ -1848,6 +1848,7 @@ function SportsWidget({ lang }) {
     const [tab, setTab] = useState('lst');
     const [search, setSearch] = useState('');
     const [golfTour, setGolfTour] = useState('PGA');
+    const [sportsLoading, setSportsLoading] = useState(true);
 
     const [eF1C, setEF1C] = useState(false);
     const [eF1S, setEF1S] = useState(false);
@@ -1857,23 +1858,191 @@ function SportsWidget({ lang }) {
     const [eGS, setEGS] = useState(false);
     const [eGL, setEGL] = useState(false);
 
-    const f1Data = { 
-        c: [ { r: "GP Bahrein", d: "02 Mar", t: "16:00" }, { r: "GP Saudi Arabia", d: "09 Mar", t: "18:00" }, { r: "GP Australia", d: "24 Mar", t: "05:00" }, { r: "GP Japan", d: "07 Apr", t: "07:00" }, { r: "GP China", d: "21 Apr", t: "09:00" }, { r: "GP Miami", d: "05 May", t: "22:00" }, { r: "GP Emilia Romagna", d: "19 May", t: "15:00" }, { r: "GP Monaco", d: "26 May", t: "15:00" }, { r: "GP Canada", d: "09 Jun", t: "20:00" }, { r: "GP Spain", d: "23 Jun", t: "15:00" } ], 
-        s: [ { p: 1, n: "Verstappen", fl: "🇳🇱", pt: 25 }, { p: 2, n: "Norris", fl: "🇬🇧", pt: 18 }, { p: 3, n: "Leclerc", fl: "🇲🇨", pt: 15 }, { p: 4, n: "Sainz", fl: "🇪🇸", pt: 12 }, { p: 5, n: "Russell", fl: "🇬🇧", pt: 10 }, { p: 6, n: "Hamilton", fl: "🇬🇧", pt: 8 }, { p: 7, n: "Piastri", fl: "🇦🇺", pt: 6 }, { p: 8, n: "Alonso", fl: "🇪🇸", pt: 4 }, { p: 9, n: "Perez", fl: "🇲🇽", pt: 2 }, { p: 10, n: "Stroll", fl: "🇨🇦", pt: 1 } ], 
-        lst: { title: 'GP Abu Dhabi', res: [ { p: 1, n: 'Verstappen', time: '1:27:02' }, { p: 2, n: 'Leclerc', time: '+17.9s' }, { p: 3, n: 'Russell', time: '+20.3s' }, { p: 4, n: 'Norris', time: '+22.7s' }, { p: 5, n: 'Piastri', time: '+31.4s' }, { p: 6, n: 'Sainz', time: '+33.1s' }, { p: 7, n: 'Hamilton', time: '+35.8s' }, { p: 8, n: 'Alonso', time: '+38.5s' }, { p: 9, n: 'Perez', time: '+40.1s' }, { p: 10, n: 'Stroll', time: '+45.0s' } ] } 
-    };
-    
-    const golfPga = { 
-        c: [ { r: "The Players", d: "14 Mar", t: "14:00 NL" }, { r: "The Masters", d: "10 Apr", t: "15:00 NL" }, { r: "RBC Heritage", d: "18 Apr", t: "14:00 NL" }, { r: "PGA Champ", d: "16 May", t: "14:00 NL" }, { r: "US Open", d: "13 Jun", t: "15:00 NL" }, { r: "Travelers Champ", d: "20 Jun", t: "14:00 NL" }, { r: "Scottish Open", d: "11 Jul", t: "09:00 NL" }, { r: "The Open", d: "18 Jul", t: "09:00 NL" }, { r: "FedEx St. Jude", d: "15 Aug", t: "14:00 NL" }, { r: "BMW Champ", d: "22 Aug", t: "14:00 NL" } ], 
-        s: [ { p: 1, n: "Scheffler", fl: "🇺🇸", pt: "3200" }, { p: 2, n: "Kim", fl: "🇰🇷", pt: "2100" }, { p: 3, n: "McIlroy", fl: "🇬🇧", pt: "1950" }, { p: 4, n: "Schauffele", fl: "🇺🇸", pt: "1800" }, { p: 5, n: "Rahm", fl: "🇺🇸", pt: "1700" }, { p: 6, n: "Clark", fl: "🇺🇸", pt: "1500" }, { p: 7, n: "Hovland", fl: "🇳🇴", pt: "1400" }, { p: 8, n: "Cantlay", fl: "🇺🇸", pt: "1350" }, { p: 9, n: "Aberg", fl: "🇳🇴", pt: "1300" }, { p: 10, n: "Harman", fl: "🇺🇸", pt: "1200" } ], 
-        lst: { title: 'Arnold Palmer Inv.', res: [ { p: 1, n: 'Scheffler', time: '-15' }, { p: 2, n: 'Clark', time: '-14' }, { p: 3, n: 'Lowry', time: '-13' }, { p: 4, n: 'Zalatoris', time: '-12' }, { p: 5, n: 'Theegala', time: '-11' }, { p: 6, n: 'Burns', time: '-10' }, { p: 7, n: 'McIlroy', time: '-9' }, { p: 8, n: 'Kim', time: '-8' }, { p: 9, n: 'Schauffele', time: '-7' }, { p: 10, n: 'Hovland', time: '-6' } ] } 
-    };
-    
-    const golfDp = { 
-        c: [ { r: "Singapore Open", d: "21 Mar", t: "08:00 NL" }, { r: "Indian Open", d: "28 Mar", t: "09:00 NL" }, { r: "Korea Champ", d: "18 Apr", t: "08:00 NL" }, { r: "ISPS Handa", d: "25 Apr", t: "07:00 NL" }, { r: "China Open", d: "02 May", t: "06:00 NL" }, { r: "Soudal Open", d: "23 May", t: "10:00 NL" }, { r: "European Open", d: "30 May", t: "09:00 NL" }, { r: "KLM Open", d: "06 Jun", t: "09:00 NL" }, { r: "BMW Int", d: "20 Jun", t: "10:00 NL" }, { r: "Italian Open", d: "04 Jul", t: "09:00 NL" } ], 
-        s: [ { p: 1, n: "McIlroy", fl: "🇬🇧", pt: "2500" }, { p: 2, n: "Kim", fl: "🇰🇷", pt: "2100" }, { p: 3, n: "Fleetwood", fl: "🇬🇧", pt: "1950" }, { p: 4, n: "Fox", fl: "🇬🇧", pt: "1800" }, { p: 5, n: "Meronk", fl: "🇵🇱", pt: "1600" }, { p: 6, n: "MacIntyre", fl: "🇬🇧", pt: "1500" }, { p: 7, n: "Olesen", fl: "🇬🇧", pt: "1400" }, { p: 8, n: "Hojgaard", fl: "🇩🇰", pt: "1350" }, { p: 9, n: "Campillo", fl: "🇪🇸", pt: "1300" }, { p: 10, n: "Perez", fl: "🇫🇷", pt: "1200" } ], 
-        lst: { title: 'Dubai Desert Classic', res: [ { p: 1, n: 'McIlroy', time: '-14' }, { p: 2, n: 'Meronk', time: '-13' }, { p: 3, n: 'Kim', time: '-12' }, { p: 4, n: 'Scott', time: '-11' }, { p: 5, n: 'Fox', time: '-10' }, { p: 6, n: 'Fleetwood', time: '-9' }, { p: 7, n: 'MacIntyre', time: '-8' }, { p: 8, n: 'Olesen', time: '-7' }, { p: 9, n: 'Hojgaard', time: '-6' }, { p: 10, n: 'Perez', time: '-5' } ] } 
-    };
+    /* v4.3: Nationaliteit → vlag emoji mapping */
+    const FLAGS = { dutch:'🇳🇱',british:'🇬🇧',german:'🇩🇪',spanish:'🇪🇸',mexican:'🇲🇽',australian:'🇦🇺',french:'🇫🇷',canadian:'🇨🇦',monegasque:'🇲🇨',thai:'🇹🇭',japanese:'🇯🇵',chinese:'🇨🇳',finnish:'🇫🇮',danish:'🇩🇰',american:'🇺🇸',italian:'🇮🇹',polish:'🇵🇱',brazilian:'🇧🇷',norwegian:'🇳🇴',swedish:'🇸🇪',swiss:'🇨🇭','new zealander':'🇳🇿',argentine:'🇦🇷',korean:'🇰🇷',irish:'🇮🇪','south african':'🇿🇦',belgian:'🇧🇪',austrian:'🇦🇹',colombian:'🇨🇴',portuguese:'🇵🇹',indian:'🇮🇳' };
+    const getFlag = (nat) => FLAGS[(nat||'').toLowerCase()] || '🏁';
+
+    /* v4.3: Datum formatter naar "02 Mar" formaat */
+    const fmtDate = (iso) => { const d = new Date(iso); const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${String(d.getDate()).padStart(2,'0')} ${m[d.getMonth()]}`; };
+    const fmtTimeNL = (iso) => { const d = new Date(iso); return d.toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Amsterdam' }); };
+
+    /* v4.3: Fallback data (wordt getoond als API's falen) */
+    const FALLBACK_F1 = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
+    const FALLBACK_GOLF = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
+
+    const [f1Data, setF1Data] = useState(FALLBACK_F1);
+    const [golfPga, setGolfPga] = useState(FALLBACK_GOLF);
+    const [golfDp, setGolfDp] = useState(FALLBACK_GOLF);
+
+    /* v4.3 LIVE: F1 data ophalen via Jolpica (Ergast opvolger, gratis, geen key) */
+    useEffect(() => {
+        const CACHE_KEY = 'sports_f1_v3';
+        const CACHE_TTL = 1800000; /* 30 minuten */
+        const currentYear = new Date().getFullYear();
+
+        const fetchF1 = async () => {
+            const cached = sessionStorage.getItem(CACHE_KEY);
+            if (cached) {
+                try { const { t, d } = JSON.parse(cached); if (Date.now() - t < CACHE_TTL) { setF1Data(d); setSportsLoading(false); return; } } catch(e) {}
+            }
+            try {
+                /* Parallel: kalender + standings + laatste race */
+                const [calRes, stdRes, lstRes] = await Promise.all([
+                    fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/races/`, { headers: { 'Accept': 'application/json' } }),
+                    fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/driverStandings/`, { headers: { 'Accept': 'application/json' } }),
+                    fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/results/last/`, { headers: { 'Accept': 'application/json' } })
+                ]);
+
+                const result = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
+
+                /* Kalender: komende races */
+                if (calRes.ok) {
+                    const calJson = await calRes.json();
+                    const races = calJson?.MRData?.RaceTable?.Races || [];
+                    const now = new Date();
+                    result.c = races
+                        .filter(r => new Date(r.date + 'T' + (r.time || '14:00:00Z')) >= new Date(now.getTime() - 86400000))
+                        .slice(0, 10)
+                        .map(r => ({
+                            r: `GP ${r.raceName.replace(' Grand Prix', '')}`,
+                            d: fmtDate(r.date),
+                            t: fmtTimeNL(r.date + 'T' + (r.time || '14:00:00Z'))
+                        }));
+                }
+
+                /* Standings */
+                if (stdRes.ok) {
+                    const stdJson = await stdRes.json();
+                    const drivers = stdJson?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings || [];
+                    result.s = drivers.slice(0, 10).map(d => ({
+                        p: parseInt(d.position),
+                        n: d.Driver.familyName,
+                        fl: getFlag(d.Driver.nationality),
+                        pt: parseInt(d.points)
+                    }));
+                }
+
+                /* Laatste race resultaat */
+                if (lstRes.ok) {
+                    const lstJson = await lstRes.json();
+                    const race = lstJson?.MRData?.RaceTable?.Races?.[0];
+                    if (race) {
+                        result.lst = {
+                            title: `GP ${race.raceName.replace(' Grand Prix', '')}`,
+                            res: (race.Results || []).slice(0, 10).map(r => ({
+                                p: parseInt(r.position),
+                                n: r.Driver.familyName,
+                                time: r.position === '1' ? (r.Time?.time || r.status || '-') : (r.Time?.time ? `+${r.Time.time.replace(/.*\+/, '')}` : r.status || 'DNF')
+                            }))
+                        };
+                    }
+                }
+
+                setF1Data(result);
+                try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), d: result })); } catch(e) {}
+            } catch (e) {
+                console.error('F1 API fout:', e);
+                /* Probeer cache als fallback, ook als verlopen */
+                const cached = sessionStorage.getItem(CACHE_KEY);
+                if (cached) { try { setF1Data(JSON.parse(cached).d); } catch(e) {} }
+            }
+            setSportsLoading(false);
+        };
+        fetchF1();
+        const interval = setInterval(fetchF1, CACHE_TTL);
+        return () => clearInterval(interval);
+    }, []);
+
+    /* v4.3 LIVE: Golf data ophalen via Vercel proxy → ESPN */
+    useEffect(() => {
+        const CACHE_TTL = 900000; /* 15 minuten */
+
+        const fetchGolf = async (tour, cacheKey) => {
+            const cached = sessionStorage.getItem(cacheKey);
+            if (cached) {
+                try { const { t, d } = JSON.parse(cached); if (Date.now() - t < CACHE_TTL) return d; } catch(e) {}
+            }
+            try {
+                const res = await fetchWithRetry('/api/golf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tour })
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                const result = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
+
+                /* Kalender: komende toernooien */
+                const events = data?.events || [];
+                const now = new Date();
+                result.c = events
+                    .filter(e => new Date(e.date) >= new Date(now.getTime() - 86400000))
+                    .slice(0, 10)
+                    .map(e => ({
+                        r: e.shortName || e.name || '',
+                        d: fmtDate(e.date),
+                        t: fmtTimeNL(e.date)
+                    }));
+
+                /* Laatste toernooi resultaat (meest recente voltooide event) */
+                const completed = events.filter(e => {
+                    const status = e.status?.type?.state || e.competitions?.[0]?.status?.type?.state || '';
+                    return status === 'post' || new Date(e.date) < now;
+                });
+                const lastEvent = completed[completed.length - 1] || events[0];
+                if (lastEvent) {
+                    const competitors = lastEvent.competitions?.[0]?.competitors || [];
+                    result.lst = {
+                        title: lastEvent.shortName || lastEvent.name || '',
+                        res: competitors.slice(0, 10).map((c, i) => ({
+                            p: parseInt(c.status?.position?.id || c.order || i + 1),
+                            n: c.athlete?.shortName?.split('. ').pop() || c.athlete?.lastName || '?',
+                            time: c.linescores?.[0]?.displayValue || c.status?.displayValue || c.score?.displayValue || '-'
+                        }))
+                    };
+                }
+
+                /* Rankings (als beschikbaar in data, anders uit competitors) */
+                if (data?.rankings?.length > 0) {
+                    result.s = data.rankings.slice(0, 10).map((r, i) => ({
+                        p: i + 1,
+                        n: r.athlete?.shortName?.split('. ').pop() || r.athlete?.lastName || '?',
+                        fl: getFlag(r.athlete?.flag?.alt || ''),
+                        pt: r.stat?.displayValue || r.points || '-'
+                    }));
+                } else if (lastEvent?.competitions?.[0]?.competitors) {
+                    /* Fallback: gebruik leaderboard van laatste toernooi als standings */
+                    result.s = lastEvent.competitions[0].competitors.slice(0, 10).map((c, i) => ({
+                        p: parseInt(c.status?.position?.id || i + 1),
+                        n: c.athlete?.shortName?.split('. ').pop() || c.athlete?.lastName || '?',
+                        fl: getFlag(c.athlete?.flag?.alt || ''),
+                        pt: c.score?.displayValue || c.statistics?.[0]?.displayValue || '-'
+                    }));
+                }
+
+                try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), d: result })); } catch(e) {}
+                return result;
+            } catch (e) {
+                console.error(`Golf ${tour} API fout:`, e);
+                const cached = sessionStorage.getItem(cacheKey);
+                if (cached) { try { return JSON.parse(cached).d; } catch(e) {} }
+                return FALLBACK_GOLF;
+            }
+        };
+
+        const loadGolf = async () => {
+            const [pga, dp] = await Promise.all([
+                fetchGolf('pga', 'sports_golf_pga_v3'),
+                fetchGolf('eur', 'sports_golf_dp_v3')
+            ]);
+            setGolfPga(pga);
+            setGolfDp(dp);
+        };
+        loadGolf();
+        const interval = setInterval(loadGolf, CACHE_TTL);
+        return () => clearInterval(interval);
+    }, []);
 
     const gData = golfTour === 'PGA' ? golfPga : golfDp;
     const match = (s) => s.toLowerCase().includes(search.toLowerCase());
@@ -1899,6 +2068,7 @@ function SportsWidget({ lang }) {
             <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-gray-500">
                     <Ico.Trp/><h3 className="text-[10px] font-black uppercase tracking-widest">Sport</h3>
+                    {sportsLoading && <span className="text-[9px] text-blue-500 animate-pulse font-bold">⏳ live laden...</span>}
                 </div>
                 <input type="text" placeholder={lang==='nl'?"Zoek (bijv. Verstappen)":"Search..."} value={search} onChange={e=>setSearch(e.target.value)} className="w-1/2 px-2 py-1 text-[10px] border rounded outline-none focus:border-blue-500 shadow-sm" />
             </div>
