@@ -284,22 +284,46 @@ function AIWidget({ lang }) {
     const lastUserMsgRef = useRef(null);
     const prevHistLen = useRef(0);
 
-    const defaultHist = []; 
-    
+    // --- FIX START: Auto-Save & Clean Slate Logica ---
     const [sessions, setSessions] = useState(() => {
-        try { return S.load('michael_sessions', []); } catch(e) { return []; }
-    });
-    const [activeSession, setActiveSession] = useState(null);
-    const [hist, setHist] = useState(() => {
-        try {
-            const saved = S.load('ai_hist', null);
-            if(saved && Array.isArray(saved) && saved.length > 0) {
-                if(saved[0]?.t?.includes('Gemini') || saved[0]?.t?.includes('OpenRouter') || saved[0]?.t?.includes('Spark') || saved[0]?.t?.includes('MICHAEL AI')) return defaultHist;
-                return saved;
+        let loadedSessions = [];
+        try { loadedSessions = S.load('michael_sessions', []); } catch(e) {}
+        
+        let savedHist = [];
+        try { savedHist = S.load('ai_hist', []); } catch(e) {}
+        
+        let activeId = null;
+        try { activeId = S.load('ai_active_session', null); } catch(e) {}
+
+        // Als er bij het opstarten nog een oude chat open stond, verplaats deze veilig naar de Historie
+        if (savedHist && savedHist.length > 0 && savedHist.some(m => m.r === 'usr')) {
+            if (activeId) {
+                // Update de bestaande sessie
+                const idx = loadedSessions.findIndex(s => s.id === activeId);
+                if (idx !== -1) {
+                    loadedSessions[idx].msgs = savedHist;
+                } else {
+                    const title = savedHist.find(m=>m.r==='usr')?.t?.slice(0,40) || 'Chat';
+                    loadedSessions.unshift({id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: savedHist});
+                }
+            } else {
+                // Maak een nieuwe sessie aan voor de onopgeslagen chat
+                const title = savedHist.find(m=>m.r==='usr')?.t?.slice(0,40) || 'Chat';
+                loadedSessions.unshift({id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: savedHist});
             }
-            return defaultHist;
-        } catch(e) { return defaultHist; }
+            loadedSessions = loadedSessions.slice(0, 20);
+            S.save('michael_sessions', loadedSessions);
+        }
+        
+        // Wis het huidige scherm volledig zodat we 100% nieuw beginnen (net als Gemini)
+        S.save('ai_hist', []);
+        S.save('ai_active_session', null);
+        return loadedSessions;
     });
+
+    const [activeSession, setActiveSession] = useState(null);
+    const [hist, setHist] = useState([]); // Altijd leeg beginnen!
+    // --- FIX END ---
 
     const [view, setView] = useState('chat');
     const [exp, setExp] = useState(false);
@@ -328,6 +352,11 @@ function AIWidget({ lang }) {
         }).catch(()=>{});
     };
 
+    // Stuur de opgeschoonde staat direct naar Vercel KV bij het inladen
+    useEffect(() => {
+        syncToCloud();
+    }, []);
+
     useEffect(() => {
         if (showContent && hist.length > prevHistLen.current) {
             setTimeout(() => {
@@ -349,36 +378,73 @@ function AIWidget({ lang }) {
         if(isImg) reader.readAsDataURL(file); else reader.readAsText(file);
     };
 
+    // Centraal updaten van geschiedenis EN actieve sessie (als je in de historie typt)
+    const updateChatState = (newHist) => {
+        setHist(newHist);
+        S.save('ai_hist', newHist);
+        if (activeSession) {
+            setSessions(prev => {
+                const updated = prev.map(s => s.id === activeSession ? { ...s, msgs: newHist } : s);
+                S.save('michael_sessions', updated);
+                return updated;
+            });
+        }
+    };
+
     const deleteMsg = (idx, e) => {
         e.stopPropagation();
         const n = hist.filter((_,i)=>i!==idx);
-        setHist(n); S.save('ai_hist', n.map(m=>({r:m.r, t:m.t})));
+        updateChatState(n);
         syncToCloud();
     };
 
     const saveCurrentSession = () => {
-        if(hist.length <= 1) return;
-        const title = hist.find(m=>m.r==='usr')?.t?.slice(0,40) || 'Chat';
-        const session = {id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: hist.map(m=>({r:m.r, t:m.t}))};
-        const updated = [session, ...sessions].slice(0, 20);
-        setSessions(updated); S.save('michael_sessions', updated);
-        syncToCloud();
+        if(hist.length === 0 || !hist.some(m => m.r === 'usr')) return;
+        
+        let updatedSessions = [...sessions];
+        if (activeSession) {
+            updatedSessions = updatedSessions.map(s => s.id === activeSession ? { ...s, msgs: hist } : s);
+        } else {
+            const title = hist.find(m=>m.r==='usr')?.t?.slice(0,40) || 'Chat';
+            const session = {id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: hist};
+            updatedSessions = [session, ...updatedSessions].slice(0, 20);
+        }
+        setSessions(updatedSessions);
+        S.save('michael_sessions', updatedSessions);
     };
+
     const newChat = () => {
         saveCurrentSession();
-        setHist(defaultHist); S.save('ai_hist', defaultHist);
-        setActiveSession(null); setView('chat');
+        setHist([]); 
+        S.save('ai_hist', []);
+        setActiveSession(null); 
+        S.save('ai_active_session', null);
+        setView('chat');
         syncToCloud();
     };
+
     const loadSession = (session) => {
         saveCurrentSession();
-        setHist(session.msgs); S.save('ai_hist', session.msgs);
-        setActiveSession(session.id); setView('chat');
+        setHist(session.msgs); 
+        S.save('ai_hist', session.msgs);
+        setActiveSession(session.id); 
+        S.save('ai_active_session', session.id);
+        setView('chat');
+        syncToCloud();
     };
+
     const deleteSession = (id, e) => {
         e.stopPropagation();
         const updated = sessions.filter(s=>s.id!==id);
-        setSessions(updated); S.save('michael_sessions', updated);
+        setSessions(updated); 
+        S.save('michael_sessions', updated);
+        if (activeSession === id) {
+            setHist([]); 
+            S.save('ai_hist', []);
+            setActiveSession(null); 
+            S.save('ai_active_session', null);
+            setView('history');
+        }
         syncToCloud();
     };
 
@@ -420,7 +486,7 @@ function AIWidget({ lang }) {
         if(attachedFile) displayMsg = `[Bijgevoegd: ${attachedFile.name}]\n${displayMsg}`;
         
         const n = [...hist, {r:'usr', t: displayMsg, file: attachedFile}];
-        setHist(n); S.save('ai_hist', n.map(m=>({r:m.r, t:m.t})));
+        updateChatState(n);
         setMsg(''); setAttachedFile(null); 
         if(fileRef.current) fileRef.current.value = '';
 
@@ -428,7 +494,7 @@ function AIWidget({ lang }) {
         if(cmdResult) {
             setTimeout(() => {
                 const r = [...n, {r:'ai', t: cmdResult}];
-                setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+                updateChatState(r);
                 syncToCloud();
             }, 400);
             return;
@@ -438,7 +504,7 @@ function AIWidget({ lang }) {
         if(!groqKey) {
             setTimeout(() => {
                 const r = [...n, {r:'ai', t: lang==='nl'?'⚠️ Geen Groq key gevonden. Ga naar Instellingen → API Keys → voeg een key toe met naam **Groq**.':'⚠️ No Groq key found.'}];
-                setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+                updateChatState(r);
                 syncToCloud();
             }, 400);
             return;
@@ -468,16 +534,16 @@ function AIWidget({ lang }) {
             const data = await res.json();
             if(data.choices?.[0]?.message?.content) {
                 const r = [...n, {r:'ai', t: data.choices[0].message.content}];
-                setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+                updateChatState(r);
                 syncToCloud();
             } else if(data.error) {
                 const r = [...n, {r:'ai', t: `⚠️ API Error: ${data.error.message}`}];
-                setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+                updateChatState(r);
                 syncToCloud();
             }
         } catch(e) {
             const r = [...n, {r:'ai', t:'⚠️ Netwerkfout. Check je verbinding.'}];
-            setHist(r); S.save('ai_hist', r.map(m=>({r:m.r, t:m.t})));
+            updateChatState(r);
             syncToCloud();
         }
         setLoading(false);
