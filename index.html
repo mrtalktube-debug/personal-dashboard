@@ -1843,7 +1843,7 @@ function SparkWidget({ lang }) {
             const prompt = `Je bent een assistent voor een DenkTank dashboard. Genereer in het Nederlands een JSON object met 4 elementen. Verzin elke keer iets compleet nieuws!
             1. "dagvraag": Een unieke, verrassende of diepgaande reflectievraag om even bij stil te staan. Geen introductie.
             2. "trivia": Een leuke algemene kennis quizvraag. Geef de vraag "q", een array van 4 opties "opts", de index van het juiste antwoord "a" (0-3), en een fascinerende "uitleg" waarom dit klopt.
-            3. "iq": Een logische puzzel, wiskundig raadsel of patroon. Geef de vraag "q", een array van 4 opties "opts", de index van het juiste antwoord "a" (0-3), en een heldere "uitleg" van de logica.
+            3. "iq": Een logische of wiskundige puzzel. Kies willekeurig één categorie: (A) kansrekening/statistiek, (B) logisch redeneren, (C) getallenreeksen of algebra. Zorg dat de vraag 100% wiskundig correct is — verifieer dit zelf vóór je het geeft. Geef de vraag "q", een array van 4 opties "opts", de index van het juiste antwoord "a" (0-3), en een stap-voor-stap "uitleg" van de logica. VOORBEELD CATEGORIE A: "In een zak zitten 3 rode en 2 blauwe knikkers. Je pakt er 2. Hoe groot is de kans dat beide rood zijn?" antwoord: 3/10. VOORBEELD CATEGORIE B: "Als alle Bloops Razzies zijn, en alle Razzies Lazzies, zijn dan alle Bloops Lazzies?" antwoord: Ja.
             4. "feit": Een bizar, fascinerend of grappig weetje dat begint met "Wist je dat...".
             
             Geef UITSLUITEND het JSON object terug, zonder markdown of extra tekst.
@@ -1856,7 +1856,7 @@ function SparkWidget({ lang }) {
                     model: 'llama-3.3-70b-versatile',
                     messages: [{ role: 'user', content: prompt }],
                     temperature: 0.9, 
-                    max_tokens: 600
+                    max_tokens: 800
                 })
             });
             
@@ -1893,12 +1893,46 @@ function SparkWidget({ lang }) {
         fetchDailySpark();
     }, [todayStr]);
 
-    const getFallbackData = () => ({
-        dagvraag: "Als je één moment van de afgelopen week opnieuw zou mogen beleven, welk moment zou dat zijn?",
-        trivia: { q: "Hoeveel harten heeft een octopus?", opts: ["1", "2", "3", "4"], a: 2, uitleg: "Een octopus heeft één hoofd-hart dat bloed door het hele lichaam pompt, en twee extra harten die bloed specifiek langs de kieuwen pompen." },
-        iq: { q: "Welk getal volgt in deze reeks: 2, 6, 12, 20, ...?", opts: ["28", "30", "32", "36"], a: 1, uitleg: "De reeks telt er steeds het volgende even getal bij op (+4, +6, +8). De volgende stap is dus 20 + 10 = 30." },
-        feit: "Wist je dat octopussen drie harten hebben en dat hun bloed blauw is in plaats van rood?"
-    });
+    const getFallbackData = () => {
+        const dagvragen = [
+            "Als je één moment van de afgelopen week opnieuw zou mogen beleven, welk moment zou dat zijn?",
+            "Wat is iets dat je vroeger moeilijk vond, maar nu makkelijk gaat?",
+            "Als je morgen alles opnieuw kon beginnen, wat zou je anders doen?",
+            "Wat geeft jou de meeste energie op een dag?",
+            "Welke gewoonte wil je dit jaar aanleren of afbreken?"
+        ];
+        const trivia = [
+            { q: "Hoeveel harten heeft een octopus?", opts: ["1", "2", "3", "4"], a: 2, uitleg: "Een octopus heeft één hoofd-hart en twee extra harten die bloed langs de kieuwen pompen." },
+            { q: "Welk land heeft de meeste tijdzones?", opts: ["Rusland", "VS", "China", "Frankrijk"], a: 3, uitleg: "Frankrijk heeft 12 tijdzones door al zijn overzeese gebieden wereldwijd." },
+            { q: "Hoeveel botten heeft een menselijk lichaam bij geboorte?", opts: ["206", "270", "300", "350"], a: 1, uitleg: "Baby's worden geboren met ~270 botten. Veel ervan groeien samen tot de volwassen 206 botten." }
+        ];
+        const iqVragen = [
+            { q: "Welk getal volgt: 2, 6, 12, 20, 30, ...?", opts: ["38", "40", "42", "44"], a: 2, uitleg: "Verschil groeit steeds met 2: +4, +6, +8, +10, +12. Dus 30 + 12 = 42." },
+            { q: "In een zak: 3 rode en 2 blauwe knikkers. Je pakt er 2. Kans dat beide rood zijn?", opts: ["1/5", "3/10", "1/3", "2/5"], a: 1, uitleg: "P = (3/5) × (2/4) = 6/20 = 3/10. Er zijn 3 rode knikkers van de 5, dan 2 van de 4." },
+            { q: "Als alle A's B's zijn en alle B's C's, zijn dan alle A's C's?", opts: ["Ja", "Nee", "Soms", "Onmogelijk te zeggen"], a: 0, uitleg: "Transitieve logica: A→B en B→C, dus A→C. Alle A's zijn inderdaad C's." },
+            { q: "Een boer heeft 17 schapen. Alle behalve 9 sterven. Hoeveel zijn er over?", opts: ["8", "9", "17", "0"], a: 1, uitleg: "De truc zit in 'alle behalve 9': er blijven dus precies 9 schapen over." },
+            { q: "Welk getal hoort hier: 1, 1, 2, 3, 5, 8, ...?", opts: ["11", "12", "13", "14"], a: 2, uitleg: "Fibonacci: elk getal is de som van de twee ervoor. 5+8=13." },
+            { q: "Je gooit 2 dobbelstenen. Kans op een totaal van 7?", opts: ["1/6", "5/36", "1/9", "7/36"], a: 0, uitleg: "Er zijn 6 combinaties die 7 geven (1+6, 2+5, 3+4, enz.) van de 36 mogelijk. 6/36 = 1/6." },
+            { q: "Als 5 machines 5 widgets maken in 5 minuten, hoelang doen 100 machines over 100 widgets?", opts: ["100 min", "5 min", "20 min", "1 min"], a: 1, uitleg: "Elke machine maakt 1 widget per 5 minuten. 100 machines = 100 widgets in 5 minuten." },
+            { q: "Welk getal mist: 4, 9, 16, 25, ?, 49", opts: ["30", "35", "36", "40"], a: 2, uitleg: "Dit zijn kwadraten: 2², 3², 4², 5², 6², 7². Het missende getal is 6² = 36." },
+            { q: "Een ladder heeft 10 sporten. Je staat op sport 5. Je gaat 3 omhoog, dan 4 omlaag. Waar sta je?", opts: ["Sport 3", "Sport 4", "Sport 5", "Sport 6"], a: 1, uitleg: "5 + 3 = 8, dan 8 - 4 = 4. Je staat op sport 4." },
+            { q: "Hoeveel seconden heeft een dag?", opts: ["84.600", "86.400", "88.000", "90.000"], a: 1, uitleg: "24 uur × 60 min × 60 sec = 86.400 seconden per dag." }
+        ];
+        const feiten = [
+            "Wist je dat octopussen drie harten hebben en dat hun bloed blauw is?",
+            "Wist je dat een groep flamingo's een 'flamboyance' heet?",
+            "Wist je dat bananen licht radioactief zijn door kalium-40?",
+            "Wist je dat honing nooit bederft? Archeoloog vonden 3000 jaar oude eetbare honing.",
+            "Wist je dat een dag op Venus langer duurt dan een jaar op Venus?"
+        ];
+        const d = new Date().getDate();
+        return {
+            dagvraag: dagvragen[d % dagvragen.length],
+            trivia: trivia[d % trivia.length],
+            iq: iqVragen[d % iqVragen.length],
+            feit: feiten[d % feiten.length]
+        };
+    };
 
     const renderQuizOptions = (quizData, pickState, setPickState) => (
         <div className="grid grid-cols-1 gap-2.5 w-full">
