@@ -1980,8 +1980,8 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const [isSaving, setIsSaving] = useState(false);
 
     const handleDragStart = (e, idx) => { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; };
-    const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v7', n); setDragIdx(null); };
-    const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v7', n); };
+    const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v8', n); setDragIdx(null); };
+    const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v8', n); };
 
     const saveAll = async () => { 
         setIsSaving(true);
@@ -1989,7 +1989,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
         S.save('api_keys_dyn', apis); 
         S.save('icals_dyn', icals); 
         S.save('ai_chat_url', aiUrl); 
-        S.save('layout_v7', layout);
+        S.save('layout_v8', layout);
         
         const cloudSettings = {};
         for (let i = 0; i < localStorage.length; i++) {
@@ -2100,8 +2100,9 @@ function App() {
     
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     
-    const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'radar', 'sports'];
-    const [layout, setLayout] = useState(defaultLayout);
+    // DEFAULT LAYOUT v8 INCLUSIEF 'spark'
+    const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'spark', 'radar', 'sports'];
+    const [layout, setLayout] = useState(() => S.load('layout_v8', defaultLayout));
 
     useEffect(() => {
         const doSync = async () => {
@@ -2123,7 +2124,7 @@ function App() {
                 } catch(e) { console.error("Auto-sync mislukt", e); }
                 
                 setLang(S.load('lang', 'nl'));
-                setLayout(S.load('layout_v7', defaultLayout));
+                setLayout(S.load('layout_v8', defaultLayout));
                 setIsSyncing(false); 
             }
         };
@@ -2167,6 +2168,7 @@ function App() {
         crypto: <div className="col-span-12 lg:col-span-4"><CryptoWidget lang={lang} /></div>, 
         agenda: <div className="col-span-12 lg:col-span-4"><AgendaWidget lang={lang} /></div>, 
         news: <div className="col-span-12 lg:col-span-8"><NewsWidget lang={lang} /></div>, 
+        spark: <div className="col-span-12 lg:col-span-4"><SparkWidget lang={lang} /></div>, // Nieuwe Spark Widget
         radar: <div className="col-span-12 lg:col-span-4"><RadarWidget lang={lang} /></div>, 
         sports: <div className="col-span-12 lg:col-span-4"><SportsWidget lang={lang} /></div> 
     };
