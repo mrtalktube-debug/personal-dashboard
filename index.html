@@ -2628,7 +2628,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const [icals, setIcals] = useState(S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]));
     const [aiUrl, setAiUrl] = useState(S.load('ai_chat_url', ''));
     
-    // const [msClientId, setMsClientId] = useState(S.load('ms_client_id', '')); 
+    const [msClientId, setMsClientId] = useState(S.load('ms_client_id', '')); 
     
     const [dragIdx, setDragIdx] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -2644,7 +2644,9 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
         S.save('icals_dyn', icals); 
         S.save('ai_chat_url', aiUrl); 
         S.save('layout_v8', layout);
-        S.save('ms_client_id', msClientId); // const cloudSettings = {};
+        S.save('ms_client_id', msClientId);
+        
+        const cloudSettings = {};
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key && key.startsWith('d_')) {
@@ -2711,7 +2713,6 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                     ))}
                 </section>
 
-                {/* */}
                 <section>
                     <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Outlook Koppeling (MSAL)</h3>
                     <div className="space-y-2">
