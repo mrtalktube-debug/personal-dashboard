@@ -19,6 +19,8 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <!-- NIEUW: Chart.js lazy laden, alleen nodig als crypto-widget zichtbaar -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <!-- NIEUW: MSAL voor Outlook OAuth -->
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root { --p-blue: #0073b1; --bg: linear-gradient(135deg, #001a33 0%, #000a14 100%); }
@@ -76,6 +78,7 @@ const Ico = {
     Glf: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path strokeWidth="2" d="M12 18a6 6 0 100-12 6 6 0 000 12z"/></svg>,
     Trp: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 4v2a4 4 0 01-8 0V4m12 4v2a4 4 0 01-1 2.652M4 8v2a4 4 0 001 2.652M12 20v-4m0 0V11m0 5h-4m4 0h4" /></svg>,
     Clip: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>,
+    Mail: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>,
     Up: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
     Dn: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>,
     Drag: () => <svg className="w-4 h-4 text-gray-400 cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>,
@@ -2424,8 +2427,8 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     const [isSaving, setIsSaving] = useState(false);
 
     const handleDragStart = (e, idx) => { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; };
-    const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v8', n); setDragIdx(null); };
-    const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v8', n); };
+    const handleDrop = (e, idx) => { e.preventDefault(); if (dragIdx === null || dragIdx === idx) return; const n = [...layout]; const item = n.splice(dragIdx, 1)[0]; n.splice(idx, 0, item); setLayout(n); S.save('layout_v9', n); setDragIdx(null); };
+    const move = (idx, dir) => { if((dir===-1 && idx===0) || (dir===1 && idx===layout.length-1)) return; const n = [...layout]; const temp = n[idx]; n[idx] = n[idx+dir]; n[idx+dir] = temp; setLayout(n); S.save('layout_v9', n); };
 
     const saveAll = async () => { 
         setIsSaving(true);
@@ -2433,7 +2436,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
         S.save('api_keys_dyn', apis); 
         S.save('icals_dyn', icals); 
         S.save('ai_chat_url', aiUrl); 
-        S.save('layout_v8', layout);
+        S.save('layout_v9', layout);
         
         const cloudSettings = {};
         for (let i = 0; i < localStorage.length; i++) {
@@ -2490,6 +2493,16 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                         <input type="password" placeholder="Bitvavo API Secret" value={bvKeys.sec} onChange={e=>setBvKeys({...bvKeys, sec: e.target.value})} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
                     </div>
                 </section>
+                </section>
+
+                <section>
+                    <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Outlook Koppeling</h3>
+                    <input type="text" placeholder="Microsoft Application (Client) ID" value={S.load('ms_client_id', '')} onChange={e => S.save('ms_client_id', e.target.value)} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                    <p className="text-[8px] text-gray-400 mt-1">Azure Portal → App registrations → Application (client) ID</p>
+                </section>
+
+                <section>
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Overige API Keys</h3>
 
                 <section>
                     <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Overige API Keys</h3><button onClick={()=>setApis([...apis, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
@@ -2535,6 +2548,273 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     );
 }
 
+/* ============================================================
+   EMAIL WIDGET v4.5 — OUTLOOK ONLY (Gmail later)
+   ============================================================ */
+<!-- NIEUW -->
+function EmailWidget({ lang }) {
+    const [tab, setTab] = useState('outlook');
+    const [oData, setOData] = useState([]);
+    const [oToken, setOToken] = useState(() => sessionStorage.getItem('outlook_token'));
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [activeAction, setActiveAction] = useState({ id: null, type: null });
+    const [replyText, setReplyText] = useState('');
+    const [destinations, setDestinations] = useState([]);
+    const msalRef = useRef(null);
+
+    const msClientId = S.load('ms_client_id', '');
+
+    // Auto-fetch bij mount als token aanwezig
+    useEffect(() => {
+        if (oToken && oData.length === 0) fetchOutlook(oToken);
+        setActiveAction({ id: null, type: null });
+        setDestinations([]);
+    }, [tab]);
+
+    // MSAL initialiseren
+    const initMsal = async () => {
+        if (!window.msal) { setError('MSAL script niet geladen'); return null; }
+        if (!msClientId) { setError('Configureer Client ID in instellingen'); return null; }
+        if (!msalRef.current) {
+            const msalConfig = { auth: { clientId: msClientId, authority: "https://login.microsoftonline.com/common" } };
+            msalRef.current = new window.msal.PublicClientApplication(msalConfig);
+            await msalRef.current.initialize();
+        }
+        return msalRef.current;
+    };
+
+    // Outlook connect
+    const connectOutlook = async () => {
+        try {
+            setError('');
+            const instance = await initMsal();
+            if (!instance) return;
+            const authResult = await instance.loginPopup({ scopes: ["Mail.ReadWrite", "Mail.Send"] });
+            const token = authResult.accessToken;
+            sessionStorage.setItem('outlook_token', token);
+            setOToken(token);
+            fetchOutlook(token);
+        } catch (e) {
+            console.error('Outlook auth error:', e);
+            setError('Verbinding mislukt');
+        }
+    };
+
+    // Outlook disconnect bij 401
+    const handle401 = () => {
+        sessionStorage.removeItem('outlook_token');
+        setOToken(null);
+        setOData([]);
+        setError('Sessie verlopen — verbind opnieuw');
+    };
+
+    // Graph API helper
+    const graphFetch = async (url, token, options = {}) => {
+        const res = await fetch(`https://graph.microsoft.com/v1.0${url}`, {
+            ...options,
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) }
+        });
+        if (res.status === 401) { handle401(); return null; }
+        return res;
+    };
+
+    // Fetch mails
+    const fetchOutlook = async (token) => {
+        setLoading(true);
+        setError('');
+        try {
+            const res = await graphFetch(`/me/messages?$filter=inferenceClassification eq 'focused'&$top=6&$select=subject,sender,bodyPreview`, token);
+            if (!res) return;
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setOData((data.value || []).map(m => ({
+                id: m.id,
+                subject: m.subject || '(geen onderwerp)',
+                fromStr: m.sender?.emailAddress?.name || m.sender?.emailAddress?.address || 'Onbekend',
+                snippet: m.bodyPreview || ''
+            })));
+        } catch (e) {
+            console.error('Outlook fetch error:', e);
+            setError('Ophalen mislukt');
+        }
+        setLoading(false);
+    };
+
+    // Optimistische UI — verwijder mail direct uit state
+    const removeMailFromUI = (id) => {
+        setOData(prev => prev.filter(m => m.id !== id));
+        setActiveAction({ id: null, type: null });
+    };
+
+    // Delete mail
+    const deleteMail = async (id) => {
+        removeMailFromUI(id);
+        try {
+            await graphFetch(`/me/messages/${id}`, oToken, { method: 'DELETE' });
+        } catch (e) { console.error('Delete error:', e); }
+    };
+
+    // Move mail
+    const moveMail = async (id, folderId) => {
+        removeMailFromUI(id);
+        try {
+            await graphFetch(`/me/messages/${id}/move`, oToken, {
+                method: 'POST',
+                body: JSON.stringify({ destinationId: folderId })
+            });
+        } catch (e) { console.error('Move error:', e); }
+    };
+
+    // Lazy load folders
+    const loadFolders = async () => {
+        if (destinations.length > 0) return;
+        try {
+            const res = await graphFetch('/me/mailFolders?$top=20', oToken);
+            if (!res) return;
+            const data = await res.json();
+            setDestinations((data.value || []).map(f => ({ id: f.id, name: f.displayName })));
+        } catch (e) { console.error('Folders error:', e); }
+    };
+
+    // Reply
+    const sendReply = async (mail) => {
+        if (!replyText.trim()) return;
+        try {
+            await graphFetch(`/me/messages/${mail.id}/reply`, oToken, {
+                method: 'POST',
+                body: JSON.stringify({ message: { body: { contentType: "Text", content: `${replyText}\n\nGroeten, Michael` } } })
+            });
+            setActiveAction({ id: null, type: null });
+            setReplyText('');
+        } catch (e) {
+            console.error('Reply error:', e);
+            setError('Versturen mislukt');
+        }
+    };
+
+    // Toggle actie
+    const toggleAction = (id, type) => {
+        if (activeAction.id === id && activeAction.type === type) {
+            setActiveAction({ id: null, type: null });
+        } else {
+            setActiveAction({ id, type });
+            setReplyText('');
+            if (type === 'move') loadFolders();
+        }
+    };
+
+    // ==== RENDER ====
+    return (
+        <div className="widget h-[450px] flex flex-col bg-white">
+            {/* Header */}
+            <div className="shrink-0 p-3 bg-gray-50 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Ico.Mail />
+                    <span className="text-[10px] font-black tracking-widest uppercase">INBOX v4.5</span>
+                </div>
+                {error && <span className="text-[9px] text-red-500 font-bold truncate max-w-[180px]">{error}</span>}
+            </div>
+
+            {/* Tabs — voorlopig alleen Outlook actief */}
+            <div className="shrink-0 flex border-b">
+                <button className="tab-btn flex-1 opacity-40 cursor-not-allowed" disabled title="Gmail wordt later toegevoegd">
+                    GMAIL
+                </button>
+                <button className={`tab-btn flex-1 ${tab === 'outlook' ? 'active' : ''}`} onClick={() => setTab('outlook')}>
+                    OUTLOOK
+                </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 p-3 overflow-y-auto hide-scroll space-y-2">
+                {/* Connect scherm */}
+                {!oToken && (
+                    <div className="flex-1 flex items-center justify-center h-full">
+                        <button onClick={connectOutlook} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 py-3 rounded transition uppercase tracking-widest">
+                            Verbind Outlook
+                        </button>
+                    </div>
+                )}
+
+                {/* Loading */}
+                {oToken && loading && (
+                    <div className="flex items-center justify-center h-full">
+                        <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Synchroniseren...</span>
+                    </div>
+                )}
+
+                {/* Leeg */}
+                {oToken && !loading && oData.length === 0 && (
+                    <div className="flex items-center justify-center h-full">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">Geen nieuwe mails</span>
+                    </div>
+                )}
+
+                {/* Mail lijst */}
+                {oToken && !loading && oData.map(mail => (
+                    <div key={mail.id} className="p-2.5 border rounded-lg bg-gray-50 hover:border-blue-200 transition shadow-sm group">
+                        <div className="flex items-start justify-between gap-2">
+                            {/* Links: content */}
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[11px] font-bold truncate">{mail.fromStr}</p>
+                                <p className="text-[10px] truncate">{mail.subject}</p>
+                                <p className="text-[9px] text-gray-500 truncate">{mail.snippet}</p>
+                            </div>
+                            {/* Rechts: acties */}
+                            <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition">
+                                <button onClick={() => toggleAction(mail.id, 'reply')} className="px-2 py-1 text-[9px] font-bold text-blue-600 bg-white border rounded hover:bg-blue-50 transition">
+                                    Reply
+                                </button>
+                                <button onClick={() => toggleAction(mail.id, 'move')} className="px-2 py-1 text-[9px] font-bold text-gray-600 bg-white border rounded hover:bg-gray-100 transition">
+                                    Map
+                                </button>
+                                <button onClick={() => deleteMail(mail.id)} className="px-2 py-1 text-[9px] font-bold text-red-600 bg-red-50 border border-red-100 rounded hover:bg-red-100 transition">
+                                    Trash
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Inline Reply */}
+                        {activeAction.id === mail.id && activeAction.type === 'reply' && (
+                            <div className="mt-2 animate-fade-in">
+                                <textarea
+                                    autoFocus
+                                    value={replyText}
+                                    onChange={e => setReplyText(e.target.value)}
+                                    placeholder="Typ je antwoord..."
+                                    className="w-full h-12 p-2 border rounded text-[10px] bg-white resize-none outline-none focus:border-blue-400"
+                                />
+                                <button onClick={() => sendReply(mail)} className="mt-1 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-bold px-3 py-1.5 rounded transition">
+                                    Verstuur
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Inline Move */}
+                        {activeAction.id === mail.id && activeAction.type === 'move' && (
+                            <div className="mt-2 animate-fade-in">
+                                {destinations.length === 0 ? (
+                                    <span className="text-[9px] text-gray-400 animate-pulse">Laden...</span>
+                                ) : (
+                                    <select
+                                        onChange={e => { if (e.target.value) moveMail(mail.id, e.target.value); }}
+                                        defaultValue=""
+                                        className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400"
+                                    >
+                                        <option value="" disabled>Kies map...</option>
+                                        {destinations.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                    </select>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+    
 function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
     const [isSyncing, setIsSyncing] = useState(false);
@@ -2545,8 +2825,8 @@ function App() {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     
     // DEFAULT LAYOUT v8 INCLUSIEF 'spark'
-    const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'spark', 'radar', 'sports'];
-    const [layout, setLayout] = useState(() => S.load('layout_v8', defaultLayout));
+    const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'spark', 'radar', 'sports', 'email'];
+    const [layout, setLayout] = useState(() => S.load('layout_v9', defaultLayout));
 
     useEffect(() => {
         const doSync = async () => {
@@ -2568,7 +2848,7 @@ function App() {
                 } catch(e) { console.error("Auto-sync mislukt", e); }
                 
                 setLang(S.load('lang', 'nl'));
-                setLayout(S.load('layout_v8', defaultLayout));
+                setLayout(S.load('layout_v9', defaultLayout));
                 setIsSyncing(false); 
             }
         };
@@ -2615,7 +2895,8 @@ function App() {
         news: <div className="col-span-12 lg:col-span-8"><WidgetErrorBoundary name="Nieuws"><NewsWidget lang={lang} /></WidgetErrorBoundary></div>, 
         spark: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Spark"><SparkWidget lang={lang} /></WidgetErrorBoundary></div>,
         radar: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Beurs Radar"><RadarWidget lang={lang} /></WidgetErrorBoundary></div>, 
-        sports: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Sport"><SportsWidget lang={lang} /></WidgetErrorBoundary></div> 
+        sports: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Sport"><SportsWidget lang={lang} /></WidgetErrorBoundary></div>,
+        email: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Email"><EmailWidget lang={lang} /></WidgetErrorBoundary></div>
     };
 
     const hour = new Date().getHours();
@@ -2662,4 +2943,5 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
 </script>
 </body>
+
 </html>
