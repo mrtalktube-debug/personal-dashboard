@@ -275,7 +275,280 @@ function WeatherBar({ lang }) {
     );
 }
 
-function AIWidget({ lang }) {
+// EmailWidget v4.5 Component
+function EmailWidget({ lang }) {
+    const [tab, setTab] = useState('gmail');
+    const [gData, setGData] = useState([]);
+    const [oData, setOData] = useState([]);
+    const [gToken, setGToken] = useState(() => sessionStorage.getItem('gmail_token'));
+    const [oToken, setOToken] = useState(() => sessionStorage.getItem('outlook_token'));
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    
+    const [activeAction, setActiveAction] = useState({ id: null, type: null });
+    const [replyText, setReplyText] = useState('');
+    const [destinations, setDestinations] = useState([]);
+
+    const msClientId = S.load('ms_client_id', '');
+
+    // Optimistische UI
+    const removeMailFromUI = (id, isGmail) => {
+        if (isGmail) setGData(prev => prev.filter(m => m.id !== id));
+        else setOData(prev => prev.filter(m => m.id !== id));
+        setActiveAction({ id: null, type: null });
+    };
+
+    // --- GMAIL LOGICA ---
+    const connectGmail = () => {
+        if (!window.google) return setError("Google script niet geladen");
+        const client = window.google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send',
+            callback: (resp) => {
+                if (resp.access_token) {
+                    sessionStorage.setItem('gmail_token', resp.access_token);
+                    setGToken(resp.access_token);
+                    fetchGmail(resp.access_token);
+                }
+            },
+        });
+        client.requestAccessToken();
+    };
+
+    const fetchGmail = async (token) => {
+        setLoading(true); setError('');
+        try {
+            const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?q=category:primary+-has:userlabels&maxResults=6', { headers: { Authorization: `Bearer ${token}` } });
+            if (res.status === 401) throw new Error('Token expired');
+            const data = await res.json();
+            
+            if (!data.messages) { setGData([]); setLoading(false); return; }
+
+            const msgs = await Promise.all(data.messages.map(async (m) => {
+                const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Message-ID`, { headers: { Authorization: `Bearer ${token}` } });
+                const msgData = await msgRes.json();
+                const headers = msgData.payload.headers;
+                return { 
+                    id: m.id, 
+                    threadId: msgData.threadId,
+                    subject: headers.find(h => h.name === 'Subject')?.value || 'Geen onderwerp',
+                    fromStr: headers.find(h => h.name === 'From')?.value || 'Onbekend',
+                    msgId: headers.find(h => h.name === 'Message-ID')?.value || '',
+                    snippet: msgData.snippet
+                };
+            }));
+            setGData(msgs);
+        } catch (e) {
+            console.error(e);
+            if (e.message === 'Token expired') { setGToken(null); sessionStorage.removeItem('gmail_token'); }
+            else setError(e.message);
+        }
+        setLoading(false);
+    };
+
+    const actionGmail = async (id, actionType, payload) => {
+        const mail = gData.find(m => m.id === id);
+        if (!mail) return;
+
+        try {
+            if (actionType === 'delete') {
+                removeMailFromUI(id, true);
+                await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/trash`, { method: 'POST', headers: { Authorization: `Bearer ${gToken}` } });
+            } 
+            else if (actionType === 'move') {
+                removeMailFromUI(id, true);
+                await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/modify`, {
+                    method: 'POST', headers: { Authorization: `Bearer ${gToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ addLabelIds: [payload], removeLabelIds: ['INBOX'] })
+                });
+            }
+            else if (actionType === 'reply') {
+                setActiveAction({ id: null, type: null });
+                const to = mail.fromStr.match(/<([^>]+)>/)?.[1] || mail.fromStr;
+                const subject = mail.subject.startsWith('Re:') ? mail.subject : 'Re: ' + mail.subject;
+                const raw = `To: ${to}\r\nSubject: ${subject}\r\nIn-Reply-To: ${mail.msgId}\r\nReferences: ${mail.msgId}\r\n\r\n${payload}\n\nGroeten, Michael`;
+                
+                const utf8_to_b64 = (str) => window.btoa(unescape(encodeURIComponent(str)));
+                const encoded = utf8_to_b64(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                
+                await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/send`, {
+                    method: 'POST', headers: { Authorization: `Bearer ${gToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ raw: encoded, threadId: mail.threadId })
+                });
+            }
+        } catch(e) { console.error("Gmail Actie Fout", e); }
+    };
+
+    const loadGmailLabels = async () => {
+        if (destinations.length > 0) return;
+        try {
+            const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/labels`, { headers: { Authorization: `Bearer ${gToken}` } });
+            const data = await res.json();
+            if (data.labels) setDestinations(data.labels.filter(l => l.type === 'user'));
+        } catch(e) { console.error(e); }
+    };
+
+    // --- OUTLOOK LOGICA ---
+    const connectOutlook = async () => {
+        if (!window.msal) return setError("MSAL script niet geladen");
+        if (!msClientId) return setError("Configureer Client ID in instellingen");
+
+        const msalConfig = { auth: { clientId: msClientId, authority: "https://login.microsoftonline.com/common" } };
+        const msalInstance = new window.msal.PublicClientApplication(msalConfig);
+        await msalInstance.initialize();
+
+        try {
+            const authResult = await msalInstance.loginPopup({ scopes: ["Mail.ReadWrite", "Mail.Send"] });
+            sessionStorage.setItem('outlook_token', authResult.accessToken);
+            setOToken(authResult.accessToken);
+            fetchOutlook(authResult.accessToken);
+        } catch (e) { setError(e.message); }
+    };
+
+    const fetchOutlook = async (token) => {
+        setLoading(true); setError('');
+        try {
+            const res = await fetch("https://graph.microsoft.com/v1.0/me/messages?$filter=inferenceClassification eq 'focused'&$top=6&$select=subject,sender,bodyPreview", { headers: { Authorization: `Bearer ${token}` } });
+            if (res.status === 401) throw new Error('Token expired');
+            const data = await res.json();
+            
+            if (data.value) {
+                setOData(data.value.map(m => ({ 
+                    id: m.id, 
+                    subject: m.subject, 
+                    fromStr: m.sender?.emailAddress?.name || m.sender?.emailAddress?.address || 'Onbekend', 
+                    snippet: m.bodyPreview 
+                })));
+            }
+        } catch (e) {
+            console.error(e);
+            if (e.message === 'Token expired') { setOToken(null); sessionStorage.removeItem('outlook_token'); }
+            else setError(e.message);
+        }
+        setLoading(false);
+    };
+
+    const actionOutlook = async (id, actionType, payload) => {
+        try {
+            if (actionType === 'delete') {
+                removeMailFromUI(id, false);
+                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${oToken}` } });
+            } 
+            else if (actionType === 'move') {
+                removeMailFromUI(id, false);
+                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${id}/move`, {
+                    method: 'POST', headers: { Authorization: `Bearer ${oToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ destinationId: payload })
+                });
+            }
+            else if (actionType === 'reply') {
+                setActiveAction({ id: null, type: null });
+                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${id}/reply`, {
+                    method: 'POST', headers: { Authorization: `Bearer ${oToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: { body: { contentType: "Text", content: `${payload}\n\nGroeten, Michael` } } })
+                });
+            }
+        } catch(e) { console.error("Outlook Actie Fout", e); }
+    };
+
+    const loadOutlookFolders = async () => {
+        if (destinations.length > 0) return;
+        try {
+            const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders?$top=20`, { headers: { Authorization: `Bearer ${oToken}` } });
+            const data = await res.json();
+            if (data.value) setDestinations(data.value);
+        } catch(e) { console.error(e); }
+    };
+
+    useEffect(() => {
+        if (tab === 'gmail' && gToken && gData.length === 0) fetchGmail(gToken);
+        if (tab === 'outlook' && oToken && oData.length === 0) fetchOutlook(oToken);
+        setActiveAction({ id: null, type: null });
+        setDestinations([]);
+    }, [tab]);
+
+    // --- RENDER HELPERS ---
+    const renderActionUI = (m, isGmail) => {
+        if (activeAction.id !== m.id) return null;
+        
+        if (activeAction.type === 'reply') return (
+            <div className="mt-2 flex gap-2 animate-fade-in">
+                <textarea autoFocus value={replyText} onChange={e=>setReplyText(e.target.value)} placeholder="Antwoord typen..." className="flex-1 text-[10px] p-1.5 border rounded outline-none resize-none h-12" />
+                <button onClick={() => isGmail ? actionGmail(m.id, 'reply', replyText) : actionOutlook(m.id, 'reply', replyText)} className="bg-blue-600 text-white font-bold text-[9px] px-2 rounded hover:bg-blue-700">Send</button>
+            </div>
+        );
+
+        if (activeAction.type === 'move') return (
+            <div className="mt-2 animate-fade-in">
+                {destinations.length === 0 ? <span className="text-[9px] text-gray-400">Laden...</span> : (
+                    <select onChange={(e) => isGmail ? actionGmail(m.id, 'move', e.target.value) : actionOutlook(m.id, 'move', e.target.value)} defaultValue="" className="w-full text-[10px] p-1 border rounded bg-white">
+                        <option value="" disabled>Kies {isGmail ? 'Label' : 'Map'}...</option>
+                        {destinations.map(d => <option key={d.id} value={d.id}>{d.name || d.displayName}</option>)}
+                    </select>
+                )}
+            </div>
+        );
+        return null;
+    };
+
+    const renderMailList = (data, isGmail) => data.map(m => (
+        <div key={m.id} className="p-2.5 border rounded-lg bg-gray-50 hover:border-blue-200 transition shadow-sm group">
+            <div className="flex justify-between items-start">
+                <div className="min-w-0 flex-1">
+                    <div className="font-bold text-[11px] text-gray-900 truncate mb-0.5">{m.fromStr.split('<')[0].trim()}</div>
+                    <div className="text-[10px] text-gray-800 font-medium truncate">{m.subject}</div>
+                    <div className="text-[9px] text-gray-500 truncate mt-0.5">{m.snippet}</div>
+                </div>
+                <div className="flex flex-col gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => { setActiveAction({id: m.id, type: 'reply'}); setReplyText(''); }} className="text-[9px] bg-white border px-1.5 py-0.5 rounded text-blue-600 hover:bg-blue-50 font-bold">Reply</button>
+                    <button onClick={() => { setActiveAction({id: m.id, type: 'move'}); if(isGmail) loadGmailLabels(); else loadOutlookFolders(); }} className="text-[9px] bg-white border px-1.5 py-0.5 rounded text-gray-600 hover:bg-gray-100 font-bold">{isGmail ? 'Label' : 'Map'}</button>
+                    <button onClick={() => isGmail ? actionGmail(m.id, 'delete') : actionOutlook(m.id, 'delete')} className="text-[9px] bg-red-50 border border-red-100 px-1.5 py-0.5 rounded text-red-600 hover:bg-red-100 font-bold">Trash</button>
+                </div>
+            </div>
+            {renderActionUI(m, isGmail)}
+        </div>
+    ));
+
+    return (
+        <div className="widget h-[450px] flex flex-col bg-white">
+            <div className="p-3 bg-gray-50 border-b flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-2 text-gray-500 font-black tracking-widest text-[10px] uppercase">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg> INBOX v4.5
+                </div>
+                {error && <span className="text-[8px] text-red-500 font-bold truncate max-w-[150px]">{error}</span>}
+            </div>
+
+            <div className="flex border-b bg-white shrink-0">
+                <button onClick={() => setTab('gmail')} className={`tab-btn ${tab === 'gmail' ? 'active' : ''}`}>GMAIL</button>
+                <button onClick={() => setTab('outlook')} className={`tab-btn ${tab === 'outlook' ? 'active' : ''}`}>OUTLOOK</button>
+            </div>
+
+            <div className="flex-1 p-3 overflow-y-auto hide-scroll space-y-2">
+                {tab === 'gmail' && (
+                    !gToken ? (
+                        <div className="h-full flex flex-col items-center justify-center gap-3">
+                            <button onClick={connectGmail} className="px-4 py-2 bg-red-600 text-white font-bold text-xs rounded shadow-sm hover:bg-red-700">Verbind Gmail</button>
+                        </div>
+                    ) : loading ? <div className="text-center text-[10px] text-red-500 font-bold mt-10 animate-pulse">Synchroniseren...</div>
+                      : gData.length === 0 ? <div className="text-center text-[10px] text-gray-400 mt-10 font-bold uppercase">Geen nieuwe mails</div>
+                      : renderMailList(gData, true)
+                )}
+
+                {tab === 'outlook' && (
+                    !oToken ? (
+                        <div className="h-full flex flex-col items-center justify-center gap-3">
+                            <button onClick={connectOutlook} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded shadow-sm hover:bg-blue-700">Verbind Outlook</button>
+                        </div>
+                    ) : loading ? <div className="text-center text-[10px] text-blue-500 font-bold mt-10 animate-pulse">Synchroniseren...</div>
+                      : oData.length === 0 ? <div className="text-center text-[10px] text-gray-400 mt-10 font-bold uppercase">Geen nieuwe mails</div>
+                      : renderMailList(oData, false)
+                )}
+            </div>
+        </div>
+    );
+}
+    
+    function AIWidget({ lang }) {
     const [msg, setMsg] = useState('');
     const [loading, setLoading] = useState(false);
     const [attachedFile, setAttachedFile] = useState(null);
