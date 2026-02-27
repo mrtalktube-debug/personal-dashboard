@@ -2759,6 +2759,8 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     );
 }
 
+const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'spark', 'radar', 'sports', 'email'];
+
 function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
     const [isSyncing, setIsSyncing] = useState(false);
@@ -2768,7 +2770,6 @@ function App() {
     
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     
-    // const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'spark', 'radar', 'sports', 'email'];
     const [layout, setLayout] = useState(() => S.load('layout_v8', defaultLayout));
 
     useEffect(() => {
@@ -2838,7 +2839,7 @@ function App() {
         spark: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Spark"><SparkWidget lang={lang} /></WidgetErrorBoundary></div>,
         radar: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Beurs Radar"><RadarWidget lang={lang} /></WidgetErrorBoundary></div>, 
         sports: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Sport"><SportsWidget lang={lang} /></WidgetErrorBoundary></div>,
-        // email: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Inbox"><EmailWidget lang={lang} /></WidgetErrorBoundary></div>
+        email: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Inbox"><EmailWidget lang={lang} /></WidgetErrorBoundary></div>
     };
 
     const hour = new Date().getHours();
