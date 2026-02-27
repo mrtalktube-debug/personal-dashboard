@@ -9,17 +9,16 @@
     <link rel="apple-touch-icon" href="https://i.postimg.cc/NLqKzZ4C/nieuw-schaap-logo1.png">
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <link rel="preconnect" href="https://unpkg.com" crossorigin>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    
-    <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
-
+<!-- NIEUW: preconnect voor snellere DNS/TLS -->
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- NIEUW: Chart.js lazy laden, alleen nodig als crypto-widget zichtbaar -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root { --p-blue: #0073b1; --bg: linear-gradient(135deg, #001a33 0%, #000a14 100%); }
@@ -80,44 +79,8 @@ const Ico = {
     Up: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M5 15l7-7 7 7"/></svg>,
     Dn: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>,
     Drag: () => <svg className="w-4 h-4 text-gray-400 cursor-move" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>,
-    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>,
-    Mail: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+    Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
 };
-
-class WidgetErrorBoundary extends React.Component {
-    constructor(props) { super(props); this.state = { hasError: false, error: null }; }
-    static getDerivedStateFromError(error) { return { hasError: true, error }; }
-    componentDidCatch(err, info) { console.error(`[${this.props.name}] Widget crash:`, err, info); }
-    render() {
-        if (this.state.hasError) return (
-            <div className="widget p-4">
-                <div className="bg-red-50 border border-red-200 rounded p-3 text-center">
-                    <p className="text-red-600 font-bold text-xs mb-1">⚠️ {this.props.name} – Fout</p>
-                    <p className="text-red-500 text-[10px] mb-2">{this.state.error?.message || 'Onbekende fout'}</p>
-                    <button onClick={() => this.setState({ hasError: false, error: null })} className="bg-red-600 text-white px-3 py-1 rounded text-[10px] font-bold hover:bg-red-700">Opnieuw proberen</button>
-                </div>
-            </div>
-        );
-        return this.props.children;
-    }
-}
-
-async function fetchWithRetry(url, options, retries = 1) {
-    for (let i = 0; i <= retries; i++) {
-        try {
-            const res = await fetch(url, options);
-            if (res.ok || i === retries) return res;
-            if (res.status === 502 || res.status === 503) {
-                await new Promise(r => setTimeout(r, 2000));
-                continue;
-            }
-            return res;
-        } catch (e) {
-            if (i === retries) throw e;
-            await new Promise(r => setTimeout(r, 2000));
-        }
-    }
-}
 
 function WeatherBar({ lang }) {
     const [c, setC] = useState(() => {
@@ -212,16 +175,35 @@ function WeatherBar({ lang }) {
         }).catch(() => setW(prev => ({ ...prev, name: "Error" })));
     }, [c, lang]);
 
+    /* Massieve weer iconen gekoppeld aan WMO codes */
     const WxIco = ({ code, isLoading }) => {
         if (isLoading) return <svg className="w-4 h-4 shrink-0 animate-spin text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
+        
+        // ZON (Code 0 of ontbrekend)
         if (code === 0 || code === undefined || code === null) return <svg className="w-4 h-4 shrink-0 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" /></svg>;
+
+        // ZON & WOLK (Code 1, 2)
         if (code === 1 || code === 2) return <svg className="w-4 h-4 shrink-0 text-yellow-200" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" clipRule="evenodd" d="M6.91 10.518c.036-.59.184-1.166.435-1.705.518-1.114 1.4-2.023 2.527-2.601A5.96 5.96 0 0113.5 5.5c1.196 0 2.338.35 3.303.978.895.584 1.593 1.399 2.016 2.353.424.953.535 2.018.318 3.036-.217 1.018-.748 1.93-1.522 2.617a4.498 4.498 0 01-1.144.757h.03a3.5 3.5 0 110 7H6.5a4.5 4.5 0 11.41-8.981v-.001a4.48 4.48 0 01-.41-8.981zM10.25 2.5a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5zM4.146 5.646a.75.75 0 00-1.06 1.06l1.06 1.06a.75.75 0 001.06-1.06l-1.06-1.06zM2.5 10.25a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5h-1.5z" /></svg>;
+
+        // ZWAAR BEWOLKT (Code 3)
         if (code === 3) return <svg className="w-4 h-4 shrink-0 text-gray-300" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" clipRule="evenodd" d="M6.5 19h11a4.5 4.5 0 001.623-8.697 7.498 7.498 0 00-14.246 1.49A4.5 4.5 0 006.5 19z" /></svg>;
+
+        // MIST (Code 45, 48)
         if (code === 45 || code === 48) return <svg className="w-4 h-4 shrink-0 text-gray-400" fill="currentColor" viewBox="0 0 24 24"><path d="M4 7h16v2H4V7zm0 4h16v2H4v-2zm0 4h16v2H4v-2zm4 4h8v2H8v-2z" /></svg>;
+
+        // MOTREGEN (Code 51-57)
         if (code >= 51 && code <= 57) return <svg className="w-4 h-4 shrink-0 text-blue-300" fill="currentColor" viewBox="0 0 24 24"><path d="M6.5 17h11a4.5 4.5 0 001.623-8.697 7.498 7.498 0 00-14.246 1.49A4.5 4.5 0 006.5 17zm1.5 2a1 1 0 10-2 0v2a1 1 0 102 0v-2zm6 0a1 1 0 10-2 0v2a1 1 0 102 0v-2zm6 0a1 1 0 10-2 0v2a1 1 0 102 0v-2z" /></svg>;
+
+        // REGEN (Code 61-67, 80-82)
         if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return <svg className="w-4 h-4 shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M6.5 16h11a4.5 4.5 0 001.623-8.697 7.498 7.498 0 00-14.246 1.49A4.5 4.5 0 006.5 16zm.854 2.146a.5.5 0 01.146.354v3a.5.5 0 01-1 0v-3a.5.5 0 01.854-.354zm5 0a.5.5 0 01.146.354v4a.5.5 0 01-1 0v-4a.5.5 0 01.854-.354zm5 0a.5.5 0 01.146.354v3a.5.5 0 01-1 0v-3a.5.5 0 01.854-.354z" /></svg>;
+
+        // SNEEUW (Code 71-77, 85, 86)
         if ((code >= 71 && code <= 77) || code === 85 || code === 86) return <svg className="w-4 h-4 shrink-0 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6.5 16h11a4.5 4.5 0 001.623-8.697 7.498 7.498 0 00-14.246 1.49A4.5 4.5 0 006.5 16zm-1 3.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm5 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm5 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" /></svg>; 
+
+        // ONWEER (Code 95, 96, 99)
         if (code >= 95) return <svg className="w-4 h-4 shrink-0 text-yellow-500" fill="currentColor" viewBox="0 0 24 24"><path d="M11.623 2.162a1.5 1.5 0 00-1.897 1.13L8.03 9.475H4.5a1.5 1.5 0 00-1.155 2.463l8 9.5a1.5 1.5 0 002.584-1.373l-1.282-5.565h3.853a1.5 1.5 0 001.189-2.42l-4.5-5.5a1.5 1.5 0 00-1.566-.418l-1.566.418v-.001L11.623 2.162z" /></svg>; 
+
+        // Veiligheidsfallback
         return <svg className="w-4 h-4 shrink-0 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" /></svg>;
     };
 
@@ -240,6 +222,7 @@ function WeatherBar({ lang }) {
     return (
         <div className="bg-white/5 px-2 md:px-10 py-2.5 border-b border-white/10 flex items-center text-white text-xs font-bold uppercase tracking-widest overflow-hidden w-full">
             <div className="flex gap-2 sm:gap-4 items-center shrink-0 w-full">
+                
                 <div className="flex items-center gap-1.5 shrink-0 bg-black/20 px-2 py-1.5 rounded-lg border border-white/5 max-w-[45%]">
                     <div 
                         className="flex items-center gap-1.5 cursor-pointer hover:text-blue-300 transition flex-1 min-w-0" 
@@ -301,6 +284,7 @@ function AIWidget({ lang }) {
     const lastUserMsgRef = useRef(null);
     const prevHistLen = useRef(0);
 
+    // --- FIX START: Auto-Save & Clean Slate Logica ---
     const [sessions, setSessions] = useState(() => {
         let loadedSessions = [];
         try { loadedSessions = S.load('michael_sessions', []); } catch(e) {}
@@ -311,8 +295,10 @@ function AIWidget({ lang }) {
         let activeId = null;
         try { activeId = S.load('ai_active_session', null); } catch(e) {}
 
+        // Als er bij het opstarten nog een oude chat open stond, verplaats deze veilig naar de Historie
         if (savedHist && savedHist.length > 0 && savedHist.some(m => m.r === 'usr')) {
             if (activeId) {
+                // Update de bestaande sessie
                 const idx = loadedSessions.findIndex(s => s.id === activeId);
                 if (idx !== -1) {
                     loadedSessions[idx].msgs = savedHist;
@@ -321,6 +307,7 @@ function AIWidget({ lang }) {
                     loadedSessions.unshift({id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: savedHist});
                 }
             } else {
+                // Maak een nieuwe sessie aan voor de onopgeslagen chat
                 const title = savedHist.find(m=>m.r==='usr')?.t?.slice(0,40) || 'Chat';
                 loadedSessions.unshift({id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: savedHist});
             }
@@ -328,13 +315,16 @@ function AIWidget({ lang }) {
             S.save('michael_sessions', loadedSessions);
         }
         
+        // Wis het huidige scherm volledig zodat we 100% nieuw beginnen (net als Gemini)
         S.save('ai_hist', []);
         S.save('ai_active_session', null);
         return loadedSessions;
     });
 
     const [activeSession, setActiveSession] = useState(null);
-    const [hist, setHist] = useState([]);
+    const [hist, setHist] = useState([]); // Altijd leeg beginnen!
+    // --- FIX END ---
+
     const [view, setView] = useState('chat');
     const [exp, setExp] = useState(false);
 
@@ -362,6 +352,7 @@ function AIWidget({ lang }) {
         }).catch(()=>{});
     };
 
+    // Stuur de opgeschoonde staat direct naar Vercel KV bij het inladen
     useEffect(() => {
         syncToCloud();
     }, []);
@@ -387,6 +378,7 @@ function AIWidget({ lang }) {
         if(isImg) reader.readAsDataURL(file); else reader.readAsText(file);
     };
 
+    // Centraal updaten van geschiedenis EN actieve sessie (als je in de historie typt)
     const updateChatState = (newHist) => {
         setHist(newHist);
         S.save('ai_hist', newHist);
@@ -833,6 +825,43 @@ function CryptoWidget({ lang }) {
     );
 }
 
+/* v4.3 NIEUW: Error Boundary – vangt crashes op in production React */
+class WidgetErrorBoundary extends React.Component {
+    constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+    static getDerivedStateFromError(error) { return { hasError: true, error }; }
+    componentDidCatch(err, info) { console.error(`[${this.props.name}] Widget crash:`, err, info); }
+    render() {
+        if (this.state.hasError) return (
+            <div className="widget p-4">
+                <div className="bg-red-50 border border-red-200 rounded p-3 text-center">
+                    <p className="text-red-600 font-bold text-xs mb-1">⚠️ {this.props.name} – Fout</p>
+                    <p className="text-red-500 text-[10px] mb-2">{this.state.error?.message || 'Onbekende fout'}</p>
+                    <button onClick={() => this.setState({ hasError: false, error: null })} className="bg-red-600 text-white px-3 py-1 rounded text-[10px] font-bold hover:bg-red-700">Opnieuw proberen</button>
+                </div>
+            </div>
+        );
+        return this.props.children;
+    }
+}
+
+/* v4.3 NIEUW: fetchWithRetry – 1x retry na 2s bij 502/503 (Vercel cold start) */
+async function fetchWithRetry(url, options, retries = 1) {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const res = await fetch(url, options);
+            if (res.ok || i === retries) return res;
+            if (res.status === 502 || res.status === 503) {
+                await new Promise(r => setTimeout(r, 2000));
+                continue;
+            }
+            return res;
+        } catch (e) {
+            if (i === retries) throw e;
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+}
+
 function AgendaWidget({ lang }) {
     const rawCals = S.load('icals_dyn', [{name: 'Agenda', val: ''}]);
     const cals = (Array.isArray(rawCals)?rawCals:[]).map(c=>c?.name).filter(Boolean);
@@ -852,6 +881,7 @@ function AgendaWidget({ lang }) {
     useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => (c||'').toLowerCase().includes((e.detail.payload||'').toLowerCase())); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
     useEffect(() => { setF(cals); }, [JSON.stringify(cals)]);
 
+    /* v4.3: Parallel laden (Promise.all) + sessionStorage cache (15 min) + retry bij 502 */
     useEffect(() => {
         const fetchCals = async () => {
             setLoading(true);
@@ -877,6 +907,7 @@ function AgendaWidget({ lang }) {
                 return { date: getLocalYYYYMMDD(dateObj), time: isAllDay ? 'Hele dag' : dateObj.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }), dateObj, isAllDay };
             };
 
+            /* v4.3: Promise.all – alle kalenders tegelijk ophalen i.p.v. sequentieel */
             const fetchPromises = (Array.isArray(rawCals) ? rawCals : []).map(async (c) => {
                 if (!c?.val) return [];
                 const calEvs = [];
@@ -1003,6 +1034,7 @@ function AgendaWidget({ lang }) {
                 })}
             </div>
             
+            {/* AANGEPASTE COMPACTE NAVIGATIE BALK VOOR MOBIEL */}
             <div className="p-2 flex border-b border-gray-200 bg-gray-50 items-center justify-between shrink-0 gap-1.5 overflow-hidden">
                 <div 
                     className="relative flex items-center bg-white border border-gray-200 p-1.5 px-2 rounded shadow-sm hover:bg-gray-100 transition cursor-pointer shrink-0"
@@ -1077,7 +1109,7 @@ function AgendaWidget({ lang }) {
         </div>
     );
 }
-
+    
 function NewsWidget({ lang }) {
     const defaultCols = ['AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
     const [cols, setCols] = useState(() => S.load('newscats', defaultCols));
@@ -1220,6 +1252,7 @@ function NewsWidget({ lang }) {
 
     useEffect(() => {
         let alive = true;
+        /* NIEUW v1.5: Cache key is nu specifiek voor de taal (nl of en) zodat bij switchen direct vers nieuws wordt geladen */
         const cacheKey = `nws_cache_v15_${lang}`;
         const cached = sessionStorage.getItem(cacheKey);
         if (cached) {
@@ -1293,6 +1326,7 @@ function NewsWidget({ lang }) {
 
     const isSearchActive = search.trim().length > 0;
 
+    /* NIEUW v1.5: Bepaal welke sorteeropties beschikbaar zijn en valideer de actieve soort */
     const availableSorts = (isSearchActive || feedMode === 'alles') ? ['tijd', 'bron'] : ['tijd', 'bron', 'onderwerp'];
     const sortLabels = {
         tijd: lang === 'nl' ? 'Tijd' : 'Time',
@@ -1317,6 +1351,7 @@ function NewsWidget({ lang }) {
             const tA = new Date(a.pubDate).getTime() || 0;
             const tB = new Date(b.pubDate).getTime() || 0;
             
+            // Valideer sortMode: val terug op 'tijd' als 'onderwerp' geselecteerd is maar niet is toegestaan
             let effectiveSort = sortMode;
             if ((isSearchActive || feedMode === 'alles') && sortMode === 'onderwerp') {
                 effectiveSort = 'tijd';
@@ -1326,6 +1361,7 @@ function NewsWidget({ lang }) {
                 let iA = priority.findIndex(p => (a.source||'').toLowerCase().includes(p)); if (iA===-1) iA=9999;
                 let iB = priority.findIndex(p => (b.source||'').toLowerCase().includes(p)); if (iB===-1) iB=9999;
                 if (iA !== iB) return iA - iB;
+                // NIEUW: Als ze niet in favorieten staan, sorteer secondair op alfabet (A-Z)
                 const srcA = (a.source || '').toLowerCase();
                 const srcB = (b.source || '').toLowerCase();
                 if (srcA < srcB) return -1;
@@ -1335,6 +1371,7 @@ function NewsWidget({ lang }) {
                 let iA = cols.findIndex(c => c.toLowerCase() === (a.cat||'').toLowerCase()); if (iA===-1) iA=9999;
                 let iB = cols.findIndex(c => c.toLowerCase() === (b.cat||'').toLowerCase()); if (iB===-1) iB=9999;
                 if (iA !== iB) return iA - iB;
+                // NIEUW: Sorteer secondair alfabetisch op categorie (A-Z)
                 const catA = (a.cat || '').toLowerCase();
                 const catB = (b.cat || '').toLowerCase();
                 if (catA < catB) return -1;
@@ -1388,6 +1425,7 @@ function NewsWidget({ lang }) {
                 </div>
             </div>
 
+            {/* NIEUW v1.5: Sorteerknoppen toegevoegd aan de 2e rij zodat ze op mobiel altijd passen */}
             <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-3 justify-between items-center shrink-0">
                 <div className="flex items-center gap-3 flex-wrap">
                     {!isSearchActive ? (
@@ -1608,6 +1646,7 @@ function RadarWidget({ lang }) {
     const [recs, setRecs] = useState([]);
     const [recsLoading, setRecsLoading] = useState(true);
 
+    /* v4.3: sessionStorage cache (2 min) + retry bij 502 + snellere refresh */
     useEffect(() => {
         const fetchStockData = async () => {
             const cacheKey = 'radar_stocks_v3';
@@ -1640,6 +1679,7 @@ function RadarWidget({ lang }) {
         return () => clearInterval(interval);
     }, [assets]);
 
+    /* v4.3: Aanbevelingen cache (10 min) + retry */
     useEffect(() => {
         const fetchRecs = async () => {
             setRecsLoading(true);
@@ -1818,12 +1858,15 @@ function SportsWidget({ lang }) {
     const [eGS, setEGS] = useState(false);
     const [eGL, setEGL] = useState(false);
 
+    /* v4.3: Nationaliteit → vlag emoji mapping */
     const FLAGS = { dutch:'🇳🇱',british:'🇬🇧',german:'🇩🇪',spanish:'🇪🇸',mexican:'🇲🇽',australian:'🇦🇺',french:'🇫🇷',canadian:'🇨🇦',monegasque:'🇲🇨',thai:'🇹🇭',japanese:'🇯🇵',chinese:'🇨🇳',finnish:'🇫🇮',danish:'🇩🇰',american:'🇺🇸',italian:'🇮🇹',polish:'🇵🇱',brazilian:'🇧🇷',norwegian:'🇳🇴',swedish:'🇸🇪',swiss:'🇨🇭','new zealander':'🇳🇿',argentine:'🇦🇷',korean:'🇰🇷',irish:'🇮🇪','south african':'🇿🇦',belgian:'🇧🇪',austrian:'🇦🇹',colombian:'🇨🇴',portuguese:'🇵🇹',indian:'🇮🇳' };
     const getFlag = (nat) => FLAGS[(nat||'').toLowerCase()] || '🏁';
 
+    /* v4.3: Datum formatter naar "02 Mar" formaat */
     const fmtDate = (iso) => { const d = new Date(iso); const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${String(d.getDate()).padStart(2,'0')} ${m[d.getMonth()]}`; };
     const fmtTimeNL = (iso) => { const d = new Date(iso); return d.toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Amsterdam' }); };
 
+    /* v4.3: Fallback data (wordt getoond als API's falen) */
     const FALLBACK_F1 = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
     const FALLBACK_GOLF = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
 
@@ -1831,9 +1874,10 @@ function SportsWidget({ lang }) {
     const [golfPga, setGolfPga] = useState(FALLBACK_GOLF);
     const [golfDp, setGolfDp] = useState(FALLBACK_GOLF);
 
+    /* v4.3 LIVE: F1 data ophalen via Jolpica (Ergast opvolger, gratis, geen key) */
     useEffect(() => {
         const CACHE_KEY = 'sports_f1_v3';
-        const CACHE_TTL = 1800000;
+        const CACHE_TTL = 1800000; /* 30 minuten */
         const currentYear = new Date().getFullYear();
 
         const fetchF1 = async () => {
@@ -1842,6 +1886,7 @@ function SportsWidget({ lang }) {
                 try { const { t, d } = JSON.parse(cached); if (Date.now() - t < CACHE_TTL) { setF1Data(d); setSportsLoading(false); return; } } catch(e) {}
             }
             try {
+                /* Parallel: kalender + standings + laatste race */
                 const [calRes, stdRes, lstRes] = await Promise.all([
                     fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/races/`, { headers: { 'Accept': 'application/json' } }),
                     fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/driverStandings/`, { headers: { 'Accept': 'application/json' } }),
@@ -1850,6 +1895,7 @@ function SportsWidget({ lang }) {
 
                 const result = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
 
+                /* Kalender: komende races */
                 if (calRes.ok) {
                     const calJson = await calRes.json();
                     const races = calJson?.MRData?.RaceTable?.Races || [];
@@ -1864,6 +1910,7 @@ function SportsWidget({ lang }) {
                         }));
                 }
 
+                /* Standings */
                 if (stdRes.ok) {
                     const stdJson = await stdRes.json();
                     const drivers = stdJson?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings || [];
@@ -1875,6 +1922,7 @@ function SportsWidget({ lang }) {
                     }));
                 }
 
+                /* Laatste race resultaat */
                 if (lstRes.ok) {
                     const lstJson = await lstRes.json();
                     const race = lstJson?.MRData?.RaceTable?.Races?.[0];
@@ -1894,6 +1942,7 @@ function SportsWidget({ lang }) {
                 try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), d: result })); } catch(e) {}
             } catch (e) {
                 console.error('F1 API fout:', e);
+                /* Probeer cache als fallback, ook als verlopen */
                 const cached = sessionStorage.getItem(CACHE_KEY);
                 if (cached) { try { setF1Data(JSON.parse(cached).d); } catch(e) {} }
             }
@@ -1904,8 +1953,9 @@ function SportsWidget({ lang }) {
         return () => clearInterval(interval);
     }, []);
 
+    /* v4.3 LIVE: Golf data ophalen via Vercel proxy → ESPN */
     useEffect(() => {
-        const CACHE_TTL = 900000;
+        const CACHE_TTL = 900000; /* 15 minuten */
 
         const fetchGolf = async (tour, cacheKey) => {
             const cached = sessionStorage.getItem(cacheKey);
@@ -1923,6 +1973,7 @@ function SportsWidget({ lang }) {
 
                 const result = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
 
+                /* Kalender: komende toernooien */
                 const events = data?.events || [];
                 const now = new Date();
                 result.c = events
@@ -1934,6 +1985,7 @@ function SportsWidget({ lang }) {
                         t: fmtTimeNL(e.date)
                     }));
 
+                /* Laatste toernooi resultaat (meest recente voltooide event) */
                 const completed = events.filter(e => {
                     const status = e.status?.type?.state || e.competitions?.[0]?.status?.type?.state || '';
                     return status === 'post' || new Date(e.date) < now;
@@ -1951,6 +2003,7 @@ function SportsWidget({ lang }) {
                     };
                 }
 
+                /* Rankings (als beschikbaar in data, anders uit competitors) */
                 if (data?.rankings?.length > 0) {
                     result.s = data.rankings.slice(0, 10).map((r, i) => ({
                         p: i + 1,
@@ -1959,6 +2012,7 @@ function SportsWidget({ lang }) {
                         pt: r.stat?.displayValue || r.points || '-'
                     }));
                 } else if (lastEvent?.competitions?.[0]?.competitors) {
+                    /* Fallback: gebruik leaderboard van laatste toernooi als standings */
                     result.s = lastEvent.competitions[0].competitors.slice(0, 10).map((c, i) => ({
                         p: parseInt(c.status?.position?.id || i + 1),
                         n: c.athlete?.shortName?.split('. ').pop() || c.athlete?.lastName || '?',
@@ -2098,14 +2152,17 @@ function SportsWidget({ lang }) {
 function SparkWidget({ lang }) {
     const [tab, setTab] = useState('dagvraag');
     
+    // States voor data en laden
     const [dailyData, setDailyData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [apiError, setApiError] = useState('');
     
+    // State voor interactie (1-klik resultaat)
     const [iqPick, setIqPick] = useState(null);
 
     const todayStr = new Date().toLocaleDateString('nl-NL');
 
+    // UI Vertalingen
     const UI = {
         nl: {
             title: 'DENKTANK',
@@ -2140,6 +2197,7 @@ function SparkWidget({ lang }) {
         setIsLoading(true);
         setApiError('');
         
+        // Cache sleutel afhankelijk van taal zodat wisselen direct werkt
         const cacheKey = `spark_daily_v6_${lang}`;
 
         if (!forceNew) {
@@ -2160,8 +2218,10 @@ function SparkWidget({ lang }) {
         }
 
         try {
+            // 1. Haal ECHTE wiskunde en feiten uit databases
             let iQ = "What is 15% of 120?", iC = "18", iI = ["12", "15", "20"];
             try {
+                // Category 19 is Mathematics in OpenTDB
                 const resI = await fetch('https://opentdb.com/api.php?amount=1&category=19&type=multiple');
                 const datI = await resI.json();
                 if (datI.results && datI.results.length > 0) {
@@ -2179,6 +2239,7 @@ function SparkWidget({ lang }) {
                 fText = datF.text;
             } catch(e) {}
 
+            // 2. Laat Groq vertalen en formatteren (Strikte lokalisatie instructies)
             const targetLang = lang === 'nl' ? 'Nederlands' : 'English';
             const factPrefix = lang === 'nl' ? 'Wist je dat ' : 'Did you know ';
             
@@ -2206,7 +2267,7 @@ function SparkWidget({ lang }) {
                 body: JSON.stringify({
                     model: 'llama-3.3-70b-versatile',
                     messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.2, 
+                    temperature: 0.2, // Laag voor feitelijke stabiliteit
                     max_tokens: 600
                 })
             });
@@ -2238,7 +2299,7 @@ function SparkWidget({ lang }) {
 
     useEffect(() => {
         fetchDailySpark();
-    }, [todayStr, lang]); 
+    }, [todayStr, lang]); // Voer opnieuw uit als taal wijzigt
 
     const getFallbackData = (currentLang) => {
         if (currentLang === 'en') {
@@ -2353,283 +2414,12 @@ function SparkWidget({ lang }) {
         </div>
     );
 }
-
-// function EmailWidget({ lang }) {
-    const [tab, setTab] = useState('gmail');
-    const [gData, setGData] = useState([]);
-    const [oData, setOData] = useState([]);
-    const [gToken, setGToken] = useState(() => sessionStorage.getItem('gmail_token'));
-    const [oToken, setOToken] = useState(() => sessionStorage.getItem('outlook_token'));
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
     
-    const [activeAction, setActiveAction] = useState({ id: null, type: null });
-    const [replyText, setReplyText] = useState('');
-    const [destinations, setDestinations] = useState([]);
-
-    const msClientId = S.load('ms_client_id', '');
-
-    const removeMailFromUI = (id, isGmail) => {
-        if (isGmail) setGData(prev => prev.filter(m => m.id !== id));
-        else setOData(prev => prev.filter(m => m.id !== id));
-        setActiveAction({ id: null, type: null });
-    };
-
-    const connectGmail = () => {
-        if (!window.google) return setError("Google script niet geladen");
-        const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send',
-            callback: (resp) => {
-                if (resp.access_token) {
-                    sessionStorage.setItem('gmail_token', resp.access_token);
-                    setGToken(resp.access_token);
-                    fetchGmail(resp.access_token);
-                }
-            },
-        });
-        client.requestAccessToken();
-    };
-
-    const fetchGmail = async (token) => {
-        setLoading(true); setError('');
-        try {
-            const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?q=category:primary+-has:userlabels&maxResults=6', { headers: { Authorization: `Bearer ${token}` } });
-            if (res.status === 401) throw new Error('Token expired');
-            const data = await res.json();
-            
-            if (!data.messages) { setGData([]); setLoading(false); return; }
-
-            const msgs = await Promise.all(data.messages.map(async (m) => {
-                const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Message-ID`, { headers: { Authorization: `Bearer ${token}` } });
-                const msgData = await msgRes.json();
-                const headers = msgData.payload.headers;
-                return { 
-                    id: m.id, 
-                    threadId: msgData.threadId,
-                    subject: headers.find(h => h.name === 'Subject')?.value || 'Geen onderwerp',
-                    fromStr: headers.find(h => h.name === 'From')?.value || 'Onbekend',
-                    msgId: headers.find(h => h.name === 'Message-ID')?.value || '',
-                    snippet: msgData.snippet
-                };
-            }));
-            setGData(msgs);
-        } catch (e) {
-            console.error(e);
-            if (e.message === 'Token expired') { setGToken(null); sessionStorage.removeItem('gmail_token'); }
-            else setError(e.message);
-        }
-        setLoading(false);
-    };
-
-    const actionGmail = async (id, actionType, payload) => {
-        const mail = gData.find(m => m.id === id);
-        if (!mail) return;
-
-        try {
-            if (actionType === 'delete') {
-                removeMailFromUI(id, true);
-                await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/trash`, { method: 'POST', headers: { Authorization: `Bearer ${gToken}` } });
-            } 
-            else if (actionType === 'move') {
-                removeMailFromUI(id, true);
-                await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/modify`, {
-                    method: 'POST', headers: { Authorization: `Bearer ${gToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ addLabelIds: [payload], removeLabelIds: ['INBOX'] })
-                });
-            }
-            else if (actionType === 'reply') {
-                setActiveAction({ id: null, type: null });
-                const to = mail.fromStr.match(/<([^>]+)>/)?.[1] || mail.fromStr;
-                const subject = mail.subject.startsWith('Re:') ? mail.subject : 'Re: ' + mail.subject;
-                const raw = `To: ${to}\r\nSubject: ${subject}\r\nIn-Reply-To: ${mail.msgId}\r\nReferences: ${mail.msgId}\r\n\r\n${payload}\n\nGroeten, Michael`;
-                
-                const utf8_to_b64 = (str) => window.btoa(unescape(encodeURIComponent(str)));
-                const encoded = utf8_to_b64(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                
-                await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/send`, {
-                    method: 'POST', headers: { Authorization: `Bearer ${gToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ raw: encoded, threadId: mail.threadId })
-                });
-            }
-        } catch(e) { console.error("Gmail Actie Fout", e); }
-    };
-
-    const loadGmailLabels = async () => {
-        if (destinations.length > 0) return;
-        try {
-            const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/labels`, { headers: { Authorization: `Bearer ${gToken}` } });
-            const data = await res.json();
-            if (data.labels) setDestinations(data.labels.filter(l => l.type === 'user'));
-        } catch(e) { console.error(e); }
-    };
-
-    const connectOutlook = async () => {
-        if (!window.msal) return setError("MSAL script niet geladen");
-        if (!msClientId) return setError("Configureer Client ID in instellingen");
-
-        const msalConfig = { auth: { clientId: msClientId, authority: "https://login.microsoftonline.com/common" } };
-        const msalInstance = new window.msal.PublicClientApplication(msalConfig);
-        await msalInstance.initialize();
-
-        try {
-            const authResult = await msalInstance.loginPopup({ scopes: ["Mail.ReadWrite", "Mail.Send"] });
-            sessionStorage.setItem('outlook_token', authResult.accessToken);
-            setOToken(authResult.accessToken);
-            fetchOutlook(authResult.accessToken);
-        } catch (e) { setError(e.message); }
-    };
-
-    const fetchOutlook = async (token) => {
-        setLoading(true); setError('');
-        try {
-            const res = await fetch("https://graph.microsoft.com/v1.0/me/messages?$filter=inferenceClassification eq 'focused'&$top=6&$select=subject,sender,bodyPreview", { headers: { Authorization: `Bearer ${token}` } });
-            if (res.status === 401) throw new Error('Token expired');
-            const data = await res.json();
-            
-            if (data.value) {
-                setOData(data.value.map(m => ({ 
-                    id: m.id, 
-                    subject: m.subject, 
-                    fromStr: m.sender?.emailAddress?.name || m.sender?.emailAddress?.address || 'Onbekend', 
-                    snippet: m.bodyPreview 
-                })));
-            }
-        } catch (e) {
-            console.error(e);
-            if (e.message === 'Token expired') { setOToken(null); sessionStorage.removeItem('outlook_token'); }
-            else setError(e.message);
-        }
-        setLoading(false);
-    };
-
-    const actionOutlook = async (id, actionType, payload) => {
-        try {
-            if (actionType === 'delete') {
-                removeMailFromUI(id, false);
-                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${oToken}` } });
-            } 
-            else if (actionType === 'move') {
-                removeMailFromUI(id, false);
-                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${id}/move`, {
-                    method: 'POST', headers: { Authorization: `Bearer ${oToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ destinationId: payload })
-                });
-            }
-            else if (actionType === 'reply') {
-                setActiveAction({ id: null, type: null });
-                await fetch(`https://graph.microsoft.com/v1.0/me/messages/${id}/reply`, {
-                    method: 'POST', headers: { Authorization: `Bearer ${oToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: { body: { contentType: "Text", content: `${payload}\n\nGroeten, Michael` } } })
-                });
-            }
-        } catch(e) { console.error("Outlook Actie Fout", e); }
-    };
-
-    const loadOutlookFolders = async () => {
-        if (destinations.length > 0) return;
-        try {
-            const res = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders?$top=20`, { headers: { Authorization: `Bearer ${oToken}` } });
-            const data = await res.json();
-            if (data.value) setDestinations(data.value);
-        } catch(e) { console.error(e); }
-    };
-
-    useEffect(() => {
-        if (tab === 'gmail' && gToken && gData.length === 0) fetchGmail(gToken);
-        if (tab === 'outlook' && oToken && oData.length === 0) fetchOutlook(oToken);
-        setActiveAction({ id: null, type: null });
-        setDestinations([]);
-    }, [tab]);
-
-    const renderActionUI = (m, isGmail) => {
-        if (activeAction.id !== m.id) return null;
-        
-        if (activeAction.type === 'reply') return (
-            <div className="mt-2 flex gap-2 animate-fade-in">
-                <textarea autoFocus value={replyText} onChange={e=>setReplyText(e.target.value)} placeholder="Antwoord typen..." className="flex-1 text-[10px] p-1.5 border rounded outline-none resize-none h-12" />
-                <button onClick={() => isGmail ? actionGmail(m.id, 'reply', replyText) : actionOutlook(m.id, 'reply', replyText)} className="bg-blue-600 text-white font-bold text-[9px] px-2 rounded hover:bg-blue-700">Send</button>
-            </div>
-        );
-
-        if (activeAction.type === 'move') return (
-            <div className="mt-2 animate-fade-in">
-                {destinations.length === 0 ? <span className="text-[9px] text-gray-400">Laden...</span> : (
-                    <select onChange={(e) => isGmail ? actionGmail(m.id, 'move', e.target.value) : actionOutlook(m.id, 'move', e.target.value)} defaultValue="" className="w-full text-[10px] p-1 border rounded bg-white">
-                        <option value="" disabled>Kies {isGmail ? 'Label' : 'Map'}...</option>
-                        {destinations.map(d => <option key={d.id} value={d.id}>{d.name || d.displayName}</option>)}
-                    </select>
-                )}
-            </div>
-        );
-        return null;
-    };
-
-    const renderMailList = (data, isGmail) => data.map(m => (
-        <div key={m.id} className="p-2.5 border rounded-lg bg-gray-50 hover:border-blue-200 transition shadow-sm group">
-            <div className="flex justify-between items-start">
-                <div className="min-w-0 flex-1">
-                    <div className="font-bold text-[11px] text-gray-900 truncate mb-0.5">{m.fromStr.split('<')[0].trim()}</div>
-                    <div className="text-[10px] text-gray-800 font-medium truncate">{m.subject}</div>
-                    <div className="text-[9px] text-gray-500 truncate mt-0.5">{m.snippet}</div>
-                </div>
-                <div className="flex flex-col gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setActiveAction({id: m.id, type: 'reply'}); setReplyText(''); }} className="text-[9px] bg-white border px-1.5 py-0.5 rounded text-blue-600 hover:bg-blue-50 font-bold">Reply</button>
-                    <button onClick={() => { setActiveAction({id: m.id, type: 'move'}); if(isGmail) loadGmailLabels(); else loadOutlookFolders(); }} className="text-[9px] bg-white border px-1.5 py-0.5 rounded text-gray-600 hover:bg-gray-100 font-bold">{isGmail ? 'Label' : 'Map'}</button>
-                    <button onClick={() => isGmail ? actionGmail(m.id, 'delete') : actionOutlook(m.id, 'delete')} className="text-[9px] bg-red-50 border border-red-100 px-1.5 py-0.5 rounded text-red-600 hover:bg-red-100 font-bold">Trash</button>
-                </div>
-            </div>
-            {renderActionUI(m, isGmail)}
-        </div>
-    ));
-
-    return (
-        <div className="widget h-[450px] flex flex-col bg-white">
-            <div className="p-3 bg-gray-50 border-b flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-2 text-gray-500 font-black tracking-widest text-[10px] uppercase">
-                    <Ico.Mail /> INBOX v4.5
-                </div>
-                {error && <span className="text-[8px] text-red-500 font-bold truncate max-w-[150px]">{error}</span>}
-            </div>
-
-            <div className="flex border-b bg-white shrink-0">
-                <button onClick={() => setTab('gmail')} className={`tab-btn ${tab === 'gmail' ? 'active' : ''}`}>GMAIL</button>
-                <button onClick={() => setTab('outlook')} className={`tab-btn ${tab === 'outlook' ? 'active' : ''}`}>OUTLOOK</button>
-            </div>
-
-            <div className="flex-1 p-3 overflow-y-auto hide-scroll space-y-2">
-                {tab === 'gmail' && (
-                    !gToken ? (
-                        <div className="h-full flex flex-col items-center justify-center gap-3">
-                            <button onClick={connectGmail} className="px-4 py-2 bg-red-600 text-white font-bold text-xs rounded shadow-sm hover:bg-red-700">Verbind Gmail</button>
-                        </div>
-                    ) : loading ? <div className="text-center text-[10px] text-red-500 font-bold mt-10 animate-pulse">Synchroniseren...</div>
-                      : gData.length === 0 ? <div className="text-center text-[10px] text-gray-400 mt-10 font-bold uppercase">Geen nieuwe mails</div>
-                      : renderMailList(gData, true)
-                )}
-
-                {tab === 'outlook' && (
-                    !oToken ? (
-                        <div className="h-full flex flex-col items-center justify-center gap-3">
-                            <button onClick={connectOutlook} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded shadow-sm hover:bg-blue-700">Verbind Outlook</button>
-                        </div>
-                    ) : loading ? <div className="text-center text-[10px] text-blue-500 font-bold mt-10 animate-pulse">Synchroniseren...</div>
-                      : oData.length === 0 ? <div className="text-center text-[10px] text-gray-400 mt-10 font-bold uppercase">Geen nieuwe mails</div>
-                      : renderMailList(oData, false)
-                )}
-            </div>
-        </div>
-    );
-}
-
 function Settings({ isOpen, onClose, layout, setLayout }) {
     const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
     const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'Groq', val: ''}]));
     const [icals, setIcals] = useState(S.load('icals_dyn', [{name: 'Ryan', val: ''}, {name: 'Yaron', val: ''}, {name: 'Michael', val: ''}, {name: 'Fam-Sch', val: ''}]));
     const [aiUrl, setAiUrl] = useState(S.load('ai_chat_url', ''));
-    
-    // const [msClientId, setMsClientId] = useState(S.load('ms_client_id', '')); 
-    
     const [dragIdx, setDragIdx] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -2644,7 +2434,8 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
         S.save('icals_dyn', icals); 
         S.save('ai_chat_url', aiUrl); 
         S.save('layout_v8', layout);
-        S.save('ms_client_id', msClientId); // const cloudSettings = {};
+        
+        const cloudSettings = {};
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key && key.startsWith('d_')) {
@@ -2711,21 +2502,6 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                     ))}
                 </section>
 
-                {/* */}
-                <section>
-                    <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Outlook Koppeling (MSAL)</h3>
-                    <div className="space-y-2">
-                        <input 
-                            type="text" 
-                            placeholder="Microsoft Azure Client ID" 
-                            value={msClientId} 
-                            onChange={e => setMsClientId(e.target.value)} 
-                            className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" 
-                        />
-                        <p className="text-[9px] text-gray-500">Nodig om Outlook e-mails op te halen. Maak een app aan in Azure Entra ID.</p>
-                    </div>
-                </section>
-
                 <section>
                     <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Live iCal Links (.ics)</h3><button onClick={()=>setIcals([...icals, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
                     {icals.map((c, i) => (
@@ -2768,7 +2544,8 @@ function App() {
     
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     
-    // const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'spark', 'radar', 'sports', 'email'];
+    // DEFAULT LAYOUT v8 INCLUSIEF 'spark'
+    const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'spark', 'radar', 'sports'];
     const [layout, setLayout] = useState(() => S.load('layout_v8', defaultLayout));
 
     useEffect(() => {
@@ -2823,13 +2600,14 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.5'}</p>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.2'}</p>
                     {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
         );
     }
 
+    /* v4.3: Alle widgets gewrapt in Error Boundaries */
     const widgets = { 
         ai: <div className="col-span-12 lg:col-span-8"><WidgetErrorBoundary name="AI Chat"><AIWidget lang={lang} /></WidgetErrorBoundary></div>, 
         crypto: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Crypto"><CryptoWidget lang={lang} /></WidgetErrorBoundary></div>, 
@@ -2837,8 +2615,7 @@ function App() {
         news: <div className="col-span-12 lg:col-span-8"><WidgetErrorBoundary name="Nieuws"><NewsWidget lang={lang} /></WidgetErrorBoundary></div>, 
         spark: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Spark"><SparkWidget lang={lang} /></WidgetErrorBoundary></div>,
         radar: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Beurs Radar"><RadarWidget lang={lang} /></WidgetErrorBoundary></div>, 
-        sports: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Sport"><SportsWidget lang={lang} /></WidgetErrorBoundary></div>,
-        // email: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Inbox"><EmailWidget lang={lang} /></WidgetErrorBoundary></div>
+        sports: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Sport"><SportsWidget lang={lang} /></WidgetErrorBoundary></div> 
     };
 
     const hour = new Date().getHours();
@@ -2880,6 +2657,7 @@ function App() {
     );
 }
 
+/* v4.3: React 18 createRoot() i.p.v. deprecated ReactDOM.render() */
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
 </script>
