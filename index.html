@@ -2621,7 +2621,7 @@ function SparkWidget({ lang }) {
         </div>
     );
 }
-
+    
 function Settings({ isOpen, onClose, layout, setLayout }) {
     const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
     const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'Groq', val: ''}]));
