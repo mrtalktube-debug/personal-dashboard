@@ -2620,7 +2620,7 @@ function EmailWidget({ lang }) {
         setLoading(true);
         setError('');
         try {
-            const res = await graphFetch(`/me/messages?$filter=inferenceClassification eq 'focused'&$orderby=receivedDateTime desc&$top=6&$select=subject,sender,bodyPreview,receivedDateTime`, token);
+            const res = await graphFetch(`/me/messages?$orderby=receivedDateTime desc&$top=6&$select=subject,sender,bodyPreview,receivedDateTime`, token);
             if (!res) return;
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
@@ -2941,6 +2941,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
