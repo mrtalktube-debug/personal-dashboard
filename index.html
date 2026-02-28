@@ -9,7 +9,6 @@
     <link rel="apple-touch-icon" href="https://i.postimg.cc/NLqKzZ4C/nieuw-schaap-logo1.png">
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-<!-- NIEUW: preconnect voor snellere DNS/TLS -->
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
@@ -17,11 +16,8 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
-<!-- NIEUW: Chart.js lazy laden, alleen nodig als crypto-widget zichtbaar -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    <!-- NIEUW: MSAL voor Outlook OAuth -->
-<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js" defer></script>
-<!-- NIEUW: Google Identity Services voor Gmail OAuth2 -->
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js" defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
@@ -180,35 +176,16 @@ function WeatherBar({ lang }) {
         }).catch(() => setW(prev => ({ ...prev, name: "Error" })));
     }, [c, lang]);
 
-    /* Massieve weer iconen gekoppeld aan WMO codes */
     const WxIco = ({ code, isLoading }) => {
         if (isLoading) return <svg className="w-4 h-4 shrink-0 animate-spin text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
-        
-        // ZON (Code 0 of ontbrekend)
         if (code === 0 || code === undefined || code === null) return <svg className="w-4 h-4 shrink-0 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" /></svg>;
-
-        // ZON & WOLK (Code 1, 2)
         if (code === 1 || code === 2) return <svg className="w-4 h-4 shrink-0 text-yellow-200" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" clipRule="evenodd" d="M6.91 10.518c.036-.59.184-1.166.435-1.705.518-1.114 1.4-2.023 2.527-2.601A5.96 5.96 0 0113.5 5.5c1.196 0 2.338.35 3.303.978.895.584 1.593 1.399 2.016 2.353.424.953.535 2.018.318 3.036-.217 1.018-.748 1.93-1.522 2.617a4.498 4.498 0 01-1.144.757h.03a3.5 3.5 0 110 7H6.5a4.5 4.5 0 11.41-8.981v-.001a4.48 4.48 0 01-.41-8.981zM10.25 2.5a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5zM4.146 5.646a.75.75 0 00-1.06 1.06l1.06 1.06a.75.75 0 001.06-1.06l-1.06-1.06zM2.5 10.25a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5h-1.5z" /></svg>;
-
-        // ZWAAR BEWOLKT (Code 3)
         if (code === 3) return <svg className="w-4 h-4 shrink-0 text-gray-300" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" clipRule="evenodd" d="M6.5 19h11a4.5 4.5 0 001.623-8.697 7.498 7.498 0 00-14.246 1.49A4.5 4.5 0 006.5 19z" /></svg>;
-
-        // MIST (Code 45, 48)
         if (code === 45 || code === 48) return <svg className="w-4 h-4 shrink-0 text-gray-400" fill="currentColor" viewBox="0 0 24 24"><path d="M4 7h16v2H4V7zm0 4h16v2H4v-2zm0 4h16v2H4v-2zm4 4h8v2H8v-2z" /></svg>;
-
-        // MOTREGEN (Code 51-57)
         if (code >= 51 && code <= 57) return <svg className="w-4 h-4 shrink-0 text-blue-300" fill="currentColor" viewBox="0 0 24 24"><path d="M6.5 17h11a4.5 4.5 0 001.623-8.697 7.498 7.498 0 00-14.246 1.49A4.5 4.5 0 006.5 17zm1.5 2a1 1 0 10-2 0v2a1 1 0 102 0v-2zm6 0a1 1 0 10-2 0v2a1 1 0 102 0v-2zm6 0a1 1 0 10-2 0v2a1 1 0 102 0v-2z" /></svg>;
-
-        // REGEN (Code 61-67, 80-82)
         if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return <svg className="w-4 h-4 shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M6.5 16h11a4.5 4.5 0 001.623-8.697 7.498 7.498 0 00-14.246 1.49A4.5 4.5 0 006.5 16zm.854 2.146a.5.5 0 01.146.354v3a.5.5 0 01-1 0v-3a.5.5 0 01.854-.354zm5 0a.5.5 0 01.146.354v4a.5.5 0 01-1 0v-4a.5.5 0 01.854-.354zm5 0a.5.5 0 01.146.354v3a.5.5 0 01-1 0v-3a.5.5 0 01.854-.354z" /></svg>;
-
-        // SNEEUW (Code 71-77, 85, 86)
         if ((code >= 71 && code <= 77) || code === 85 || code === 86) return <svg className="w-4 h-4 shrink-0 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6.5 16h11a4.5 4.5 0 001.623-8.697 7.498 7.498 0 00-14.246 1.49A4.5 4.5 0 006.5 16zm-1 3.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm5 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm5 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" /></svg>; 
-
-        // ONWEER (Code 95, 96, 99)
         if (code >= 95) return <svg className="w-4 h-4 shrink-0 text-yellow-500" fill="currentColor" viewBox="0 0 24 24"><path d="M11.623 2.162a1.5 1.5 0 00-1.897 1.13L8.03 9.475H4.5a1.5 1.5 0 00-1.155 2.463l8 9.5a1.5 1.5 0 002.584-1.373l-1.282-5.565h3.853a1.5 1.5 0 001.189-2.42l-4.5-5.5a1.5 1.5 0 00-1.566-.418l-1.566.418v-.001L11.623 2.162z" /></svg>; 
-
-        // Veiligheidsfallback
         return <svg className="w-4 h-4 shrink-0 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" /></svg>;
     };
 
@@ -289,7 +266,6 @@ function AIWidget({ lang }) {
     const lastUserMsgRef = useRef(null);
     const prevHistLen = useRef(0);
 
-    // --- FIX START: Auto-Save & Clean Slate Logica ---
     const [sessions, setSessions] = useState(() => {
         let loadedSessions = [];
         try { loadedSessions = S.load('michael_sessions', []); } catch(e) {}
@@ -300,10 +276,8 @@ function AIWidget({ lang }) {
         let activeId = null;
         try { activeId = S.load('ai_active_session', null); } catch(e) {}
 
-        // Als er bij het opstarten nog een oude chat open stond, verplaats deze veilig naar de Historie
         if (savedHist && savedHist.length > 0 && savedHist.some(m => m.r === 'usr')) {
             if (activeId) {
-                // Update de bestaande sessie
                 const idx = loadedSessions.findIndex(s => s.id === activeId);
                 if (idx !== -1) {
                     loadedSessions[idx].msgs = savedHist;
@@ -312,7 +286,6 @@ function AIWidget({ lang }) {
                     loadedSessions.unshift({id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: savedHist});
                 }
             } else {
-                // Maak een nieuwe sessie aan voor de onopgeslagen chat
                 const title = savedHist.find(m=>m.r==='usr')?.t?.slice(0,40) || 'Chat';
                 loadedSessions.unshift({id: Date.now(), title, date: new Date().toLocaleDateString('nl-NL'), msgs: savedHist});
             }
@@ -320,15 +293,13 @@ function AIWidget({ lang }) {
             S.save('michael_sessions', loadedSessions);
         }
         
-        // Wis het huidige scherm volledig zodat we 100% nieuw beginnen (net als Gemini)
         S.save('ai_hist', []);
         S.save('ai_active_session', null);
         return loadedSessions;
     });
 
     const [activeSession, setActiveSession] = useState(null);
-    const [hist, setHist] = useState([]); // Altijd leeg beginnen!
-    // --- FIX END ---
+    const [hist, setHist] = useState([]); 
 
     const [view, setView] = useState('chat');
     const [exp, setExp] = useState(false);
@@ -357,7 +328,6 @@ function AIWidget({ lang }) {
         }).catch(()=>{});
     };
 
-    // Stuur de opgeschoonde staat direct naar Vercel KV bij het inladen
     useEffect(() => {
         syncToCloud();
     }, []);
@@ -383,7 +353,6 @@ function AIWidget({ lang }) {
         if(isImg) reader.readAsDataURL(file); else reader.readAsText(file);
     };
 
-    // Centraal updaten van geschiedenis EN actieve sessie (als je in de historie typt)
     const updateChatState = (newHist) => {
         setHist(newHist);
         S.save('ai_hist', newHist);
@@ -830,7 +799,52 @@ function CryptoWidget({ lang }) {
     );
 }
 
-/* v4.3 NIEUW: Error Boundary – vangt crashes op in production React */
+gray-400 animate-pulse">Laden...</span> : (
+                                        <select onChange={e=>{if(e.target.value)moveMail(selectedMail,e.target.value);}} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
+                                            <option value="" disabled>Kies map...</option>
+                                            {destinations.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+                                        </select>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-3 py-2">
+                            {bodyLoading ? <span className="text-[10px] text-blue-600 font-bold animate-pulse">Laden...</span>
+                            : <div className="text-[10px] text-gray-700 leading-relaxed mail-body" dangerouslySetInnerHTML={{__html:mailBody}} />}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {initializing && (
+                            <div className="flex items-center justify-center h-full">
+                                <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Verbinden...</span>
+                            </div>
+                        )}
+                        {!initializing && accounts.length===0 && gmailAccounts.length===0 && (
+                            <div className="flex items-center justify-center h-full">
+                                <span className="text-[10px] text-gray-400">Geen accounts — klik + om toe te voegen</span>
+                            </div>
+                        )}
+                        {!initializing && (loading || gmailLoading) && mergedEmails.length===0 && (
+                            <div className="flex items-center justify-center h-full">
+                                <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Synchroniseren...</span>
+                            </div>
+                        )}
+                        {!initializing && !(loading || gmailLoading) && mergedEmails.length===0 && (accounts.length>0 || gmailAccounts.length>0) && (
+                            <div className="flex items-center justify-center h-full">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">Geen nieuwe mails</span>
+                            </div>
+                        )}
+                        {!initializing && mergedEmails.map(mail => (
+                            <MailRow key={`${mail.accountIdx}-${mail.id}`} mail={mail} />
+                        ))}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
 class WidgetErrorBoundary extends React.Component {
     constructor(props) { super(props); this.state = { hasError: false, error: null }; }
     static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -849,7 +863,6 @@ class WidgetErrorBoundary extends React.Component {
     }
 }
 
-/* v4.3 NIEUW: fetchWithRetry – 1x retry na 2s bij 502/503 (Vercel cold start) */
 async function fetchWithRetry(url, options, retries = 1) {
     for (let i = 0; i <= retries; i++) {
         try {
@@ -886,7 +899,6 @@ function AgendaWidget({ lang }) {
     useEffect(() => { const h = (e) => { if(e.detail.type === 'SET_AGENDA') { const target = cals.find(c => (c||'').toLowerCase().includes((e.detail.payload||'').toLowerCase())); if(target) setF([target]); }}; window.addEventListener('dashCmd', h); return () => window.removeEventListener('dashCmd', h); }, [cals]);
     useEffect(() => { setF(cals); }, [JSON.stringify(cals)]);
 
-    /* v4.3: Parallel laden (Promise.all) + sessionStorage cache (15 min) + retry bij 502 */
     useEffect(() => {
         const fetchCals = async () => {
             setLoading(true);
@@ -912,7 +924,6 @@ function AgendaWidget({ lang }) {
                 return { date: getLocalYYYYMMDD(dateObj), time: isAllDay ? 'Hele dag' : dateObj.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }), dateObj, isAllDay };
             };
 
-            /* v4.3: Promise.all – alle kalenders tegelijk ophalen i.p.v. sequentieel */
             const fetchPromises = (Array.isArray(rawCals) ? rawCals : []).map(async (c) => {
                 if (!c?.val) return [];
                 const calEvs = [];
@@ -1039,7 +1050,6 @@ function AgendaWidget({ lang }) {
                 })}
             </div>
             
-            {/* AANGEPASTE COMPACTE NAVIGATIE BALK VOOR MOBIEL */}
             <div className="p-2 flex border-b border-gray-200 bg-gray-50 items-center justify-between shrink-0 gap-1.5 overflow-hidden">
                 <div 
                     className="relative flex items-center bg-white border border-gray-200 p-1.5 px-2 rounded shadow-sm hover:bg-gray-100 transition cursor-pointer shrink-0"
@@ -1114,7 +1124,7 @@ function AgendaWidget({ lang }) {
         </div>
     );
 }
-    
+
 function NewsWidget({ lang }) {
     const defaultCols = ['AI & TECH', 'F1', 'AUTO', 'CRYPTO', 'LEIDSCHENDAM'];
     const [cols, setCols] = useState(() => S.load('newscats', defaultCols));
@@ -1151,7 +1161,7 @@ function NewsWidget({ lang }) {
 
     async function fastFetch(query, hlParam, glParam, ceidParam) {
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 8000);
+        const tid = setTimeout(() => { ctrl.abort(); }, 8000);
         
         const gUrl = query === 'ALGEMEEN' 
             ? `https://news.google.com/rss?hl=${hlParam}&gl=${glParam}&ceid=${ceidParam}`
@@ -1250,14 +1260,13 @@ function NewsWidget({ lang }) {
                 } catch(e) {}
             }
 
-            out.push({ title, link, pubDate, source, desc: cleanDesc, img, cat });
+            out.push({ title: title, link: link, pubDate: pubDate, source: source, desc: cleanDesc, img: img, cat: cat });
         }
         return out;
     };
 
     useEffect(() => {
         let alive = true;
-        /* NIEUW v1.5: Cache key is nu specifiek voor de taal (nl of en) zodat bij switchen direct vers nieuws wordt geladen */
         const cacheKey = `nws_cache_v15_${lang}`;
         const cached = sessionStorage.getItem(cacheKey);
         if (cached) {
@@ -1273,7 +1282,8 @@ function NewsWidget({ lang }) {
 
         const loadCats = async () => {
             const fetchList = ['ALGEMEEN', ...cols];
-            for (const cat of fetchList) {
+            for (let i = 0; i < fetchList.length; i++) {
+                const cat = fetchList[i];
                 if (!alive) return;
                 const h = lang === 'nl' ? 'nl' : 'en-US';
                 const g = lang === 'nl' ? 'NL' : 'US';
@@ -1326,12 +1336,11 @@ function NewsWidget({ lang }) {
         if (searchTimer.current) clearTimeout(searchTimer.current);
         if (!val.trim()) { setSearchResults([]); setSearchDone(false); setIsSearching(false); return; }
         setIsSearching(true);
-        searchTimer.current = setTimeout(() => doSearch(val), 400);
+        searchTimer.current = setTimeout(() => { doSearch(val); }, 400);
     };
 
     const isSearchActive = search.trim().length > 0;
 
-    /* NIEUW v1.5: Bepaal welke sorteeropties beschikbaar zijn en valideer de actieve soort */
     const availableSorts = (isSearchActive || feedMode === 'alles') ? ['tijd', 'bron'] : ['tijd', 'bron', 'onderwerp'];
     const sortLabels = {
         tijd: lang === 'nl' ? 'Tijd' : 'Time',
@@ -1356,7 +1365,6 @@ function NewsWidget({ lang }) {
             const tA = new Date(a.pubDate).getTime() || 0;
             const tB = new Date(b.pubDate).getTime() || 0;
             
-            // Valideer sortMode: val terug op 'tijd' als 'onderwerp' geselecteerd is maar niet is toegestaan
             let effectiveSort = sortMode;
             if ((isSearchActive || feedMode === 'alles') && sortMode === 'onderwerp') {
                 effectiveSort = 'tijd';
@@ -1366,7 +1374,6 @@ function NewsWidget({ lang }) {
                 let iA = priority.findIndex(p => (a.source||'').toLowerCase().includes(p)); if (iA===-1) iA=9999;
                 let iB = priority.findIndex(p => (b.source||'').toLowerCase().includes(p)); if (iB===-1) iB=9999;
                 if (iA !== iB) return iA - iB;
-                // NIEUW: Als ze niet in favorieten staan, sorteer secondair op alfabet (A-Z)
                 const srcA = (a.source || '').toLowerCase();
                 const srcB = (b.source || '').toLowerCase();
                 if (srcA < srcB) return -1;
@@ -1376,7 +1383,6 @@ function NewsWidget({ lang }) {
                 let iA = cols.findIndex(c => c.toLowerCase() === (a.cat||'').toLowerCase()); if (iA===-1) iA=9999;
                 let iB = cols.findIndex(c => c.toLowerCase() === (b.cat||'').toLowerCase()); if (iB===-1) iB=9999;
                 if (iA !== iB) return iA - iB;
-                // NIEUW: Sorteer secondair alfabetisch op categorie (A-Z)
                 const catA = (a.cat || '').toLowerCase();
                 const catB = (b.cat || '').toLowerCase();
                 if (catA < catB) return -1;
@@ -1398,7 +1404,7 @@ function NewsWidget({ lang }) {
 
     const srcColor = (s) => {
         const c = ['#c586c0','#d16b92','#b278a9','#9a73b5','#e27b64','#e2a864','#4a90e2'];
-        let h = 0; for (let i=0;i<s.length;i++) h = s.charCodeAt(i)+((h<<5)-h);
+        let h = 0; for (let i=0;i<s.length;i++) { h = s.charCodeAt(i)+((h<<5)-h); }
         return c[Math.abs(h)%c.length];
     };
 
@@ -1430,7 +1436,6 @@ function NewsWidget({ lang }) {
                 </div>
             </div>
 
-            {/* NIEUW v1.5: Sorteerknoppen toegevoegd aan de 2e rij zodat ze op mobiel altijd passen */}
             <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-3 justify-between items-center shrink-0">
                 <div className="flex items-center gap-3 flex-wrap">
                     {!isSearchActive ? (
@@ -1469,7 +1474,7 @@ function NewsWidget({ lang }) {
                                     key={c} 
                                     draggable 
                                     onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('catIndex', idx); }}
-                                    onDragOver={(e) => e.preventDefault()}
+                                    onDragOver={(e) => { e.preventDefault(); }}
                                     onDrop={(e) => {
                                         e.preventDefault();
                                         const fromIdx = parseInt(e.dataTransfer.getData('catIndex'));
@@ -1488,7 +1493,7 @@ function NewsWidget({ lang }) {
                             ))}
                         </div>
                         <div className="flex gap-1 mt-1.5">
-                            <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addCol()} placeholder={lang === 'nl' ? "+ Categorie" : "+ Category"} className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
+                            <input value={newCol} onChange={e=>setNewCol(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter') { addCol(); } }} placeholder={lang === 'nl' ? "+ Categorie" : "+ Category"} className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
                             <button onClick={addCol} className="px-2 py-1 bg-blue-500 text-white text-[9px] font-bold rounded">+</button>
                         </div>
                     </div>
@@ -1500,7 +1505,7 @@ function NewsWidget({ lang }) {
                                     key={b}
                                     draggable
                                     onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('blockIndex', idx); }}
-                                    onDragOver={(e) => e.preventDefault()}
+                                    onDragOver={(e) => { e.preventDefault(); }}
                                     onDrop={(e) => {
                                         e.preventDefault();
                                         const fromIdx = parseInt(e.dataTransfer.getData('blockIndex'));
@@ -1518,7 +1523,7 @@ function NewsWidget({ lang }) {
                             ))}
                         </div>
                         <div className="flex gap-1 mt-1.5">
-                            <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addBlock()} placeholder={lang === 'nl' ? "+ Blokkeer woord" : "+ Block word"} className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
+                            <input value={newBlock} onChange={e=>setNewBlock(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter') { addBlock(); } }} placeholder={lang === 'nl' ? "+ Blokkeer woord" : "+ Block word"} className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
                             <button onClick={addBlock} className="px-2 py-1 bg-red-500 text-white text-[9px] font-bold rounded">+</button>
                         </div>
                     </div>
@@ -1530,7 +1535,7 @@ function NewsWidget({ lang }) {
                                     key={p}
                                     draggable
                                     onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData('prioIndex', idx); }}
-                                    onDragOver={(e) => e.preventDefault()}
+                                    onDragOver={(e) => { e.preventDefault(); }}
                                     onDrop={(e) => {
                                         e.preventDefault();
                                         const fromIdx = parseInt(e.dataTransfer.getData('prioIndex'));
@@ -1553,7 +1558,7 @@ function NewsWidget({ lang }) {
                             ))}
                         </div>
                         <div className="flex gap-1 mt-1.5">
-                            <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addPriority()} placeholder={lang === 'nl' ? "+ Prioriteit bron" : "+ Priority source"} className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
+                            <input value={newPriority} onChange={e=>setNewPriority(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter') { addPriority(); } }} placeholder={lang === 'nl' ? "+ Prioriteit bron" : "+ Priority source"} className="px-2 py-1 text-[10px] border border-gray-200 rounded flex-1 outline-none"/>
                             <button onClick={addPriority} className="px-2 py-1 bg-green-500 text-white text-[9px] font-bold rounded">+</button>
                         </div>
                     </div>
@@ -1651,7 +1656,6 @@ function RadarWidget({ lang }) {
     const [recs, setRecs] = useState([]);
     const [recsLoading, setRecsLoading] = useState(true);
 
-    /* v4.3: sessionStorage cache (2 min) + retry bij 502 + snellere refresh */
     useEffect(() => {
         const fetchStockData = async () => {
             const cacheKey = 'radar_stocks_v3';
@@ -1684,7 +1688,6 @@ function RadarWidget({ lang }) {
         return () => clearInterval(interval);
     }, [assets]);
 
-    /* v4.3: Aanbevelingen cache (10 min) + retry */
     useEffect(() => {
         const fetchRecs = async () => {
             setRecsLoading(true);
@@ -1705,7 +1708,7 @@ function RadarWidget({ lang }) {
                 const data = await res.json();
                 if (Array.isArray(data)) {
                     setRecs(data);
-                    try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), data })); } catch(e) {}
+                    try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), data: data })); } catch(e) {}
                 }
             } catch (e) { console.error("Aanbevelingen fout:", e); }
             finally { setRecsLoading(false); }
@@ -1755,13 +1758,13 @@ function RadarWidget({ lang }) {
             </div>
 
             <div className="flex border-b bg-white shrink-0">
-                <button onClick={()=>{setTab('recs');setManage(false)}} className={`tab-btn ${tab==='recs'?'active':''}`}>📊 TOP PICKS</button>
-                <button onClick={()=>setTab('watch')} className={`tab-btn ${tab==='watch'?'active':''}`}>👁 WATCHLIST</button>
+                <button onClick={()=>{setTab('recs');setManage(false);}} className={`tab-btn ${tab==='recs'?'active':''}`}>📊 TOP PICKS</button>
+                <button onClick={()=>{setTab('watch');}} className={`tab-btn ${tab==='watch'?'active':''}`}>👁 WATCHLIST</button>
             </div>
 
             {manage && tab === 'watch' && (
                 <div className="p-3 bg-gray-100 border-b flex gap-2 shrink-0">
-                    <input value={newAsset} onChange={e=>setNewAsset(e.target.value)} onKeyPress={e=>e.key==='Enter'&&addAsset()} className="flex-1 p-1.5 border rounded text-[10px]" placeholder="Ticker (bijv. TSLA, AAPL)" />
+                    <input value={newAsset} onChange={e=>setNewAsset(e.target.value)} onKeyPress={e=>{ if (e.key==='Enter') { addAsset(); } }} className="flex-1 p-1.5 border rounded text-[10px]" placeholder="Ticker (bijv. TSLA, AAPL)" />
                     <button onClick={addAsset} className="bg-blue-600 text-white px-3 rounded font-bold">+</button>
                 </div>
             )}
@@ -1822,16 +1825,16 @@ function RadarWidget({ lang }) {
                         if (!data) return (
                             <div key={a} className="p-3 border rounded-lg bg-gray-50 flex justify-between items-center">
                                 <span className="font-bold text-sm text-gray-400">{a}</span>
-                                {manage ? <button onClick={(e)=>{e.stopPropagation(); removeAsset(a)}} className="text-red-500 font-bold text-lg">&times;</button> : 
+                                {manage ? <button onClick={(e)=>{e.stopPropagation(); removeAsset(a);}} className="text-red-500 font-bold text-lg">&times;</button> : 
                                 <span className="text-[9px] text-gray-400">Niet gevonden</span>}
                             </div>
                         );
                         const isPos = data.tr.d >= 0;
                         return (
-                            <div key={a} onClick={() => !manage && window.open(getYahooUrl(data.ticker, data.name), '_blank')} className={`p-3 border rounded-lg shadow-sm transition ${!manage ? 'cursor-pointer hover:shadow-md' : ''} ${isPos ? 'bg-green-50 border-green-200 hover:border-green-300' : 'bg-red-50 border-red-200 hover:border-red-300'}`}>
+                            <div key={a} onClick={() => { if (!manage) { window.open(getYahooUrl(data.ticker, data.name), '_blank'); } }} className={`p-3 border rounded-lg shadow-sm transition ${!manage ? 'cursor-pointer hover:shadow-md' : ''} ${isPos ? 'bg-green-50 border-green-200 hover:border-green-300' : 'bg-red-50 border-red-200 hover:border-red-300'}`}>
                                 <div className="flex justify-between items-start mb-1">
                                     <span className="font-black text-sm text-gray-900">{a}</span>
-                                    {manage ? <button onClick={(e)=>{e.stopPropagation(); removeAsset(a)}} className="text-red-500 font-bold text-lg">&times;</button> : 
+                                    {manage ? <button onClick={(e)=>{e.stopPropagation(); removeAsset(a);}} className="text-red-500 font-bold text-lg">&times;</button> : 
                                     <span className="text-[10px] font-mono font-bold">{data.currency} {data.price.toFixed(2)}</span>}
                                 </div>
                                 <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-tighter mt-2 border-t border-black/5 pt-2">
@@ -1863,15 +1866,12 @@ function SportsWidget({ lang }) {
     const [eGS, setEGS] = useState(false);
     const [eGL, setEGL] = useState(false);
 
-    /* v4.3: Nationaliteit → vlag emoji mapping */
     const FLAGS = { dutch:'🇳🇱',british:'🇬🇧',german:'🇩🇪',spanish:'🇪🇸',mexican:'🇲🇽',australian:'🇦🇺',french:'🇫🇷',canadian:'🇨🇦',monegasque:'🇲🇨',thai:'🇹🇭',japanese:'🇯🇵',chinese:'🇨🇳',finnish:'🇫🇮',danish:'🇩🇰',american:'🇺🇸',italian:'🇮🇹',polish:'🇵🇱',brazilian:'🇧🇷',norwegian:'🇳🇴',swedish:'🇸🇪',swiss:'🇨🇭','new zealander':'🇳🇿',argentine:'🇦🇷',korean:'🇰🇷',irish:'🇮🇪','south african':'🇿🇦',belgian:'🇧🇪',austrian:'🇦🇹',colombian:'🇨🇴',portuguese:'🇵🇹',indian:'🇮🇳' };
     const getFlag = (nat) => FLAGS[(nat||'').toLowerCase()] || '🏁';
 
-    /* v4.3: Datum formatter naar "02 Mar" formaat */
     const fmtDate = (iso) => { const d = new Date(iso); const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${String(d.getDate()).padStart(2,'0')} ${m[d.getMonth()]}`; };
     const fmtTimeNL = (iso) => { const d = new Date(iso); return d.toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Amsterdam' }); };
 
-    /* v4.3: Fallback data (wordt getoond als API's falen) */
     const FALLBACK_F1 = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
     const FALLBACK_GOLF = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
 
@@ -1879,10 +1879,9 @@ function SportsWidget({ lang }) {
     const [golfPga, setGolfPga] = useState(FALLBACK_GOLF);
     const [golfDp, setGolfDp] = useState(FALLBACK_GOLF);
 
-    /* v4.3 LIVE: F1 data ophalen via Jolpica (Ergast opvolger, gratis, geen key) */
     useEffect(() => {
         const CACHE_KEY = 'sports_f1_v3';
-        const CACHE_TTL = 1800000; /* 30 minuten */
+        const CACHE_TTL = 1800000;
         const currentYear = new Date().getFullYear();
 
         const fetchF1 = async () => {
@@ -1891,7 +1890,6 @@ function SportsWidget({ lang }) {
                 try { const { t, d } = JSON.parse(cached); if (Date.now() - t < CACHE_TTL) { setF1Data(d); setSportsLoading(false); return; } } catch(e) {}
             }
             try {
-                /* Parallel: kalender + standings + laatste race */
                 const [calRes, stdRes, lstRes] = await Promise.all([
                     fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/races/`, { headers: { 'Accept': 'application/json' } }),
                     fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/driverStandings/`, { headers: { 'Accept': 'application/json' } }),
@@ -1900,7 +1898,6 @@ function SportsWidget({ lang }) {
 
                 const result = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
 
-                /* Kalender: komende races */
                 if (calRes.ok) {
                     const calJson = await calRes.json();
                     const races = calJson?.MRData?.RaceTable?.Races || [];
@@ -1915,7 +1912,6 @@ function SportsWidget({ lang }) {
                         }));
                 }
 
-                /* Standings */
                 if (stdRes.ok) {
                     const stdJson = await stdRes.json();
                     const drivers = stdJson?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings || [];
@@ -1927,7 +1923,6 @@ function SportsWidget({ lang }) {
                     }));
                 }
 
-                /* Laatste race resultaat */
                 if (lstRes.ok) {
                     const lstJson = await lstRes.json();
                     const race = lstJson?.MRData?.RaceTable?.Races?.[0];
@@ -1947,7 +1942,6 @@ function SportsWidget({ lang }) {
                 try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), d: result })); } catch(e) {}
             } catch (e) {
                 console.error('F1 API fout:', e);
-                /* Probeer cache als fallback, ook als verlopen */
                 const cached = sessionStorage.getItem(CACHE_KEY);
                 if (cached) { try { setF1Data(JSON.parse(cached).d); } catch(e) {} }
             }
@@ -1958,9 +1952,8 @@ function SportsWidget({ lang }) {
         return () => clearInterval(interval);
     }, []);
 
-    /* v4.3 LIVE: Golf data ophalen via Vercel proxy → ESPN */
     useEffect(() => {
-        const CACHE_TTL = 900000; /* 15 minuten */
+        const CACHE_TTL = 900000;
 
         const fetchGolf = async (tour, cacheKey) => {
             const cached = sessionStorage.getItem(cacheKey);
@@ -1971,14 +1964,13 @@ function SportsWidget({ lang }) {
                 const res = await fetchWithRetry('/api/golf', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tour })
+                    body: JSON.stringify({ tour: tour })
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
 
                 const result = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
 
-                /* Kalender: komende toernooien */
                 const events = data?.events || [];
                 const now = new Date();
                 result.c = events
@@ -1990,7 +1982,6 @@ function SportsWidget({ lang }) {
                         t: fmtTimeNL(e.date)
                     }));
 
-                /* Laatste toernooi resultaat (meest recente voltooide event) */
                 const completed = events.filter(e => {
                     const status = e.status?.type?.state || e.competitions?.[0]?.status?.type?.state || '';
                     return status === 'post' || new Date(e.date) < now;
@@ -2008,7 +1999,6 @@ function SportsWidget({ lang }) {
                     };
                 }
 
-                /* Rankings (als beschikbaar in data, anders uit competitors) */
                 if (data?.rankings?.length > 0) {
                     result.s = data.rankings.slice(0, 10).map((r, i) => ({
                         p: i + 1,
@@ -2017,7 +2007,6 @@ function SportsWidget({ lang }) {
                         pt: r.stat?.displayValue || r.points || '-'
                     }));
                 } else if (lastEvent?.competitions?.[0]?.competitors) {
-                    /* Fallback: gebruik leaderboard van laatste toernooi als standings */
                     result.s = lastEvent.competitions[0].competitors.slice(0, 10).map((c, i) => ({
                         p: parseInt(c.status?.position?.id || i + 1),
                         n: c.athlete?.shortName?.split('. ').pop() || c.athlete?.lastName || '?',
@@ -2153,98 +2142,63 @@ function SportsWidget({ lang }) {
         </div>
     );
 }
-    
+
 function SparkWidget({ lang }) {
     const [tab, setTab] = useState('dagvraag');
-    
-    // States voor data en laden
     const [dailyData, setDailyData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [apiError, setApiError] = useState('');
-    
-    // State voor interactie (1-klik resultaat)
     const [iqPick, setIqPick] = useState(null);
 
     const todayStr = new Date().toLocaleDateString('nl-NL');
 
-    // UI Vertalingen
     const UI = {
         nl: {
-            title: 'DENKTANK',
-            btnNew: 'Nieuw',
-            tReflect: 'DagVraag',
-            tIq: 'IQ',
-            tFact: 'Feiten',
-            loading: 'Data ophalen...',
-            subReflect: 'Reflectie',
-            subFact: 'Wist je dat?',
-            correct: '🎉 Correct!',
-            wrong: '❌ Fout!',
-            genHover: 'Genereer direct een nieuwe set'
+            title: 'DENKTANK', btnNew: 'Nieuw', tReflect: 'DagVraag', tIq: 'IQ', tFact: 'Feiten',
+            loading: 'Data ophalen...', subReflect: 'Reflectie', subFact: 'Wist je dat?',
+            correct: '🎉 Correct!', wrong: '❌ Fout!', genHover: 'Genereer direct een nieuwe set'
         },
         en: {
-            title: 'THINK TANK',
-            btnNew: 'New',
-            tReflect: 'Daily',
-            tIq: 'IQ',
-            tFact: 'Facts',
-            loading: 'Fetching data...',
-            subReflect: 'Reflection',
-            subFact: 'Did you know?',
-            correct: '🎉 Correct!',
-            wrong: '❌ Incorrect!',
-            genHover: 'Generate a new set immediately'
+            title: 'THINK TANK', btnNew: 'New', tReflect: 'Daily', tIq: 'IQ', tFact: 'Facts',
+            loading: 'Fetching data...', subReflect: 'Reflection', subFact: 'Did you know?',
+            correct: '🎉 Correct!', wrong: '❌ Incorrect!', genHover: 'Generate a new set immediately'
         }
     };
     const t = UI[lang] || UI.nl;
 
     const fetchDailySpark = async (forceNew = false) => {
-        setIsLoading(true);
-        setApiError('');
-        
-        // Cache sleutel afhankelijk van taal zodat wisselen direct werkt
+        setIsLoading(true); setApiError('');
         const cacheKey = `spark_daily_v6_${lang}`;
 
         if (!forceNew) {
             const cached = S.load(cacheKey, null);
             if (cached && cached.date === todayStr && cached.data) {
-                setDailyData(cached.data);
-                setIsLoading(false);
-                return;
+                setDailyData(cached.data); setIsLoading(false); return;
             }
         }
 
         const groqKey = S.load('api_keys_dyn', []).find(a => a.name.toLowerCase().includes('groq'))?.val;
         if (!groqKey) {
-            setApiError('No Groq API key.');
-            setDailyData(getFallbackData(lang));
-            setIsLoading(false);
-            return;
+            setApiError('No Groq API key.'); setDailyData(getFallbackData(lang)); setIsLoading(false); return;
         }
 
         try {
-            // 1. Haal ECHTE wiskunde en feiten uit databases
             let iQ = "What is 15% of 120?", iC = "18", iI = ["12", "15", "20"];
             try {
-                // Category 19 is Mathematics in OpenTDB
                 const resI = await fetch('https://opentdb.com/api.php?amount=1&category=19&type=multiple');
                 const datI = await resI.json();
                 if (datI.results && datI.results.length > 0) {
                     const dec = (str) => { const txt = document.createElement("textarea"); txt.innerHTML = str; return txt.value; };
-                    iQ = dec(datI.results[0].question);
-                    iC = dec(datI.results[0].correct_answer);
-                    iI = datI.results[0].incorrect_answers.map(dec);
+                    iQ = dec(datI.results[0].question); iC = dec(datI.results[0].correct_answer); iI = datI.results[0].incorrect_answers.map(dec);
                 }
             } catch(e) {}
 
             let fText = "Bananas grow pointing upwards towards the sun.";
             try {
                 const resF = await fetch('https://uselessfacts.jsph.pl/api/v2/facts/random');
-                const datF = await resF.json();
-                fText = datF.text;
+                const datF = await resF.json(); fText = datF.text;
             } catch(e) {}
 
-            // 2. Laat Groq vertalen en formatteren (Strikte lokalisatie instructies)
             const targetLang = lang === 'nl' ? 'Nederlands' : 'English';
             const factPrefix = lang === 'nl' ? 'Wist je dat ' : 'Did you know ';
             
@@ -2253,28 +2207,17 @@ function SparkWidget({ lang }) {
             TAAK 2: Vertaal dit feit naar het ${targetLang}: "${fText}". Begin de zin met EXACT "${factPrefix}".
             TAAK 3: Beoordeel deze wiskundige IQ-vraag: "${iQ}". Het antwoord is "${iC}", de foute opties zijn "${iI.join(', ')}".
             BELANGRIJKE REGELS VOOR TAAK 3:
-            - Als de vraag imperiale eenheden bevat (inches, miles, gallons, pounds) of leunt op onvertaalbare Amerikaanse cultuur, NEGEER DE VRAAG DAN VOLLEDIG. Verzin in de plaats daarvan ZELF een universele, foutloze logische getallenreeks (zoals 2, 4, 8, 16...).
-            - Zorg dat de vraag in vlekkeloos en natuurlijk ${targetLang} is geschreven. Gebruik bij getallen het metrische systeem (cm, km).
+            - Als de vraag imperiale eenheden bevat, NEGEER DE VRAAG DAN VOLLEDIG. Verzin in de plaats daarvan ZELF een universele logische getallenreeks.
+            - Zorg dat de vraag in vlekkeloos en natuurlijk ${targetLang} is geschreven. Gebruik metrisch systeem.
             - Maak een array van 4 opties, hussel ze, en geef de index (0-3) van de juiste. 
             - Schrijf 1 heldere zin wiskundige uitleg in het ${targetLang}.
-
             LET OP: Gebruik NOOIT dubbele aanhalingstekens binnenin je zinnen (gebruik enkele ').
-            Geef UITSLUITEND dit JSON object terug, zonder enige markdown:
-            {
-                "dagvraag": "...",
-                "feit": "...",
-                "iq": {"q": "...", "opts": ["...","...","...","..."], "a": 0, "uitleg": "..."}
-            }`;
+            Geef UITSLUITEND dit JSON object terug:
+            { "dagvraag": "...", "feit": "...", "iq": {"q": "...", "opts": ["...","...","...","..."], "a": 0, "uitleg": "..."} }`;
 
             const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'llama-3.3-70b-versatile',
-                    messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.2, // Laag voor feitelijke stabiliteit
-                    max_tokens: 600
-                })
+                method: 'POST', headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], temperature: 0.2, max_tokens: 600 })
             });
             
             const data = await res.json();
@@ -2284,47 +2227,38 @@ function SparkWidget({ lang }) {
                 if (jsonMatch) {
                     const parsed = JSON.parse(jsonMatch[0]);
                     setDailyData(parsed);
-                    if (!forceNew) {
-                        S.save(cacheKey, { date: todayStr, data: parsed });
-                    }
+                    if (!forceNew) S.save(cacheKey, { date: todayStr, data: parsed });
                     setApiError('');
-                } else {
-                    throw new Error("Ongeldig JSON formaat");
-                }
+                } else { throw new Error("Ongeldig JSON formaat"); }
             }
         } catch (e) {
             console.error("DenkTank AI Error:", e);
             if (!dailyData) setDailyData(getFallbackData(lang));
             setApiError('Fallback mode.');
         }
-        
-        setIsLoading(false);
-        setIqPick(null);
+        setIsLoading(false); setIqPick(null);
     };
 
-    useEffect(() => {
-        fetchDailySpark();
-    }, [todayStr, lang]); // Voer opnieuw uit als taal wijzigt
+    useEffect(() => { fetchDailySpark(); }, [todayStr, lang]);
 
     const getFallbackData = (currentLang) => {
         if (currentLang === 'en') {
             return {
                 dagvraag: "What small decision has had a massive impact on your life?",
-                iq: { q: "What number follows in this sequence: 2, 6, 12, 20, 30, ...?", opts: ["38", "40", "42", "44"], a: 2, uitleg: "The difference increases by 2 each time (+4, +6, +8, +10). The next step is 30 + 12 = 42." },
+                iq: { q: "What number follows in this sequence: 2, 6, 12, 20, 30, ...?", opts: ["38", "40", "42", "44"], a: 2, uitleg: "The difference increases by 2 each time. The next step is 30 + 12 = 42." },
                 feit: "Did you know that octopuses have three hearts and their blood is blue?"
             };
         }
         return {
             dagvraag: "Welke kleine beslissing heeft ooit een grote impact op je leven gehad?",
-            iq: { q: "Welk getal volgt in deze reeks: 2, 6, 12, 20, 30, ...?", opts: ["38", "40", "42", "44"], a: 2, uitleg: "De toename stijgt steeds met 2 (+4, +6, +8, +10). De volgende stap is dus 30 + 12 = 42." },
-            feit: "Wist je dat octopussen drie harten hebben en dat hun bloed blauw is in plaats van rood?"
+            iq: { q: "Welk getal volgt in deze reeks: 2, 6, 12, 20, 30, ...?", opts: ["38", "40", "42", "44"], a: 2, uitleg: "De toename stijgt steeds met 2 (+4, +6, +8). De volgende stap is dus 30 + 12 = 42." },
+            feit: "Wist je dat octopussen drie harten hebben en dat hun bloed blauw is?"
         };
     };
 
     const renderQuiz = (quizData, pickState, setPickState) => (
         <div className="flex flex-col w-full">
             <h4 className="text-[13px] md:text-sm font-bold text-center text-gray-800 mb-6 leading-snug">{quizData?.q}</h4>
-            
             <div className="grid grid-cols-2 gap-2 w-full">
                 {quizData?.opts.map((opt, i) => {
                     let btnClass = "bg-white border border-gray-200 text-gray-700 hover:border-[#0073b1] hover:bg-blue-50";
@@ -2334,23 +2268,15 @@ function SparkWidget({ lang }) {
                         else btnClass = "bg-gray-50 border border-gray-100 text-gray-400 opacity-50";
                     }
                     return (
-                        <button 
-                            key={i} 
-                            onClick={() => setPickState(i)}
-                            disabled={pickState !== null}
-                            className={`px-3 py-2.5 rounded text-[11px] md:text-xs transition-all duration-200 text-center ${btnClass}`}
-                        >
+                        <button key={i} onClick={() => setPickState(i)} disabled={pickState !== null} className={`px-3 py-2.5 rounded text-[11px] md:text-xs transition-all duration-200 text-center ${btnClass}`}>
                             {opt}
                         </button>
                     );
                 })}
             </div>
-
             {pickState !== null && (
                 <div className={`mt-4 p-3 rounded border text-xs leading-relaxed animate-fade-in ${pickState === quizData.a ? 'bg-green-50/50 border-green-100 text-green-900' : 'bg-red-50/50 border-red-100 text-red-900'}`}>
-                    <span className={`font-black uppercase tracking-wider block mb-1 ${pickState === quizData.a ? 'text-green-600' : 'text-red-600'}`}>
-                        {pickState === quizData.a ? t.correct : t.wrong}
-                    </span>
+                    <span className={`font-black uppercase tracking-wider block mb-1 ${pickState === quizData.a ? 'text-green-600' : 'text-red-600'}`}>{pickState === quizData.a ? t.correct : t.wrong}</span>
                     <span className="text-gray-700">{quizData.uitleg}</span>
                 </div>
             )}
@@ -2365,23 +2291,16 @@ function SparkWidget({ lang }) {
                 </div>
                 <div className="flex items-center gap-2">
                     {apiError && <span className="text-[8px] text-red-500 font-bold bg-white px-2 py-0.5 rounded border border-red-100 hidden sm:inline-block">{apiError}</span>}
-                    <button 
-                        onClick={() => fetchDailySpark(true)} 
-                        disabled={isLoading}
-                        className="px-2.5 py-1.5 bg-white border border-gray-200 text-[#0073b1] hover:bg-[#0073b1] hover:text-white hover:border-[#0073b1] text-[9px] font-bold uppercase rounded transition shadow-sm flex items-center gap-1 disabled:opacity-50"
-                        title={t.genHover}
-                    >
+                    <button onClick={() => fetchDailySpark(true)} disabled={isLoading} className="px-2.5 py-1.5 bg-white border border-gray-200 text-[#0073b1] hover:bg-[#0073b1] hover:text-white hover:border-[#0073b1] text-[9px] font-bold uppercase rounded transition shadow-sm flex items-center gap-1 disabled:opacity-50" title={t.genHover}>
                         <span className={isLoading ? "animate-spin inline-block" : ""}>↻</span> {t.btnNew}
                     </button>
                 </div>
             </div>
-            
             <div className="flex border-b border-gray-200 bg-white shrink-0">
                 <button onClick={() => setTab('dagvraag')} className={`tab-btn ${tab === 'dagvraag' ? 'active' : ''}`}>{t.tReflect}</button>
                 <button onClick={() => setTab('iq')} className={`tab-btn ${tab === 'iq' ? 'active' : ''}`}>{t.tIq}</button>
                 <button onClick={() => setTab('feiten')} className={`tab-btn ${tab === 'feiten' ? 'active' : ''}`}>{t.tFact}</button>
             </div>
-
             <div className="flex-1 overflow-y-auto p-5 bg-white hide-scroll relative flex flex-col">
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-full space-y-4 my-auto">
@@ -2393,24 +2312,18 @@ function SparkWidget({ lang }) {
                         {tab === 'dagvraag' && (
                             <div className="flex flex-col flex-1 items-center justify-center text-center px-2">
                                 <h4 className="text-[10px] font-black text-[#0073b1] uppercase tracking-widest mb-6">{t.subReflect}</h4>
-                                <p className="text-lg md:text-xl font-bold text-gray-800 leading-snug">
-                                    "{dailyData?.dagvraag}"
-                                </p>
+                                <p className="text-lg md:text-xl font-bold text-gray-800 leading-snug">"{dailyData?.dagvraag}"</p>
                             </div>
                         )}
-
                         {tab === 'iq' && (
                             <div className="flex flex-col flex-1 justify-center items-center w-full max-w-md mx-auto">
                                 {renderQuiz(dailyData?.iq, iqPick, setIqPick)}
                             </div>
                         )}
-
                         {tab === 'feiten' && (
                             <div className="flex flex-col flex-1 items-center justify-center text-center px-4">
                                 <h4 className="text-[10px] font-black text-[#0073b1] uppercase tracking-widest mb-6">{t.subFact}</h4>
-                                <p className="text-sm md:text-base font-bold text-gray-800 leading-relaxed">
-                                    {dailyData?.feit}
-                                </p>
+                                <p className="text-sm md:text-base font-bold text-gray-800 leading-relaxed">{dailyData?.feit}</p>
                             </div>
                         )}
                     </>
@@ -2419,7 +2332,7 @@ function SparkWidget({ lang }) {
         </div>
     );
 }
-    
+
 function Settings({ isOpen, onClose, layout, setLayout }) {
     const [bvKeys, setBvKeys] = useState(S.load('bitvavo_keys', {pub: '', sec: ''}));
     const [apis, setApis] = useState(S.load('api_keys_dyn', [{name: 'Groq', val: ''}]));
@@ -2443,9 +2356,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
         const cloudSettings = {};
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith('d_')) {
-                cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key));
-            }
+            if (key && key.startsWith('d_')) { cloudSettings[key.substring(2)] = JSON.parse(localStorage.getItem(key)); }
         }
 
         try {
@@ -2455,21 +2366,10 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                 body: JSON.stringify({ email: ALLOWED_EMAIL, settings: cloudSettings })
             });
             const dbData = await res.json();
-            
-            if (!res.ok || dbData.error) {
-                alert("FOUT BIJ OPSLAAN: " + (dbData.error || res.statusText));
-                setIsSaving(false);
-                return; 
-            }
-        } catch(e) { 
-            alert("NETWERK FOUT BIJ OPSLAAN: " + e.message); 
-            setIsSaving(false);
-            return; 
-        }
+            if (!res.ok || dbData.error) { alert("FOUT BIJ OPSLAAN: " + (dbData.error || res.statusText)); setIsSaving(false); return; }
+        } catch(e) { alert("NETWERK FOUT BIJ OPSLAAN: " + e.message); setIsSaving(false); return; }
 
-        setIsSaving(false);
-        onClose(); 
-        window.location.reload(); 
+        setIsSaving(false); onClose(); window.location.reload(); 
     };
 
     return (
@@ -2497,19 +2397,18 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
                 </section>
 
                 <section>
-    <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Outlook Koppeling</h3>
-    <input type="text" placeholder="Microsoft Application (Client) ID" defaultValue={S.load('ms_client_id', '')} onChange={e => S.save('ms_client_id', e.target.value)} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
-    <p className="text-[8px] text-gray-400 mt-1">Azure Portal → App registrations → Application (client) ID</p>
-</section>
+                    <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Outlook Koppeling</h3>
+                    <input type="text" placeholder="Microsoft Application (Client) ID" defaultValue={S.load('ms_client_id', '')} onChange={e => S.save('ms_client_id', e.target.value)} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                    <p className="text-[8px] text-gray-400 mt-1">Azure Portal → App registrations → Application (client) ID</p>
+                </section>
 
-{/* <!-- NIEUW: Gmail Koppeling --> */}
-<section>
-    <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Gmail Koppeling</h3>
-    <input type="text" placeholder="Google OAuth Client ID" defaultValue={S.load('gmail_client_id', '')} onChange={e => S.save('gmail_client_id', e.target.value)} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
-    <p className="text-[8px] text-gray-400 mt-1">Google Cloud Console → Credentials → OAuth 2.0 Client ID</p>
-</section>
+                <section>
+                    <h3 className="text-[10px] font-black text-blue-600 uppercase mb-4">Gmail Koppeling</h3>
+                    <input type="text" placeholder="Google OAuth Client ID" defaultValue={S.load('gmail_client_id', '')} onChange={e => S.save('gmail_client_id', e.target.value)} className="w-full p-2.5 border rounded text-xs font-mono bg-gray-50 outline-none focus:border-blue-500" />
+                    <p className="text-[8px] text-gray-400 mt-1">Google Cloud Console → Credentials → OAuth 2.0 Client ID</p>
+                </section>
 
-                    <section>
+                <section>
                     <div className="flex justify-between items-center mb-4"><h3 className="text-[10px] font-black text-blue-600 uppercase">Overige API Keys</h3><button onClick={()=>setApis([...apis, {name:'', val:''}])} className="bg-blue-100 text-blue-700 px-2 rounded font-bold">+</button></div>
                     {apis.map((a, i) => (
                         <div key={i} className="flex gap-2 mb-2">
@@ -2553,8 +2452,522 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
     );
 }
 
- 
+function EmailWidget({ lang }) {
+    const [accounts, setAccounts] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [activeAction, setActiveAction] = useState({ id: null, type: null });
+    const [replyText, setReplyText] = useState('');
+    const [destinations, setDestinations] = useState([]);
+    const [selectedMail, setSelectedMail] = useState(null);
+    const [mailBody, setMailBody] = useState('');
+    const [bodyLoading, setBodyLoading] = useState(false);
+    const [initializing, setInitializing] = useState(true);
+
+    const [gmailAccounts, setGmailAccounts] = useState([]);
+    const [activeTab, setActiveTab] = useState('outlook');
+    const [gmailLoading, setGmailLoading] = useState(false);
     
+    // const gmailClientId = S.load('gmail_client_id', GOOGLE_CLIENT_ID);
+    const msClientId = S.load('ms_client_id', '');
+    const msalRef = useRef(null);
+
+    const initMsal = async () => {
+        if (!window.msal) { setError('MSAL script niet geladen'); return null; }
+        if (!msClientId) { setError('Configureer Client ID in instellingen'); return null; }
+        if (!msalRef.current) {
+            msalRef.current = new window.msal.PublicClientApplication({
+                auth: { clientId: msClientId, authority: "https://login.microsoftonline.com/common" },
+                cache: { cacheLocation: "localStorage" }
+            });
+            await msalRef.current.initialize();
+        }
+        return msalRef.current;
+    };
+
+    const acquireTokenForAccount = async (msalAccount) => {
+        const instance = await initMsal();
+        if (!instance) { return null; }
+        try {
+            const r = await instance.acquireTokenSilent({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount });
+            return r.accessToken;
+        } catch (e) {
+            try {
+                const r = await instance.acquireTokenPopup({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount });
+                return r.accessToken;
+            } catch (err) { return null; }
+        }
+    };
+
+    const accountLabel = (msalAccount) => {
+        if (!msalAccount) { return '?'; }
+        const email = msalAccount.username || '';
+        const local = email.split('@')[0];
+        const pretty = local.replace(/[._-]/g, '-').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('-');
+        return pretty.length > 12 ? pretty.slice(0, 12) : pretty;
+    };
+
+    useEffect(() => {
+        let isMounted = true;
+        const autoConnect = async () => {
+            if (isMounted) { setInitializing(true); }
+            const timer = setTimeout(() => { 
+                if (isMounted) { setInitializing(false); } 
+            }, 2000); 
+
+            try {
+                const instance = await initMsal();
+                if (!instance) { return; }
+                const cached = instance.getAllAccounts();
+                if (cached.length === 0) { return; }
+
+                const loaded = [];
+                for (let i = 0; i < cached.length; i++) {
+                    const c = cached[i];
+                    const token = await acquireTokenForAccount(c);
+                    loaded.push({ msalAccount: c, token: token, emails: [], label: accountLabel(c) });
+                }
+                
+                if (isMounted) { setAccounts(loaded); }
+                
+                loaded.forEach((a, i) => { 
+                    if (a.token) { fetchMailsForAccount(a.token, i, a.label); } 
+                });
+            } catch (error) {
+                console.error(error);
+            } finally {
+                clearTimeout(timer);
+                if (isMounted) { setInitializing(false); }
+            }
+        };
+        autoConnect();
+        return () => { isMounted = false; };
+    }, []);
+
+    const addAccount = async () => {
+        try {
+            setError('');
+            const instance = await initMsal();
+            if (!instance) { return; }
+            await instance.handleRedirectPromise();
+            const r = await instance.loginPopup({ scopes: ["Mail.ReadWrite","Mail.Send"], prompt: "select_account" });
+            
+            setAccounts(prev => {
+                const exists = prev.some(a => a.msalAccount.username.toLowerCase() === r.account.username.toLowerCase());
+                if (exists) { setError('Account al toegevoegd'); return prev; }
+                const label = accountLabel(r.account);
+                const newArr = [...prev, { msalAccount: r.account, token: r.accessToken, emails: [], label: label }];
+                fetchMailsForAccount(r.accessToken, newArr.length - 1, label);
+                return newArr;
+            });
+        } catch (e) {
+            console.error('Add account error:', e);
+            if (e.errorCode === 'interaction_in_progress') {
+                setError('Wacht tot vorige actie klaar is');
+            } else {
+                setError('Account toevoegen mislukt');
+            }
+        }
+    };
+
+    const graphFetch = async (url, token, accountIdx, options = {}) => {
+        const res = await fetch(`https://graph.microsoft.com/v1.0${url}`, {
+            ...options,
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers||{}) }
+        });
+        if (res.status === 401) {
+            const acct = accounts[accountIdx];
+            if (acct) {
+                const newToken = await acquireTokenForAccount(acct.msalAccount);
+                if (newToken) {
+                    setAccounts(prev => {
+                        return prev.map((a, i) => {
+                            if (i === accountIdx) { return { ...a, token: newToken }; }
+                            return a;
+                        });
+                    });
+                    return fetch(`https://graph.microsoft.com/v1.0${url}`, {
+                        ...options,
+                        headers: { Authorization: `Bearer ${newToken}`, 'Content-Type': 'application/json', ...(options.headers||{}) }
+                    });
+                }
+            }
+            setError('Sessie verlopen'); return null;
+        }
+        return res;
+    };
+
+    const fetchMailsForAccount = async (token, idx, label) => {
+        setLoading(true);
+        const timer = setTimeout(() => { setLoading(false); }, 2000);
+        try {
+            const controller = new AbortController();
+            setTimeout(() => { controller.abort(); }, 2000);
+            
+            const res = await graphFetch('/me/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification', token, idx, { signal: controller.signal });
+            if (!res || !res.ok) { return; }
+            
+            const data = await res.json();
+            const rawMails = data.value || [];
+            const emails = rawMails.filter(m => m.inferenceClassification === 'focused').slice(0, 20).map(m => {
+                return {
+                    id: m.id, accountIdx: idx, accountLabel: label,
+                    subject: m.subject || '(geen onderwerp)',
+                    fromStr: m.sender?.emailAddress?.name || m.sender?.emailAddress?.address || 'Onbekend',
+                    snippet: m.bodyPreview || '',
+                    date: m.receivedDateTime, webLink: m.webLink || ''
+                };
+            });
+            
+            setAccounts(prev => {
+                return prev.map((a, i) => {
+                    if (i === idx) { return { ...a, emails: emails }; }
+                    return a;
+                });
+            });
+        } catch (error) {
+            console.error(error);
+        } finally {
+            clearTimeout(timer);
+            setLoading(false);
+        }
+    };
+
+    const connectGmail = (selectAccount = false) => {
+        if (!gmailClientId) { setError('Configureer Gmail Client ID in instellingen'); return; }
+        const client = window.google.accounts.oauth2.initTokenClient({
+            client_id: gmailClientId,
+            scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send',
+            prompt: selectAccount ? 'select_account' : '',
+            callback: async (tokenResponse) => {
+                if (tokenResponse.error) { setError('Gmail verbinding mislukt'); return; }
+                const token = tokenResponse.access_token;
+                try {
+                    const profileRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    const profile = await profileRes.json();
+                    const email = profile.emailAddress || 'Gmail';
+                    const label = email.split('@')[0].replace(/[._-]/g, '-').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('-').slice(0, 12);
+
+                    setGmailAccounts(prev => {
+                        const exists = prev.findIndex(a => a.email === email);
+                        if (exists >= 0) {
+                            const updated = [...prev];
+                            updated[exists] = { ...updated[exists], token: token };
+                            fetchGmail(token, exists, label, updated);
+                            return updated;
+                        }
+                        const newArr = [...prev, { email: email, token: token, emails: [], label: label }];
+                        fetchGmail(token, newArr.length - 1, label, newArr);
+                        return newArr;
+                    });
+                } catch (err) { setError('Gmail profiel ophalen mislukt'); }
+            }
+        });
+        client.requestAccessToken({ prompt: selectAccount ? 'select_account' : '' });
+    };
+
+    const fetchGmail = async (token, idx, label, currentAccounts) => {
+        setGmailLoading(true);
+        const timer = setTimeout(() => { setGmailLoading(false); }, 2000);
+        try {
+            const controller = new AbortController();
+            setTimeout(() => { controller.abort(); }, 2000);
+            
+            const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&labelIds=INBOX&q=category:primary', {
+                headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
+            });
+            if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
+            const data = await res.json();
+            const messages = data.messages || [];
+
+            const details = await Promise.all(messages.slice(0, 20).map(async m => {
+                const r = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`, {
+                    headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
+                }).catch(() => null);
+                return (r && r.ok) ? r.json() : null;
+            }));
+
+            const emails = details.filter(Boolean).map(m => {
+                const headers = m.payload?.headers || [];
+                const getH = (name) => {
+                    const found = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
+                    return found ? found.value : '';
+                };
+                return {
+                    id: m.id, accountIdx: idx, accountLabel: label, source: 'gmail',
+                    subject: getH('Subject') || '(geen onderwerp)',
+                    fromStr: getH('From').replace(/<.*>/, '').trim() || 'Onbekend',
+                    snippet: m.snippet || '',
+                    date: new Date(parseInt(m.internalDate)).toISOString(),
+                    threadId: m.threadId
+                };
+            });
+
+            setGmailAccounts(prev => {
+                return prev.map((a, i) => {
+                    if (i === idx) { return { ...a, emails: emails }; }
+                    return a;
+                });
+            });
+        } catch (error) {
+            console.error('Gmail fetch:', error);
+        } finally {
+            clearTimeout(timer);
+            setGmailLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (gmailClientId && gmailAccounts.length === 0 && !initializing) {
+            connectGmail(false);
+        }
+    }, [initializing]);
+
+    const openGmailMail = async (mail) => {
+        setSelectedMail(mail); setMailBody(''); setBodyLoading(true);
+        setActiveAction({ id: null, type: null }); setReplyText('');
+        const token = gmailAccounts[mail.accountIdx]?.token;
+        try {
+            const res = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${mail.id}?format=full`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const part = data.payload?.parts?.find(p => p.mimeType === 'text/html') || data.payload?.parts?.find(p => p.mimeType === 'text/plain') || data.payload;
+            const encoded = part?.body?.data || '';
+            const decoded = encoded ? atob(encoded.replace(/-/g, '+').replace(/_/g, '/')) : 'Geen inhoud';
+            setMailBody(decoded);
+        } catch (err) { setMailBody('Kon mail niet laden'); }
+        setBodyLoading(false);
+    };
+
+    const deleteGmail = async (mail) => {
+        const token = gmailAccounts[mail.accountIdx]?.token;
+        setGmailAccounts(prev => {
+            return prev.map((a, i) => {
+                if (i === mail.accountIdx) { return { ...a, emails: a.emails.filter(m => m.id !== mail.id) }; }
+                return a;
+            });
+        });
+        try { await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${mail.id}/trash`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch (err) {}
+    };
+
+    const mergedEmails = React.useMemo(() => {
+        const all = [];
+        if (activeTab === 'outlook') {
+            accounts.forEach(a => a.emails.forEach(m => all.push({...m, source:'outlook'})));
+        } else {
+            gmailAccounts.forEach(a => a.emails.forEach(m => all.push(m)));
+        }
+        return all.sort((a,b) => new Date(b.date) - new Date(a.date));
+    }, [accounts, gmailAccounts, activeTab]);
+
+    const tokenForMail = (mail) => {
+        const acct = accounts[mail?.accountIdx];
+        return acct ? acct.token : null;
+    };
+
+    const openMail = async (mail) => {
+        setSelectedMail(mail); setMailBody(''); setBodyLoading(true);
+        setActiveAction({ id:null, type:null }); setReplyText('');
+        try {
+            const res = await graphFetch(`/me/messages/${mail.id}?$select=body`, tokenForMail(mail), mail.accountIdx);
+            if (!res) { return; }
+            const data = await res.json();
+            setMailBody(data.body?.content || 'Geen inhoud');
+        } catch (err) { setMailBody('Kon mail niet laden'); }
+        setBodyLoading(false);
+    };
+
+    const removeMailFromUI = (mail) => {
+        setAccounts(prev => {
+            return prev.map((a, i) => {
+                if (i === mail.accountIdx) { return { ...a, emails: a.emails.filter(m => m.id !== mail.id) }; }
+                return a;
+            });
+        });
+        setSelectedMail(null); setActiveAction({id:null,type:null});
+    };
+
+    const deleteMail = async (mail) => {
+        removeMailFromUI(mail);
+        try { await graphFetch(`/me/messages/${mail.id}`, tokenForMail(mail), mail.accountIdx, { method:'DELETE' }); } catch (err) {}
+    };
+
+    const moveMail = async (mail, folderId) => {
+        removeMailFromUI(mail);
+        try { await graphFetch(`/me/messages/${mail.id}/move`, tokenForMail(mail), mail.accountIdx, { method:'POST', body:JSON.stringify({destinationId:folderId}) }); } catch (err) {}
+    };
+
+    const loadFolders = async (mail) => {
+        setDestinations([]);
+        try {
+            const res = await graphFetch('/me/mailFolders?$top=20', tokenForMail(mail), mail.accountIdx);
+            if (!res) { return; }
+            const data = await res.json();
+            setDestinations((data.value||[]).map(f => { return {id:f.id, name:f.displayName}; }));
+        } catch (err) {}
+    };
+
+    const sendReply = async (mail) => {
+        if (!replyText.trim()) { return; }
+        try {
+            await graphFetch(`/me/messages/${mail.id}/reply`, tokenForMail(mail), mail.accountIdx, {
+                method:'POST', body:JSON.stringify({message:{body:{contentType:"Text",content:`${replyText}\n\n\nGroeten, Michael`}}})
+            });
+            setActiveAction({id:null,type:null}); setReplyText(''); setError('');
+        } catch (err) { setError('Versturen mislukt'); }
+    };
+
+    const forwardMail = async (mail) => {
+        if (!replyText.trim()) { return; }
+        const parts = replyText.split(',').map(s=>s.trim()).filter(p=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p));
+        if (!parts.length) { setError('Voer een geldig e-mailadres in'); return; }
+        try {
+            await graphFetch(`/me/messages/${mail.id}/forward`, tokenForMail(mail), mail.accountIdx, {
+                method:'POST', body:JSON.stringify({ toRecipients:parts.map(a=>{ return {emailAddress:{address:a}}; }), comment:'\n\nGroeten, Michael' })
+            });
+            setActiveAction({id:null,type:null}); setReplyText(''); setError('');
+        } catch (err) { setError('Doorsturen mislukt'); }
+    };
+
+    const toggleAction = (id, type) => {
+        if (activeAction.id === id && activeAction.type === type) { 
+            setActiveAction({id:null,type:null}); 
+        } else { 
+            setActiveAction({id,type}); 
+            setReplyText(''); 
+            if (type === 'move') { loadFolders(selectedMail); }
+        }
+    };
+
+    // const MailRow = ({ mail }) => {
+        return (
+            <div className="relative overflow-hidden border-b border-gray-100">
+                <div className="relative bg-white">
+                    <div className="px-4 py-3 cursor-pointer hover:bg-gray-50/60 transition" onClick={() => mail.source === 'gmail' ? openGmailMail(mail) : openMail(mail)}>
+                        <div className="flex justify-between items-start gap-2">
+                            <span className="text-[12px] font-semibold text-gray-900 truncate flex-1" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.fromStr}</span>
+                            <div className="text-right shrink-0">
+                                <div className="text-[9px] font-bold text-red-400">{mail.accountLabel}</div>
+                                <div className="text-[9px] text-gray-400">{new Date(mail.date).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+                            </div>
+                        </div>
+                        <div className="text-[11px] text-blue-700 font-medium truncate mt-0.5" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.subject}</div>
+                        <div className="text-[10px] text-gray-400 truncate mt-0.5">{mail.snippet}</div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="widget h-[500px] flex flex-col bg-white">
+            <div className="shrink-0 px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    {selectedMail && (
+                        <button onClick={() => { setSelectedMail(null); setActiveAction({id:null,type:null}); }} className="p-1 rounded hover:bg-gray-200 transition">
+                            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                        </button>
+                    )}
+                    <Ico.Mail />
+                    <span className="text-[11px] font-black tracking-widest uppercase">Mail</span>
+                </div>
+                {error && <span className="text-[9px] text-red-500 font-bold truncate max-w-[200px]">{error}</span>}
+            </div>
+
+            {!selectedMail && (
+                <div className="shrink-0 border-b">
+                    <div className="flex">
+                        <button className={`tab-btn flex-1 ${activeTab==='outlook'?'active':''}`} onClick={()=>{setActiveTab('outlook');}}>OUTLOOK</button>
+                        <button className={`tab-btn flex-1 ${activeTab==='gmail'?'active':''}`} onClick={()=>{setActiveTab('gmail');}}>GMAIL</button>
+                    </div>
+                    <div className="flex items-center px-4 py-1.5 gap-2 bg-gray-50/50">
+                        {(activeTab==='outlook'?accounts:gmailAccounts).map((a,i) => (
+                            <span key={i} className="text-[8px] font-bold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" title={a.msalAccount?.username||a.email||''}>
+                                {a.label}
+                            </span>
+                        ))}
+                        <button onClick={()=>{ activeTab==='outlook' ? addAccount() : connectGmail(true); }} className="ml-auto w-5 h-5 flex items-center justify-center rounded-full bg-blue-50 text-blue-500 hover:bg-blue-100 transition" title="Account toevoegen">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14m-7-7h14"/></svg>
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto hide-scroll">
+                {selectedMail ? (
+                    <div className="flex flex-col h-full">
+                        <div className="shrink-0 p-3 border-b bg-gray-50/50">
+                            <h3 className="text-[12px] font-bold text-gray-800 leading-snug mb-1">{selectedMail.subject}</h3>
+                            <div className="text-[9px] text-gray-500">Van: {selectedMail.fromStr} • {selectedMail.accountLabel} • {new Date(selectedMail.date).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+                            <div className="flex gap-1 mt-2">
+                                <button onClick={() => toggleAction(selectedMail.id,'reply')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='reply'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Beantwoorden</button>
+                                <button onClick={() => toggleAction(selectedMail.id,'forward')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='forward'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Doorsturen</button>
+                                <button onClick={() => toggleAction(selectedMail.id,'move')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='move'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Verplaatsen</button>
+                                <button onClick={() => { mail.source === 'gmail' ? deleteGmail(selectedMail) : deleteMail(selectedMail); }} className="text-[8px] font-bold px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100 transition">Verwijderen</button>
+                            </div>
+                            {activeAction.type==='reply' && (
+                                <div className="mt-2 flex gap-1">
+                                    <input value={replyText} onChange={e=>{setReplyText(e.target.value);}} placeholder="Typ antwoord..." className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e=>{ if (e.key==='Enter') { sendReply(selectedMail); } }} />
+                                    <button onClick={()=>{sendReply(selectedMail);}} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
+                                </div>
+                            )}
+                            {activeAction.type==='forward' && (
+                                <div className="mt-2 flex gap-1">
+                                    <input value={replyText} onChange={e=>{setReplyText(e.target.value);}} placeholder="email@voorbeeld.nl" className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e=>{ if (e.key==='Enter') { forwardMail(selectedMail); } }} />
+                                    <button onClick={()=>{forwardMail(selectedMail);}} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
+                                </div>
+                            )}
+                            {activeAction.type==='move' && (
+                                <div className="mt-2">
+                                    {destinations.length===0 ? <span className="text-[9px] text-gray-400 animate-pulse">Laden...</span> : (
+                                        <select onChange={e=>{if(e.target.value)moveMail(selectedMail,e.target.value);}} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
+                                            <option value="" disabled>Kies map...</option>
+                                            {destinations.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+                                        </select>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-3 py-2">
+                            {bodyLoading ? <span className="text-[10px] text-blue-600 font-bold animate-pulse">Laden...</span>
+                            : <div className="text-[10px] text-gray-700 leading-relaxed mail-body" dangerouslySetInnerHTML={{__html:mailBody}} />}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {initializing && (
+                            <div className="flex items-center justify-center h-full">
+                                <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Verbinden...</span>
+                            </div>
+                        )}
+                        {!initializing && accounts.length===0 && gmailAccounts.length===0 && (
+                            <div className="flex items-center justify-center h-full">
+                                <span className="text-[10px] text-gray-400">Geen accounts — klik + om toe te voegen</span>
+                            </div>
+                        )}
+                        {!initializing && (loading || gmailLoading) && mergedEmails.length===0 && (
+                            <div className="flex items-center justify-center h-full">
+                                <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Synchroniseren...</span>
+                            </div>
+                        )}
+                        {!initializing && !(loading || gmailLoading) && mergedEmails.length===0 && (accounts.length>0 || gmailAccounts.length>0) && (
+                            <div className="flex items-center justify-center h-full">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">Geen nieuwe mails</span>
+                            </div>
+                        )}
+                        {!initializing && mergedEmails.map(mail => (
+                            <MailRow key={`${mail.accountIdx}-${mail.id}`} mail={mail} />
+                        ))}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function App() {
     const [isAuth, setIsAuth] = useState(S.load('auth_status', false));
     const [isSyncing, setIsSyncing] = useState(false);
@@ -2564,7 +2977,6 @@ function App() {
     
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     
-    // DEFAULT LAYOUT v8 INCLUSIEF 'spark'
     const defaultLayout = ['ai', 'crypto', 'agenda', 'news', 'spark', 'radar', 'sports', 'email'];
     const [layout, setLayout] = useState(() => S.load('layout_v9', defaultLayout));
 
@@ -2576,11 +2988,7 @@ function App() {
                     const res = await fetch(`/api/settings?email=${ALLOWED_EMAIL}&t=${Date.now()}`, { cache: 'no-store' });
                     if(res.ok) {
                         let cloudData = await res.json();
-                        
-                        if (typeof cloudData === 'string') {
-                            try { cloudData = JSON.parse(cloudData); } catch(e) {}
-                        }
-
+                        if (typeof cloudData === 'string') { try { cloudData = JSON.parse(cloudData); } catch(e) {} }
                         if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
                             Object.keys(cloudData).forEach(k => S.save(k, cloudData[k]));
                         }
@@ -2620,14 +3028,13 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 4.2'}</p>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 5.6'}</p>
                     {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
         );
     }
 
-    /* v4.3: Alle widgets gewrapt in Error Boundaries */
     const widgets = { 
         ai: <div className="col-span-12 lg:col-span-8"><WidgetErrorBoundary name="AI Chat"><AIWidget lang={lang} /></WidgetErrorBoundary></div>, 
         crypto: <div className="col-span-12 lg:col-span-4"><WidgetErrorBoundary name="Crypto"><CryptoWidget lang={lang} /></WidgetErrorBoundary></div>, 
@@ -2678,32 +3085,8 @@ function App() {
     );
 }
 
-/* v4.3: React 18 createRoot() i.p.v. deprecated ReactDOM.render() */
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
 </script>
 </body>
-
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
