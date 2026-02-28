@@ -2576,8 +2576,7 @@ const [moveTarget, setMoveTarget] = useState(null);
 const [gmailAccounts, setGmailAccounts] = useState([]); // [{email, token, emails:[], label}]
 const [activeTab, setActiveTab] = useState('outlook'); // 'outlook' | 'gmail'
 const [gmailLoading, setGmailLoading] = useState(false);
-const gmailClientId = S.load('gmail_client_id', '');
-    const msalRef = useRef(null);
+const gmailClientId = S.load('gmail_client_id', GOOGLE_CLIENT_ID); // const msalRef = useRef(null);
     const msClientId = S.load('ms_client_id', '');
 
     const initMsal = async () => {
@@ -2907,79 +2906,22 @@ const deleteGmail = async (mail) => {
         const startXRef = useRef(0);
         const swipingRef = useRef(false);
 
-        const onTouchStart = (e) => { startXRef.current = e.touches[0].clientX; swipingRef.current = true; };
-        const onTouchMove = (e) => {
-            if (!swipingRef.current || !rowRef.current) return;
-            const diff = e.touches[0].clientX - startXRef.current;
-            rowRef.current.style.transform = `translateX(${diff}px)`;
-            rowRef.current.style.transition = 'none';
-        };
-        const onTouchEnd = (e) => {
-            swipingRef.current = false;
-            if (!rowRef.current) return;
-            const diff = parseInt(rowRef.current.style.transform.replace(/[^-\d]/g,'')) || 0;
-            if (diff > 80) {
-                // <!-- NIEUW: swipe rechts → verwijderen -->
-                rowRef.current.style.transform = 'translateX(110%)';
-                rowRef.current.style.transition = 'transform 0.3s';
-                setTimeout(() => mail.source === 'gmail' ? deleteGmail(mail) : deleteMail(mail), 300);
-            } else if (diff < -80) {
-                // <!-- NIEUW: swipe links → verplaatsen -->
-                rowRef.current.style.transform = 'translateX(0)';
-                rowRef.current.style.transition = 'transform 0.3s';
-                setMoveTarget(mail);
-                loadFolders(mail);
-            } else {
-                rowRef.current.style.transform = 'translateX(0)';
-                rowRef.current.style.transition = 'transform 0.3s';
-            }
-        };
-
-        const isMoveTarget = moveTarget?.id === mail.id;
-
+        // const MailRow = ({ mail }) => {
         return (
             <div className="relative overflow-hidden border-b border-gray-100">
-                {/* <!-- NIEUW: swipe achtergrond hints --> */}
-                <div className="absolute inset-0 flex pointer-events-none">
-                    <div className="flex-1 bg-red-500 flex items-center pl-3">
-                        <span className="text-white text-[9px] font-bold tracking-wide">VERWIJDER</span>
-                    </div>
-                    <div className="flex-1 bg-blue-500 flex items-center justify-end pr-3">
-                        <span className="text-white text-[9px] font-bold tracking-wide">VERPLAATS</span>
-                    </div>
-                </div>
-                <div ref={rowRef} className="relative bg-white"
-                    onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+                <div className="relative bg-white">
                     <div className="px-4 py-3 cursor-pointer hover:bg-gray-50/60 transition" onClick={() => mail.source === 'gmail' ? openGmailMail(mail) : openMail(mail)}>
                         <div className="flex justify-between items-start gap-2">
                             <span className="text-[12px] font-semibold text-gray-900 truncate flex-1" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.fromStr}</span>
-                            {/* <!-- NIEUW: account label + datum rechts --> */}
                             <div className="text-right shrink-0">
                                 <div className="text-[9px] font-bold text-red-400">{mail.accountLabel}</div>
                                 <div className="text-[9px] text-gray-400">{new Date(mail.date).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
                             </div>
                         </div>
-                        {/* <!-- NIEUW: subject in blauw zoals screenshot --> */}
                         <div className="text-[11px] text-blue-700 font-medium truncate mt-0.5" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.subject}</div>
                         <div className="text-[10px] text-gray-400 truncate mt-0.5">{mail.snippet}</div>
                     </div>
                 </div>
-                {/* <!-- NIEUW: inline map-keuze na swipe links --> */}
-                {isMoveTarget && (
-                    <div className="bg-blue-50 px-4 py-2 border-t border-blue-100 flex items-center gap-2">
-                        {destinations.length === 0 ? (
-                            <span className="text-[9px] text-blue-500 animate-pulse">Mappen laden...</span>
-                        ) : (
-                            <>
-                                <select onChange={e => { if(e.target.value) moveMail(mail, e.target.value); }} defaultValue="" className="flex-1 p-1.5 border border-blue-200 rounded text-[10px] bg-white outline-none focus:border-blue-400">
-                                    <option value="" disabled>Kies map...</option>
-                                    {destinations.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                                </select>
-                                <button onClick={() => setMoveTarget(null)} className="text-[9px] text-gray-400 hover:text-gray-600">✕</button>
-                            </>
-                        )}
-                    </div>
-                )}
             </div>
         );
     };
@@ -3226,6 +3168,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
