@@ -2637,53 +2637,6 @@ function EmailWidget({ lang }) {
     setLoading(false);
 };
 
-    const removeMailFromUI = (id) => {
-        setOData(prev => prev.filter(m => m.id !== id));
-        setActiveAction({ id: null, type: null });
-    };
-
-    const deleteMail = async (id) => {
-        removeMailFromUI(id);
-        try {
-            await graphFetch(`/me/messages/${id}`, oToken, { method: 'DELETE' });
-        } catch (e) { console.error('Delete error:', e); }
-    };
-
-    const moveMail = async (id, folderId) => {
-        removeMailFromUI(id);
-        try {
-            await graphFetch(`/me/messages/${id}/move`, oToken, {
-                method: 'POST',
-                body: JSON.stringify({ destinationId: folderId })
-            });
-        } catch (e) { console.error('Move error:', e); }
-    };
-
-    const loadFolders = async () => {
-        if (destinations.length > 0) return;
-        try {
-            const res = await graphFetch('/me/mailFolders?$top=20', oToken);
-            if (!res) return;
-            const data = await res.json();
-            setDestinations((data.value || []).map(f => ({ id: f.id, name: f.displayName })));
-        } catch (e) { console.error('Folders error:', e); }
-    };
-
-    const sendReply = async (mail) => {
-        if (!replyText.trim()) return;
-        try {
-            await graphFetch(`/me/messages/${mail.id}/reply`, oToken, {
-                method: 'POST',
-                body: JSON.stringify({ message: { body: { contentType: "Text", content: `${replyText}\n\nGroeten, Michael` } } })
-            });
-            setActiveAction({ id: null, type: null });
-            setReplyText('');
-        } catch (e) {
-            console.error('Reply error:', e);
-            setError('Versturen mislukt');
-        }
-    };
-
     const toggleAction = (id, type) => {
         if (activeAction.id === id && activeAction.type === type) {
             setActiveAction({ id: null, type: null });
@@ -2928,6 +2881,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
