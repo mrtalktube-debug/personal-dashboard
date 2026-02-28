@@ -799,46 +799,6 @@ function CryptoWidget({ lang }) {
     );
 }
 
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex-1 overflow-y-auto px-3 py-2">
-                            {bodyLoading ? <span className="text-[10px] text-blue-600 font-bold animate-pulse">Laden...</span>
-                            : <div className="text-[10px] text-gray-700 leading-relaxed mail-body" dangerouslySetInnerHTML={{__html:mailBody}} />}
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        {initializing && (
-                            <div className="flex items-center justify-center h-full">
-                                <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Verbinden...</span>
-                            </div>
-                        )}
-                        {!initializing && accounts.length===0 && gmailAccounts.length===0 && (
-                            <div className="flex items-center justify-center h-full">
-                                <span className="text-[10px] text-gray-400">Geen accounts — klik + om toe te voegen</span>
-                            </div>
-                        )}
-                        {!initializing && (loading || gmailLoading) && mergedEmails.length===0 && (
-                            <div className="flex items-center justify-center h-full">
-                                <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Synchroniseren...</span>
-                            </div>
-                        )}
-                        {!initializing && !(loading || gmailLoading) && mergedEmails.length===0 && (accounts.length>0 || gmailAccounts.length>0) && (
-                            <div className="flex items-center justify-center h-full">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase">Geen nieuwe mails</span>
-                            </div>
-                        )}
-                        {!initializing && mergedEmails.map(mail => (
-                            <MailRow key={`${mail.accountIdx}-${mail.id}`} mail={mail} />
-                        ))}
-                    </>
-                )}
-            </div>
-        </div>
-    );
-}
-
 class WidgetErrorBoundary extends React.Component {
     constructor(props) { super(props); this.state = { hasError: false, error: null }; }
     static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -3085,4 +3045,5 @@ root.render(<App />);
 </body>
 
 </html>
+
 
