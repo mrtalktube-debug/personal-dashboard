@@ -1203,7 +1203,7 @@ function NewsWidget({ lang }) {
                 }
             }
 
-            if (!img && srcUrl) { try { img = 'https://icon.horse/icon/' + new URL(srcUrl).hostname.replace('www.',''); } catch(e){} }
+            if (!img && srcUrl) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(srcUrl).hostname.replace('www.','') + '&sz=128'; } catch(e){} }
             if (!img && link) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(link).hostname.replace('www.','') + '&sz=64'; } catch(e){} }
 
             if (pubDate) {
@@ -1571,7 +1571,7 @@ function NewsWidget({ lang }) {
                                                         el.dataset.retry = '2';
                                                         try { 
                                                             const domain = new URL(a.link).hostname.replace('www.','');
-                                                            el.src = `https://icon.horse/icon/${domain}`;
+                                                            el.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
                                                         } catch(err) { 
                                                             el.dataset.retry = '3';
                                                             el.src = 'https://www.google.com/s2/favicons?sz=128'; 
@@ -1847,7 +1847,7 @@ function SportsWidget({ lang }) {
                 const [calRes, stdRes, lstRes] = await Promise.all([
                     fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/races/`, { headers: { 'Accept': 'application/json' } }),
                     fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/driverStandings/`, { headers: { 'Accept': 'application/json' } }),
-                    fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/results/last/`, { headers: { 'Accept': 'application/json' } })
+                    fetchWithRetry(`https://api.jolpi.ca/ergast/f1/${currentYear}/results/last/`, { headers: { 'Accept': 'application/json' } }).catch(() => ({ ok: false }))
                 ]);
 
                 const result = { c: [], s: [], lst: { title: 'Geen data', res: [] } };
@@ -3045,5 +3045,6 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
