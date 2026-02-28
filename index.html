@@ -2468,7 +2468,7 @@ function EmailWidget({ lang }) {
     const [activeTab, setActiveTab] = useState('outlook');
     const [gmailLoading, setGmailLoading] = useState(false);
     
-    // const gmailClientId = S.load('gmail_client_id', GOOGLE_CLIENT_ID);
+    const gmailClientId = S.load('gmail_client_id', GOOGLE_CLIENT_ID);
     const msClientId = S.load('ms_client_id', '');
     const msalRef = useRef(null);
 
@@ -2842,11 +2842,11 @@ function EmailWidget({ lang }) {
         }
     };
 
-    // const MailRow = ({ mail }) => {
+    const MailRow = ({ mail }) => {
         return (
             <div className="relative overflow-hidden border-b border-gray-100">
                 <div className="relative bg-white">
-                    <div className="px-4 py-3 cursor-pointer hover:bg-gray-50/60 transition" onClick={() => mail.source === 'gmail' ? openGmailMail(mail) : openMail(mail)}>
+                    <div className="px-4 py-3 cursor-pointer hover:bg-gray-50/60 transition" onClick={() => { if(mail.source === 'gmail'){ openGmailMail(mail); } else { openMail(mail); } }}>
                         <div className="flex justify-between items-start gap-2">
                             <span className="text-[12px] font-semibold text-gray-900 truncate flex-1" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.fromStr}</span>
                             <div className="text-right shrink-0">
@@ -2906,7 +2906,7 @@ function EmailWidget({ lang }) {
                                 <button onClick={() => toggleAction(selectedMail.id,'reply')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='reply'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Beantwoorden</button>
                                 <button onClick={() => toggleAction(selectedMail.id,'forward')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='forward'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Doorsturen</button>
                                 <button onClick={() => toggleAction(selectedMail.id,'move')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='move'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Verplaatsen</button>
-                                <button onClick={() => { mail.source === 'gmail' ? deleteGmail(selectedMail) : deleteMail(selectedMail); }} className="text-[8px] font-bold px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100 transition">Verwijderen</button>
+                                <button onClick={() => { if(mail.source === 'gmail') { deleteGmail(selectedMail); } else { deleteMail(selectedMail); } }} className="text-[8px] font-bold px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100 transition">Verwijderen</button>
                             </div>
                             {activeAction.type==='reply' && (
                                 <div className="mt-2 flex gap-1">
@@ -2923,7 +2923,7 @@ function EmailWidget({ lang }) {
                             {activeAction.type==='move' && (
                                 <div className="mt-2">
                                     {destinations.length===0 ? <span className="text-[9px] text-gray-400 animate-pulse">Laden...</span> : (
-                                        <select onChange={e=>{if(e.target.value)moveMail(selectedMail,e.target.value);}} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
+                                        <select onChange={e=>{if(e.target.value){moveMail(selectedMail,e.target.value);}}} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
                                             <option value="" disabled>Kies map...</option>
                                             {destinations.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
                                         </select>
@@ -3089,4 +3089,5 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
 </script>
 </body>
+
 </html>
