@@ -2615,7 +2615,7 @@ function EmailWidget({ lang }) {
     setLoading(true);
     setError('');
     try {
-        const res = await graphFetch(`/me/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification`, token);
+        const res = await graphFetch(`/me/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification`, token);
         if (!res) return;
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
@@ -2881,6 +2881,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
