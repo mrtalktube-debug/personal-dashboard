@@ -2696,7 +2696,7 @@ function EmailWidget({ lang }) {
         try {
             await graphFetch(`/me/messages/${mail.id}/reply`, oToken, {
                 method: 'POST',
-                body: JSON.stringify({ message: { body: { contentType: "Text", content: `${replyText}\n\nGroeten, Michael` } } })
+                body: JSON.stringify({ message: { body: { contentType: "Text", content: `${replyText}\n\n\nGroeten, Michael` } } })
             });
             setActiveAction({ id: null, type: null });
             setReplyText('');
@@ -2704,6 +2704,29 @@ function EmailWidget({ lang }) {
         } catch (e) {
             console.error('Reply error:', e);
             setError('Versturen mislukt');
+        }
+    };
+
+    const forwardMail = async (mail) => {
+        if (!replyText.trim()) return;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const parts = replyText.split(',').map(s => s.trim());
+        const addresses = parts.filter(p => emailRegex.test(p));
+        if (addresses.length === 0) { setError('Voer een geldig e-mailadres in'); return; }
+        try {
+            await graphFetch(`/me/messages/${mail.id}/forward`, oToken, {
+                method: 'POST',
+                body: JSON.stringify({
+                    toRecipients: addresses.map(a => ({ emailAddress: { address: a } })),
+                    comment: `\n\nGroeten, Michael`
+                })
+            });
+            setActiveAction({ id: null, type: null });
+            setReplyText('');
+            setError('');
+        } catch (e) {
+            console.error('Forward error:', e);
+            setError('Doorsturen mislukt');
         }
     };
 
@@ -2767,6 +2790,9 @@ function EmailWidget({ lang }) {
                                 <button onClick={() => toggleAction(selectedMail.id, 'move')} className={`px-2.5 py-1 text-[9px] font-bold rounded border transition ${activeAction.type === 'move' ? 'bg-gray-600 text-white border-gray-600' : 'text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
                                     Verplaatsen
                                 </button>
+                                <button onClick={() => toggleAction(selectedMail.id, 'forward')} className={`px-2.5 py-1 text-[9px] font-bold rounded border transition ${activeAction.type === 'forward' ? 'bg-green-600 text-white border-green-600' : 'text-green-600 border-gray-200 hover:bg-green-50'}`}>
+                                    Doorsturen
+                                </button>
                                 <button onClick={() => deleteMail(selectedMail.id)} className="px-2.5 py-1 text-[9px] font-bold text-red-600 rounded border border-gray-200 hover:bg-red-50 transition">
                                     Verwijderen
                                 </button>
@@ -2776,6 +2802,13 @@ function EmailWidget({ lang }) {
                                 <div className="mt-2 animate-fade-in">
                                     <textarea autoFocus value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Typ je antwoord..." className="w-full h-16 p-2 border rounded text-[10px] bg-white resize-none outline-none focus:border-blue-400" />
                                     <button onClick={() => sendReply(selectedMail)} className="mt-1 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-bold px-3 py-1.5 rounded transition">Verstuur</button>
+                                </div>
+                            )}
+                            {/* Inline Forward */}
+                            {activeAction.id === selectedMail.id && activeAction.type === 'forward' && (
+                                <div className="mt-2 animate-fade-in">
+                                    <input autoFocus value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="E-mailadres ontvanger..." className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-green-400" />
+                                    <button onClick={() => forwardMail(selectedMail)} className="mt-1 bg-green-600 hover:bg-green-700 text-white text-[9px] font-bold px-3 py-1.5 rounded transition">Doorsturen</button>
                                 </div>
                             )}
                             {/* Inline Move */}
@@ -2973,6 +3006,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
