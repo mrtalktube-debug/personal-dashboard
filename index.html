@@ -799,12 +799,6 @@ function CryptoWidget({ lang }) {
     );
 }
 
-gray-400 animate-pulse">Laden...</span> : (
-                                        <select onChange={e=>{if(e.target.value)moveMail(selectedMail,e.target.value);}} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
-                                            <option value="" disabled>Kies map...</option>
-                                            {destinations.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
-                                        </select>
-                                    )}
                                 </div>
                             )}
                         </div>
@@ -3091,3 +3085,4 @@ root.render(<App />);
 </body>
 
 </html>
+
