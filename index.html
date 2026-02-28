@@ -2548,10 +2548,11 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
    MAIL WIDGET v4.5 — OUTLOOK ONLY (Gmail later)
    ============================================================ */
 
+/* ============================================================
+   MAIL WIDGET v5.1 — MULTI-ACCOUNT MERGED + SWIPE
+   ============================================================ */
 function EmailWidget({ lang }) {
-    // === MULTI-ACCOUNT STATE ===
-    const [accounts, setAccounts] = useState([]);        // [{msalAccount, token, emails}]
-    const [activeIdx, setActiveIdx] = useState(0);
+    const [accounts, setAccounts] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [activeAction, setActiveAction] = useState({ id: null, type: null });
@@ -2561,425 +2562,404 @@ function EmailWidget({ lang }) {
     const [mailBody, setMailBody] = useState('');
     const [bodyLoading, setBodyLoading] = useState(false);
     const [initializing, setInitializing] = useState(true);
+    const [moveTarget, setMoveTarget] = useState(null); // <!-- NIEUW: mail waarvoor map-keuze open staat -->
     const msalRef = useRef(null);
-
     const msClientId = S.load('ms_client_id', '');
 
-    // === MSAL INIT — localStorage cache zodat accounts overleven browser-close ===
     const initMsal = async () => {
         if (!window.msal) { setError('MSAL script niet geladen'); return null; }
         if (!msClientId) { setError('Configureer Client ID in instellingen'); return null; }
         if (!msalRef.current) {
-            const msalConfig = {
+            msalRef.current = new window.msal.PublicClientApplication({
                 auth: { clientId: msClientId, authority: "https://login.microsoftonline.com/common" },
-                cache: { cacheLocation: "localStorage" } // <!-- NIEUW: persistent cache -->
-            };
-            msalRef.current = new window.msal.PublicClientApplication(msalConfig);
+                cache: { cacheLocation: "localStorage" }
+            });
             await msalRef.current.initialize();
         }
         return msalRef.current;
     };
 
-    // === SILENT TOKEN — geen popup, geen login-knop ===
     const acquireTokenForAccount = async (msalAccount) => {
         const instance = await initMsal();
         if (!instance) return null;
         try {
-            const result = await instance.acquireTokenSilent({
-                scopes: ["Mail.ReadWrite", "Mail.Send"],
-                account: msalAccount
-            });
-            return result.accessToken;
-        } catch (e) {
-            console.warn('Silent token failed, trying popup...', e);
+            const r = await instance.acquireTokenSilent({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount });
+            return r.accessToken;
+        } catch {
             try {
-                const result = await instance.acquireTokenPopup({
-                    scopes: ["Mail.ReadWrite", "Mail.Send"],
-                    account: msalAccount
-                });
-                return result.accessToken;
-            } catch (e2) {
-                console.error('Token acquisition failed:', e2);
-                return null;
-            }
+                const r = await instance.acquireTokenPopup({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount });
+                return r.accessToken;
+            } catch { return null; }
         }
     };
 
-    // === AUTO-CONNECT BIJ MOUNT — alle gecachede accounts laden ===
+    // <!-- NIEUW: short label uit e-mail prefix (bijv. "Fam-Sch", "Michael") -->
+    const accountLabel = (msalAccount) => {
+        if (!msalAccount) return '?';
+        const email = msalAccount.username || '';
+        const local = email.split('@')[0]; // bijv. "fam.schaper" of "michael"
+        // Capitalize + max 10 chars
+        const pretty = local.replace(/[._-]/g, '-').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('-');
+        return pretty.length > 12 ? pretty.slice(0, 12) : pretty;
+    };
+
     useEffect(() => {
         const autoConnect = async () => {
             setInitializing(true);
             const instance = await initMsal();
             if (!instance) { setInitializing(false); return; }
-
-            const cachedAccounts = instance.getAllAccounts();
-            if (cachedAccounts.length === 0) {
-                // Eerste keer ooit: automatisch popup triggeren
+            const cached = instance.getAllAccounts();
+            if (cached.length === 0) {
                 try {
-                    const authResult = await instance.loginPopup({ scopes: ["Mail.ReadWrite", "Mail.Send"] });
-                    const token = authResult.accessToken;
-                    const acct = authResult.account;
-                    setAccounts([{ msalAccount: acct, token, emails: [] }]);
-                    setActiveIdx(0);
-                    fetchOutlookForAccount(token, 0);
-                } catch (e) {
-                    console.error('Initial login error:', e);
-                    setError('Eerste verbinding mislukt');
-                }
+                    const r = await instance.loginPopup({ scopes: ["Mail.ReadWrite","Mail.Send"] });
+                    const label = accountLabel(r.account);
+                    setAccounts([{ msalAccount: r.account, token: r.accessToken, emails: [], label }]);
+                    fetchMailsForAccount(r.accessToken, 0, label);
+                } catch (e) { console.error(e); setError('Eerste verbinding mislukt'); }
                 setInitializing(false);
                 return;
             }
-
-            // Bestaande accounts: silent token voor allemaal
             const loaded = [];
-            for (let i = 0; i < cachedAccounts.length; i++) {
-                const token = await acquireTokenForAccount(cachedAccounts[i]);
-                loaded.push({ msalAccount: cachedAccounts[i], token, emails: [] });
+            for (const c of cached) {
+                const token = await acquireTokenForAccount(c);
+                loaded.push({ msalAccount: c, token, emails: [], label: accountLabel(c) });
             }
             setAccounts(loaded);
-            setActiveIdx(0);
-            // Fetch mails voor eerste account
-            if (loaded[0]?.token) {
-                fetchOutlookForAccount(loaded[0].token, 0);
-            }
+            loaded.forEach((a, i) => { if (a.token) fetchMailsForAccount(a.token, i, a.label); });
             setInitializing(false);
         };
         autoConnect();
     }, []);
 
-    // === ACCOUNT TOEVOEGEN ===
+    // <!-- NIEUW: fix stale closure — gebruik functionele setState -->
     const addAccount = async () => {
         try {
             setError('');
             const instance = await initMsal();
             if (!instance) return;
-            const authResult = await instance.loginPopup({
-                scopes: ["Mail.ReadWrite", "Mail.Send"],
-                prompt: "select_account"  // <!-- NIEUW: forceert account-keuze -->
+            // <!-- NIEUW: handleRedirectPromise voorkomt "interaction_in_progress" -->
+            await instance.handleRedirectPromise();
+            const r = await instance.loginPopup({ scopes: ["Mail.ReadWrite","Mail.Send"], prompt: "select_account" });
+            setAccounts(prev => {
+                const exists = prev.some(a => a.msalAccount.username.toLowerCase() === r.account.username.toLowerCase());
+                if (exists) { setError('Account al toegevoegd'); return prev; }
+                const label = accountLabel(r.account);
+                const newArr = [...prev, { msalAccount: r.account, token: r.accessToken, emails: [], label }];
+                fetchMailsForAccount(r.accessToken, newArr.length - 1, label);
+                return newArr;
             });
-            // Check of account al bestaat
-            const existingIdx = accounts.findIndex(a =>
-                a.msalAccount.username.toLowerCase() === authResult.account.username.toLowerCase()
-            );
-            if (existingIdx >= 0) {
-                setError('Dit account is al toegevoegd');
-                return;
-            }
-            const newAcct = { msalAccount: authResult.account, token: authResult.accessToken, emails: [] };
-            const newIdx = accounts.length;
-            setAccounts(prev => [...prev, newAcct]);
-            setActiveIdx(newIdx);
-            fetchOutlookForAccount(authResult.accessToken, newIdx);
         } catch (e) {
             console.error('Add account error:', e);
-            setError('Account toevoegen mislukt');
+            if (e.errorCode === 'interaction_in_progress') {
+                setError('Wacht tot vorige actie klaar is');
+            } else {
+                setError('Account toevoegen mislukt');
+            }
         }
     };
 
-    // === GRAPH HELPERS ===
-    const graphFetch = async (url, token, options = {}) => {
+    const graphFetch = async (url, token, accountIdx, options = {}) => {
         const res = await fetch(`https://graph.microsoft.com/v1.0${url}`, {
             ...options,
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) }
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers||{}) }
         });
         if (res.status === 401) {
-            // Token verlopen: probeer silent refresh
-            const acct = accounts[activeIdx];
+            // Silent refresh
+            const acct = accounts[accountIdx];
             if (acct) {
                 const newToken = await acquireTokenForAccount(acct.msalAccount);
                 if (newToken) {
-                    setAccounts(prev => prev.map((a, i) => i === activeIdx ? { ...a, token: newToken } : a));
-                    // Retry met nieuw token
-                    const retry = await fetch(`https://graph.microsoft.com/v1.0${url}`, {
+                    setAccounts(p => p.map((a,i) => i===accountIdx ? {...a, token:newToken} : a));
+                    return fetch(`https://graph.microsoft.com/v1.0${url}`, {
                         ...options,
-                        headers: { Authorization: `Bearer ${newToken}`, 'Content-Type': 'application/json', ...(options.headers || {}) }
+                        headers: { Authorization: `Bearer ${newToken}`, 'Content-Type': 'application/json', ...(options.headers||{}) }
                     });
-                    return retry;
                 }
             }
-            setError('Sessie verlopen');
-            return null;
+            setError('Sessie verlopen'); return null;
         }
         return res;
     };
 
-    // === FETCH MAILS VOOR SPECIFIEK ACCOUNT ===
-    const fetchOutlookForAccount = async (token, idx) => {
+    const fetchMailsForAccount = async (token, idx, label) => {
         setLoading(true);
-        setError('');
         try {
-            const res = await graphFetch(`/me/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification`, token);
-            if (!res) return;
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const res = await graphFetch('/me/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification', token, idx);
+            if (!res || !res.ok) return;
             const data = await res.json();
-            const emails = (data.value || [])
+            const emails = (data.value||[])
                 .filter(m => m.inferenceClassification === 'focused')
                 .slice(0, 20)
                 .map(m => ({
-                    id: m.id,
+                    id: m.id, accountIdx: idx, accountLabel: label,
                     subject: m.subject || '(geen onderwerp)',
                     fromStr: m.sender?.emailAddress?.name || m.sender?.emailAddress?.address || 'Onbekend',
                     snippet: m.bodyPreview || '',
-                    date: m.receivedDateTime,
-                    webLink: m.webLink || ''
+                    date: m.receivedDateTime, webLink: m.webLink || ''
                 }));
-            setAccounts(prev => prev.map((a, i) => i === idx ? { ...a, emails } : a));
-        } catch (e) {
-            console.error('Outlook fetch error:', e);
-            setError('Ophalen mislukt');
-        }
+            setAccounts(p => p.map((a,i) => i===idx ? {...a, emails} : a));
+        } catch (e) { console.error(e); setError('Ophalen mislukt'); }
         setLoading(false);
     };
 
-    // Actief account helpers
-    const activeAccount = accounts[activeIdx] || null;
-    const oToken = activeAccount?.token || null;
-    const oData = activeAccount?.emails || [];
+    // <!-- NIEUW: merged + gesorteerde lijst -->
+    const mergedEmails = React.useMemo(() => {
+        const all = [];
+        accounts.forEach(a => a.emails.forEach(m => all.push(m)));
+        return all.sort((a,b) => new Date(b.date) - new Date(a.date));
+    }, [accounts]);
 
-    const setODataForActive = (updater) => {
-        setAccounts(prev => prev.map((a, i) => {
-            if (i !== activeIdx) return a;
-            return { ...a, emails: typeof updater === 'function' ? updater(a.emails) : updater };
-        }));
-    };
+    // Token voor geselecteerde mail
+    const tokenForMail = (mail) => accounts[mail?.accountIdx]?.token;
 
-    // === BESTAANDE FUNCTIES (aangepast naar multi-account) ===
     const openMail = async (mail) => {
-        setSelectedMail(mail);
-        setMailBody('');
-        setBodyLoading(true);
-        setActiveAction({ id: null, type: null });
-        setReplyText('');
+        setSelectedMail(mail); setMailBody(''); setBodyLoading(true);
+        setActiveAction({ id:null, type:null }); setReplyText('');
         try {
-            const res = await graphFetch(`/me/messages/${mail.id}?$select=body`, oToken);
+            const res = await graphFetch(`/me/messages/${mail.id}?$select=body`, tokenForMail(mail), mail.accountIdx);
             if (!res) return;
             const data = await res.json();
             setMailBody(data.body?.content || 'Geen inhoud');
-        } catch (e) {
-            console.error('Mail body error:', e);
-            setMailBody('Kon mail niet laden');
-        }
+        } catch { setMailBody('Kon mail niet laden'); }
         setBodyLoading(false);
     };
 
-    const removeMailFromUI = (id) => {
-        setODataForActive(prev => prev.filter(m => m.id !== id));
-        setActiveAction({ id: null, type: null });
-        setSelectedMail(null);
+    const removeMailFromUI = (mail) => {
+        setAccounts(p => p.map((a,i) => i===mail.accountIdx ? {...a, emails: a.emails.filter(m=>m.id!==mail.id)} : a));
+        setMoveTarget(null); setSelectedMail(null); setActiveAction({id:null,type:null});
     };
 
-    const deleteMail = async (id) => {
-        removeMailFromUI(id);
-        try { await graphFetch(`/me/messages/${id}`, oToken, { method: 'DELETE' }); }
-        catch (e) { console.error('Delete error:', e); }
+    const deleteMail = async (mail) => {
+        removeMailFromUI(mail);
+        try { await graphFetch(`/me/messages/${mail.id}`, tokenForMail(mail), mail.accountIdx, { method:'DELETE' }); } catch {}
     };
 
-    const moveMail = async (id, folderId) => {
-        removeMailFromUI(id);
+    const moveMail = async (mail, folderId) => {
+        removeMailFromUI(mail);
+        try { await graphFetch(`/me/messages/${mail.id}/move`, tokenForMail(mail), mail.accountIdx, { method:'POST', body:JSON.stringify({destinationId:folderId}) }); } catch {}
+    };
+
+    const loadFolders = async (mail) => {
+        setDestinations([]);
         try {
-            await graphFetch(`/me/messages/${id}/move`, oToken, {
-                method: 'POST', body: JSON.stringify({ destinationId: folderId })
-            });
-        } catch (e) { console.error('Move error:', e); }
-    };
-
-    const loadFolders = async () => {
-        if (destinations.length > 0) return;
-        try {
-            const res = await graphFetch('/me/mailFolders?$top=20', oToken);
+            const res = await graphFetch('/me/mailFolders?$top=20', tokenForMail(mail), mail.accountIdx);
             if (!res) return;
             const data = await res.json();
-            setDestinations((data.value || []).map(f => ({ id: f.id, name: f.displayName })));
-        } catch (e) { console.error('Folders error:', e); }
+            setDestinations((data.value||[]).map(f => ({id:f.id, name:f.displayName})));
+        } catch {}
     };
 
     const sendReply = async (mail) => {
         if (!replyText.trim()) return;
         try {
-            await graphFetch(`/me/messages/${mail.id}/reply`, oToken, {
-                method: 'POST',
-                body: JSON.stringify({ message: { body: { contentType: "Text", content: `${replyText}\n\n\nGroeten, Michael` } } })
+            await graphFetch(`/me/messages/${mail.id}/reply`, tokenForMail(mail), mail.accountIdx, {
+                method:'POST', body:JSON.stringify({message:{body:{contentType:"Text",content:`${replyText}\n\n\nGroeten, Michael`}}})
             });
-            setActiveAction({ id: null, type: null });
-            setReplyText('');
-            setError('');
-        } catch (e) { console.error('Reply error:', e); setError('Versturen mislukt'); }
+            setActiveAction({id:null,type:null}); setReplyText(''); setError('');
+        } catch { setError('Versturen mislukt'); }
     };
 
     const forwardMail = async (mail) => {
         if (!replyText.trim()) return;
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const parts = replyText.split(',').map(s => s.trim());
-        const addresses = parts.filter(p => emailRegex.test(p));
-        if (addresses.length === 0) { setError('Voer een geldig e-mailadres in'); return; }
+        const parts = replyText.split(',').map(s=>s.trim()).filter(p=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p));
+        if (!parts.length) { setError('Voer een geldig e-mailadres in'); return; }
         try {
-            await graphFetch(`/me/messages/${mail.id}/forward`, oToken, {
-                method: 'POST',
-                body: JSON.stringify({
-                    toRecipients: addresses.map(a => ({ emailAddress: { address: a } })),
-                    comment: `\n\nGroeten, Michael`
-                })
+            await graphFetch(`/me/messages/${mail.id}/forward`, tokenForMail(mail), mail.accountIdx, {
+                method:'POST', body:JSON.stringify({ toRecipients:parts.map(a=>({emailAddress:{address:a}})), comment:'\n\nGroeten, Michael' })
             });
-            setActiveAction({ id: null, type: null });
-            setReplyText('');
-            setError('');
-        } catch (e) { console.error('Forward error:', e); setError('Doorsturen mislukt'); }
+            setActiveAction({id:null,type:null}); setReplyText(''); setError('');
+        } catch { setError('Doorsturen mislukt'); }
     };
 
     const toggleAction = (id, type) => {
-        if (activeAction.id === id && activeAction.type === type) {
-            setActiveAction({ id: null, type: null });
-        } else {
-            setActiveAction({ id, type });
-            setReplyText('');
-            if (type === 'move') loadFolders();
-        }
+        if (activeAction.id===id && activeAction.type===type) setActiveAction({id:null,type:null});
+        else { setActiveAction({id,type}); setReplyText(''); if(type==='move') loadFolders(selectedMail); }
     };
 
-    // === Account wisselen ===
-    const switchAccount = async (idx) => {
-        setActiveIdx(idx);
-        setSelectedMail(null);
-        setActiveAction({ id: null, type: null });
-        setDestinations([]);
-        // Refresh token als nodig
-        const acct = accounts[idx];
-        if (acct && acct.emails.length === 0 && acct.token) {
-            fetchOutlookForAccount(acct.token, idx);
-        }
-    };
+    // <!-- NIEUW: Swipe handlers voor mail items -->
+    const handleSwipeStart = (mail, startX) => { mail._swipeStartX = startX; };
 
-    // === Korte accountnaam (voor tabs) ===
-    const shortName = (msalAccount) => {
-        if (!msalAccount) return '?';
-        const email = msalAccount.username || '';
-        const name = msalAccount.name || email.split('@')[0];
-        // Eerste woord + eerste letter achternaam
-        const parts = name.split(' ');
-        if (parts.length > 1) return `${parts[0]} ${parts[1][0]}.`;
-        return parts[0];
+    // <!-- NIEUW: Swipe-enabled mail item -->
+    const MailRow = ({ mail }) => {
+        const rowRef = useRef(null);
+        const startXRef = useRef(0);
+        const swipingRef = useRef(false);
+
+        const onTouchStart = (e) => { startXRef.current = e.touches[0].clientX; swipingRef.current = true; };
+        const onTouchMove = (e) => {
+            if (!swipingRef.current || !rowRef.current) return;
+            const diff = e.touches[0].clientX - startXRef.current;
+            rowRef.current.style.transform = `translateX(${diff}px)`;
+            rowRef.current.style.transition = 'none';
+        };
+        const onTouchEnd = (e) => {
+            swipingRef.current = false;
+            if (!rowRef.current) return;
+            const diff = parseInt(rowRef.current.style.transform.replace(/[^-\d]/g,'')) || 0;
+            if (diff > 80) {
+                // <!-- NIEUW: swipe rechts → verwijderen -->
+                rowRef.current.style.transform = 'translateX(110%)';
+                rowRef.current.style.transition = 'transform 0.3s';
+                setTimeout(() => deleteMail(mail), 300);
+            } else if (diff < -80) {
+                // <!-- NIEUW: swipe links → verplaatsen -->
+                rowRef.current.style.transform = 'translateX(0)';
+                rowRef.current.style.transition = 'transform 0.3s';
+                setMoveTarget(mail);
+                loadFolders(mail);
+            } else {
+                rowRef.current.style.transform = 'translateX(0)';
+                rowRef.current.style.transition = 'transform 0.3s';
+            }
+        };
+
+        const isMoveTarget = moveTarget?.id === mail.id;
+
+        return (
+            <div className="relative overflow-hidden border-b border-gray-100">
+                {/* <!-- NIEUW: swipe achtergrond hints --> */}
+                <div className="absolute inset-0 flex pointer-events-none">
+                    <div className="flex-1 bg-red-500 flex items-center pl-3">
+                        <span className="text-white text-[9px] font-bold tracking-wide">VERWIJDER</span>
+                    </div>
+                    <div className="flex-1 bg-blue-500 flex items-center justify-end pr-3">
+                        <span className="text-white text-[9px] font-bold tracking-wide">VERPLAATS</span>
+                    </div>
+                </div>
+                <div ref={rowRef} className="relative bg-white"
+                    onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+                    <div className="px-4 py-3 cursor-pointer hover:bg-gray-50/60 transition" onClick={() => openMail(mail)}>
+                        <div className="flex justify-between items-start gap-2">
+                            <span className="text-[12px] font-semibold text-gray-900 truncate flex-1" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.fromStr}</span>
+                            {/* <!-- NIEUW: account label + datum rechts --> */}
+                            <div className="text-right shrink-0">
+                                <div className="text-[9px] font-bold text-red-400">{mail.accountLabel}</div>
+                                <div className="text-[9px] text-gray-400">{new Date(mail.date).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+                            </div>
+                        </div>
+                        {/* <!-- NIEUW: subject in blauw zoals screenshot --> */}
+                        <div className="text-[11px] text-blue-700 font-medium truncate mt-0.5" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.subject}</div>
+                        <div className="text-[10px] text-gray-400 truncate mt-0.5">{mail.snippet}</div>
+                    </div>
+                </div>
+                {/* <!-- NIEUW: inline map-keuze na swipe links --> */}
+                {isMoveTarget && (
+                    <div className="bg-blue-50 px-4 py-2 border-t border-blue-100 flex items-center gap-2">
+                        {destinations.length === 0 ? (
+                            <span className="text-[9px] text-blue-500 animate-pulse">Mappen laden...</span>
+                        ) : (
+                            <>
+                                <select onChange={e => { if(e.target.value) moveMail(mail, e.target.value); }} defaultValue="" className="flex-1 p-1.5 border border-blue-200 rounded text-[10px] bg-white outline-none focus:border-blue-400">
+                                    <option value="" disabled>Kies map...</option>
+                                    {destinations.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                </select>
+                                <button onClick={() => setMoveTarget(null)} className="text-[9px] text-gray-400 hover:text-gray-600">✕</button>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
     };
 
     return (
         <div className="widget h-[500px] flex flex-col bg-white">
             {/* Header */}
-            <div className="shrink-0 p-3 bg-gray-50 border-b flex items-center justify-between">
+            <div className="shrink-0 px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     {selectedMail && (
-                        <button onClick={() => { setSelectedMail(null); setActiveAction({ id: null, type: null }); }} className="p-1 rounded hover:bg-gray-200 transition" title="Terug">
+                        <button onClick={() => { setSelectedMail(null); setActiveAction({id:null,type:null}); }} className="p-1 rounded hover:bg-gray-200 transition">
                             <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
                         </button>
                     )}
                     <Ico.Mail />
-                    <span className="text-[10px] font-black tracking-widest uppercase">Mail</span>
+                    <span className="text-[11px] font-black tracking-widest uppercase">Mail</span>
                 </div>
-                {error && <span className="text-[9px] text-red-500 font-bold truncate max-w-[180px]">{error}</span>}
+                {error && <span className="text-[9px] text-red-500 font-bold truncate max-w-[200px]">{error}</span>}
             </div>
 
-            {/* <!-- NIEUW: Account tabs (vervangt oude Gmail/Outlook tabs) --> */}
-            {!selectedMail && (
-                <div className="shrink-0 flex border-b">
-                    {accounts.map((acct, i) => (
-                        <button key={i} className={`tab-btn flex-1 ${activeIdx === i ? 'active' : ''}`}
-                            onClick={() => switchAccount(i)}
-                            title={acct.msalAccount?.username || ''}>
-                            {shortName(acct.msalAccount)}
-                        </button>
+            {/* <!-- NIEUW: Account bar — "Outlook" + account badges + add --> */}
+            {!selectedMail && accounts.length > 0 && (
+                <div className="shrink-0 flex items-center border-b px-4 py-2 gap-2 bg-white">
+                    <span className="text-[11px] font-bold text-gray-800 mr-auto">Outlook</span>
+                    {accounts.map((a, i) => (
+                        <span key={i} className="text-[8px] font-bold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" title={a.msalAccount?.username}>
+                            {a.label}
+                        </span>
                     ))}
-                    {/* <!-- NIEUW: + knop voor extra account --> */}
-                    <button onClick={addAccount} className="tab-btn px-3 text-blue-500 hover:bg-blue-50 transition" title="Account toevoegen" style={{flex:'none'}}>
-                        <svg className="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14m-7-7h14"/></svg>
+                    <button onClick={addAccount} className="ml-1 w-5 h-5 flex items-center justify-center rounded-full bg-blue-50 text-blue-500 hover:bg-blue-100 transition" title="Account toevoegen">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14m-7-7h14"/></svg>
                     </button>
                 </div>
             )}
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto hide-scroll">
-
-                {/* === DETAIL VIEW === */}
                 {selectedMail ? (
+                    /* === DETAIL VIEW (ongewijzigd qua functie) === */
                     <div className="flex flex-col h-full">
-                        {/* Mail header */}
                         <div className="shrink-0 p-3 border-b bg-gray-50/50">
-                            <h3 className="text-[11px] font-bold text-gray-800 leading-snug mb-1">{selectedMail.subject}</h3>
-                            <div className="text-[9px] text-gray-500">Van: {selectedMail.fromStr} • {new Date(selectedMail.date).toLocaleString('nl-NL', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</div>
-                            {/* Action buttons */}
+                            <h3 className="text-[12px] font-bold text-gray-800 leading-snug mb-1">{selectedMail.subject}</h3>
+                            <div className="text-[9px] text-gray-500">Van: {selectedMail.fromStr} • {selectedMail.accountLabel} • {new Date(selectedMail.date).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
                             <div className="flex gap-1 mt-2">
-                                <button onClick={() => toggleAction(selectedMail.id, 'reply')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type === 'reply' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Beantwoorden</button>
-                                <button onClick={() => toggleAction(selectedMail.id, 'forward')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type === 'forward' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Doorsturen</button>
-                                <button onClick={() => toggleAction(selectedMail.id, 'move')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type === 'move' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Verplaatsen</button>
-                                <button onClick={() => deleteMail(selectedMail.id)} className="text-[8px] font-bold px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100 transition">Verwijderen</button>
+                                <button onClick={() => toggleAction(selectedMail.id,'reply')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='reply'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Beantwoorden</button>
+                                <button onClick={() => toggleAction(selectedMail.id,'forward')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='forward'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Doorsturen</button>
+                                <button onClick={() => toggleAction(selectedMail.id,'move')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='move'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Verplaatsen</button>
+                                <button onClick={() => deleteMail(selectedMail)} className="text-[8px] font-bold px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100 transition">Verwijderen</button>
                             </div>
-                            {/* Action panels */}
-                            {activeAction.type === 'reply' && (
+                            {activeAction.type==='reply' && (
                                 <div className="mt-2 flex gap-1">
-                                    <input value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Typ antwoord..." className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e => e.key === 'Enter' && sendReply(selectedMail)} />
-                                    <button onClick={() => sendReply(selectedMail)} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
+                                    <input value={replyText} onChange={e=>setReplyText(e.target.value)} placeholder="Typ antwoord..." className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e=>e.key==='Enter'&&sendReply(selectedMail)} />
+                                    <button onClick={()=>sendReply(selectedMail)} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
                                 </div>
                             )}
-                            {activeAction.type === 'forward' && (
+                            {activeAction.type==='forward' && (
                                 <div className="mt-2 flex gap-1">
-                                    <input value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="email@voorbeeld.nl" className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e => e.key === 'Enter' && forwardMail(selectedMail)} />
-                                    <button onClick={() => forwardMail(selectedMail)} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
+                                    <input value={replyText} onChange={e=>setReplyText(e.target.value)} placeholder="email@voorbeeld.nl" className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e=>e.key==='Enter'&&forwardMail(selectedMail)} />
+                                    <button onClick={()=>forwardMail(selectedMail)} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
                                 </div>
                             )}
-                            {activeAction.type === 'move' && (
+                            {activeAction.type==='move' && (
                                 <div className="mt-2">
-                                    {destinations.length === 0 ? (
-                                        <span className="text-[9px] text-gray-400 animate-pulse">Laden...</span>
-                                    ) : (
-                                        <select onChange={e => { if (e.target.value) moveMail(selectedMail.id, e.target.value); }} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
+                                    {destinations.length===0 ? <span className="text-[9px] text-gray-400 animate-pulse">Laden...</span> : (
+                                        <select onChange={e=>{if(e.target.value)moveMail(selectedMail,e.target.value);}} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
                                             <option value="" disabled>Kies map...</option>
-                                            {destinations.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                            {destinations.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
                                         </select>
                                     )}
                                 </div>
                             )}
                         </div>
-                        {/* Mail body */}
                         <div className="flex-1 overflow-y-auto px-3 py-2">
-                            {bodyLoading ? (
-                                <span className="text-[10px] text-blue-600 font-bold animate-pulse">Laden...</span>
-                            ) : (
-                                <div className="text-[10px] text-gray-700 leading-relaxed mail-body" dangerouslySetInnerHTML={{ __html: mailBody }} />
-                            )}
+                            {bodyLoading ? <span className="text-[10px] text-blue-600 font-bold animate-pulse">Laden...</span>
+                            : <div className="text-[10px] text-gray-700 leading-relaxed mail-body" dangerouslySetInnerHTML={{__html:mailBody}} />}
                         </div>
                     </div>
                 ) : (
                     <>
-                        {/* === LIJST VIEW === */}
-                        {/* <!-- NIEUW: initializing state i.p.v. "VERBIND OUTLOOK" knop --> */}
                         {initializing && (
                             <div className="flex items-center justify-center h-full">
                                 <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Verbinden...</span>
                             </div>
                         )}
-                        {!initializing && accounts.length === 0 && (
+                        {!initializing && accounts.length===0 && (
                             <div className="flex items-center justify-center h-full">
                                 <span className="text-[10px] text-gray-400">Geen accounts — klik + om toe te voegen</span>
                             </div>
                         )}
-                        {!initializing && oToken && loading && (
+                        {!initializing && accounts.length>0 && loading && mergedEmails.length===0 && (
                             <div className="flex items-center justify-center h-full">
                                 <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Synchroniseren...</span>
                             </div>
                         )}
-                        {!initializing && oToken && !loading && oData.length === 0 && (
+                        {!initializing && !loading && mergedEmails.length===0 && accounts.length>0 && (
                             <div className="flex items-center justify-center h-full">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase">Geen nieuwe mails</span>
                             </div>
                         )}
-                        {!initializing && oToken && !loading && oData.map(mail => (
-                            <div key={mail.id} className="border-b border-gray-100 hover:bg-blue-50/40 transition group cursor-pointer" onClick={() => openMail(mail)}>
-                                <div className="p-3">
-                                    <div className="flex justify-between items-start gap-2">
-                                        <span className="text-[10px] font-bold text-gray-800 truncate flex-1">{mail.fromStr}</span>
-                                        <span className="text-[8px] text-gray-400 shrink-0">{new Date(mail.date).toLocaleString('nl-NL', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</span>
-                                    </div>
-                                    <div className="text-[10px] text-gray-700 font-medium truncate mt-0.5">{mail.subject}</div>
-                                    <div className="text-[9px] text-gray-400 truncate mt-0.5">{mail.snippet}</div>
-                                </div>
-                            </div>
+                        {/* <!-- NIEUW: merged gesorteerde lijst met swipe --> */}
+                        {!initializing && mergedEmails.map(mail => (
+                            <MailRow key={`${mail.accountIdx}-${mail.id}`} mail={mail} />
                         ))}
                     </>
                 )}
@@ -3118,6 +3098,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
