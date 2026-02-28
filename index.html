@@ -2617,31 +2617,33 @@ const gmailClientId = S.load('gmail_client_id', GOOGLE_CLIENT_ID); // const msal
     };
 
     useEffect(() => {
+        let isMounted = true;
         const autoConnect = async () => {
             setInitializing(true);
-            const instance = await initMsal();
-            if (!instance) { setInitializing(false); return; }
-            const cached = instance.getAllAccounts();
-            if (cached.length === 0) {
-                try {
-                    const r = await instance.loginPopup({ scopes: ["Mail.ReadWrite","Mail.Send"] });
-                    const label = accountLabel(r.account);
-                    setAccounts([{ msalAccount: r.account, token: r.accessToken, emails: [], label }]);
-                    fetchMailsForAccount(r.accessToken, 0, label);
-                } catch (e) { console.error(e); setError('Eerste verbinding mislukt'); }
-                setInitializing(false);
-                return;
+            // const timer = setTimeout(() => { if (isMounted) setInitializing(false); }, 2000); 
+
+            try {
+                const instance = await initMsal();
+                if (!instance) return;
+                const cached = instance.getAllAccounts();
+                if (cached.length === 0) return; // Geen auto-popup op load, dit veroorzaakte het vasthangen
+
+                const loaded = [];
+                for (const c of cached) {
+                    const token = await acquireTokenForAccount(c);
+                    loaded.push({ msalAccount: c, token, emails: [], label: accountLabel(c) });
+                }
+                if (isMounted) setAccounts(loaded);
+                loaded.forEach((a, i) => { if (a.token) fetchMailsForAccount(a.token, i, a.label); });
+            } catch(e) {
+                console.error(e);
+            } finally {
+                clearTimeout(timer);
+                if (isMounted) setInitializing(false);
             }
-            const loaded = [];
-            for (const c of cached) {
-                const token = await acquireTokenForAccount(c);
-                loaded.push({ msalAccount: c, token, emails: [], label: accountLabel(c) });
-            }
-            setAccounts(loaded);
-            loaded.forEach((a, i) => { if (a.token) fetchMailsForAccount(a.token, i, a.label); });
-            setInitializing(false);
         };
         autoConnect();
+        return () => { isMounted = false; };
     }, []);
 
     // <!-- NIEUW: fix stale closure — gebruik functionele setState -->
@@ -2696,8 +2698,10 @@ const gmailClientId = S.load('gmail_client_id', GOOGLE_CLIENT_ID); // const msal
 
     const fetchMailsForAccount = async (token, idx, label) => {
         setLoading(true);
-        try {
-            const res = await graphFetch('/me/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification', token, idx);
+        const timer = setTimeout(() => setLoading(false), 2000); // try {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), 2000);
+            const res = await graphFetch('/me/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification', token, idx, { signal: controller.signal });
             if (!res || !res.ok) return;
             const data = await res.json();
             const emails = (data.value||[])
@@ -2711,8 +2715,10 @@ const gmailClientId = S.load('gmail_client_id', GOOGLE_CLIENT_ID); // const msal
                     date: m.receivedDateTime, webLink: m.webLink || ''
                 }));
             setAccounts(p => p.map((a,i) => i===idx ? {...a, emails} : a));
-        } catch (e) { console.error(e); setError('Ophalen mislukt'); }
-        setLoading(false);
+        } catch (e) { console.error(e); } finally {
+            clearTimeout(timer);
+            setLoading(false);
+        }
     };
 
    // <!-- NIEUW: Gmail OAuth2 connect -->
@@ -2755,20 +2761,21 @@ const connectGmail = (selectAccount = false) => {
 
 const fetchGmail = async (token, idx, label, currentAccounts) => {
     setGmailLoading(true);
-    try {
+    const timer = setTimeout(() => setGmailLoading(false), 2000); // try {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 2000);
         const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&labelIds=INBOX&q=category:primary', {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const messages = data.messages || [];
 
-        // Haal details per bericht op (batch)
         const details = await Promise.all(messages.slice(0, 20).map(async m => {
             const r = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            return r.ok ? r.json() : null;
+                headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
+            }).catch(() => null);
+            return r && r.ok ? r.json() : null;
         }));
 
         const emails = details.filter(Boolean).map(m => {
@@ -2785,8 +2792,10 @@ const fetchGmail = async (token, idx, label, currentAccounts) => {
         });
 
         setGmailAccounts(prev => prev.map((a, i) => i === idx ? { ...a, emails } : a));
-    } catch (e) { console.error('Gmail fetch:', e); setError('Gmail ophalen mislukt'); }
-    setGmailLoading(false);
+    } catch (e) { console.error('Gmail fetch:', e); } finally {
+        clearTimeout(timer);
+        setGmailLoading(false);
+    }
 };
 
 // <!-- NIEUW: Gmail auto-connect bij mount -->
@@ -3168,6 +3177,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
