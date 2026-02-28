@@ -1179,33 +1179,49 @@ function NewsWidget({ lang }) {
             let cleanDesc = desc.replace(/<[^>]+>/g, '').trim();
             if (cleanDesc.toLowerCase().startsWith(title.toLowerCase().substring(0, 30))) cleanDesc = '';
 
+            <!-- NIEUW: Betere artikelafbeelding-extractie -->
             let img = null;
-            const urlM = desc.match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif|avif)(?:\?[^"'\s<>]*)?)/i);
-            if (urlM) img = urlM[1];
-
+            
+            // 1. Zoek <img> tags in description (Google News stopt hier de artikelafbeelding)
+            const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgM) img = imgM[1];
+            
+            // 2. Zoek directe image-URLs in description
             if (!img) {
-                const imgM = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
-                if (imgM) img = imgM[1];
+                const urlM = desc.match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif|avif)(?:\?[^"'\s<>]*)?)/i);
+                if (urlM) img = urlM[1];
             }
-
+            
+            // 3. Zoek Google News thumbnail URLs (lh3.googleusercontent.com zonder extensie)
+            if (!img) {
+                const gnM = desc.match(/(https?:\/\/lh3\.googleusercontent\.com\/[^"'\s<>]+)/i);
+                if (gnM) img = gnM[1];
+            }
+            
+            // 4. CDATA fallback
             if (!img && desc.includes('CDATA')) {
                 const cdataM = desc.match(/\[CDATA\[(.*?)\]\]/s);
                 if (cdataM) {
-                    const cdataImg = cdataM[1].match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif))/i);
+                    const cdataImg = cdataM[1].match(/<img[^>]+src=["']([^"']+)["']/i) 
+                                  || cdataM[1].match(/(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|gif))/i);
                     if (cdataImg) img = cdataImg[1];
                 }
             }
-
+            
+            // 5. media:content tag
             if (!img) {
                 const mediaContent = item.querySelector('media\\:content, content');
-                if (mediaContent) {
-                    img = mediaContent.getAttribute('url');
-                }
+                if (mediaContent) img = mediaContent.getAttribute('url');
             }
-
-            if (!img && srcUrl) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(srcUrl).hostname.replace('www.','') + '&sz=128'; } catch(e){} }
-            if (!img && link) { try { img = 'https://www.google.com/s2/favicons?domain=' + new URL(link).hostname.replace('www.','') + '&sz=64'; } catch(e){} }
-
+            
+            // 6. Enclosure tag (sommige feeds)
+            if (!img) {
+                const enc = item.querySelector('enclosure');
+                if (enc && (enc.getAttribute('type') || '').startsWith('image/')) img = enc.getAttribute('url');
+            }
+            
+            // 7. Laatste fallback: GEEN favicon, liever geen afbeelding dan een bronlogo
+            // img blijft null → widget toont geen afbeelding
             if (pubDate) {
                 try {
                     const t = new Date(pubDate).getTime();
@@ -3045,6 +3061,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
