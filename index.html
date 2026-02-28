@@ -2612,14 +2612,17 @@ function EmailWidget({ lang }) {
 
     // NIEUW: 20 mails, nieuwste eerst, met webLink + datum
     const fetchOutlook = async (token) => {
-        setLoading(true);
-        setError('');
-        try {
-            const res = await graphFetch(`/me/messages?$filter=inferenceClassification eq 'focused'&$orderby=receivedDateTime desc&$top=20&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification`, token);
-            if (!res) return;
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            setOData((data.value || []).map(m => ({
+    setLoading(true);
+    setError('');
+    try {
+        const res = await graphFetch(`/me/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification`, token);
+        if (!res) return;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setOData((data.value || [])
+            .filter(m => m.inferenceClassification === 'focused')
+            .slice(0, 20)
+            .map(m => ({
                 id: m.id,
                 subject: m.subject || '(geen onderwerp)',
                 fromStr: m.sender?.emailAddress?.name || m.sender?.emailAddress?.address || 'Onbekend',
@@ -2627,12 +2630,12 @@ function EmailWidget({ lang }) {
                 date: m.receivedDateTime,
                 webLink: m.webLink || ''
             })));
-        } catch (e) {
-            console.error('Outlook fetch error:', e);
-            setError('Ophalen mislukt');
-        }
-        setLoading(false);
-    };
+    } catch (e) {
+        console.error('Outlook fetch error:', e);
+        setError('Ophalen mislukt');
+    }
+    setLoading(false);
+};
 
     const removeMailFromUI = (id) => {
         setOData(prev => prev.filter(m => m.id !== id));
@@ -2925,6 +2928,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
