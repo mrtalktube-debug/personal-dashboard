@@ -2715,7 +2715,7 @@ function EmailWidget({ lang }) {
 
     useEffect(() => {
         if (gmailClientId && gmailAccounts.length === 0 && !initializing) {
-            connectGmail(false);
+            restoreGmailAccounts();
         }
     }, [initializing]);
 
@@ -3085,6 +3085,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
