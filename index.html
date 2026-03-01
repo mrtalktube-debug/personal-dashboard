@@ -1949,8 +1949,8 @@ function SportsWidget({ lang }) {
         const CACHE_TTL = 900000;
 
         const fetchGolf = async (tour, cacheKey) => {
-            // Forceer nieuwe cache v5 voor de nieuwe datamapping
-            const safeCacheKey = cacheKey + '_v5';
+            // Forceer cache v7 om de verkeerde kalender data te overschrijven
+            const safeCacheKey = cacheKey + '_v7';
             const cached = sessionStorage.getItem(safeCacheKey);
             if (cached) {
                 try { const { t, d } = JSON.parse(cached); if (Date.now() - t < CACHE_TTL) return d; } catch(e) {}
@@ -1967,14 +1967,14 @@ function SportsWidget({ lang }) {
                 const result = { c: [], lb: { title: 'Geen data', res: [] } };
                 const now = new Date();
 
-                // KALENDER EXTRACTIE (Haalt volledige schema uit ESPN leagues-object)
+                // KALENDER EXTRACTIE (Live en gesorteerd)
                 let calItems = [];
                 if (data?.leagues?.[0]?.calendar) {
                     calItems = data.leagues[0].calendar.map(c => ({
                         r: c.label || c.name || '',
                         d: fmtDateRange(c.startDate, c.endDate),
                         loc: c.event?.locations?.[0]?.venue?.fullName || '',
-                        raw: new Date(c.endDate || c.startDate)
+                        raw: new Date(c.startDate || c.endDate)
                     }));
                 }
                 if (calItems.length <= 1) {
@@ -1982,15 +1982,16 @@ function SportsWidget({ lang }) {
                         r: e.shortName || e.name || '',
                         d: fmtDateRange(e.startDate || e.date, e.endDate),
                         loc: e.locations?.[0]?.venue?.fullName || '',
-                        raw: new Date(e.endDate || e.date)
+                        raw: new Date(e.startDate || e.date)
                     }));
                 }
 
                 result.c = calItems
-                    .filter(e => e.raw >= new Date(now.getTime() - 86400000 * 3))
-                    .slice(0, 10); // Pak direct de komende 10 events
+                    .filter(e => e.raw >= new Date(now.getTime() - 86400000 * 5))
+                    .sort((a, b) => a.raw - b.raw) // Sorteer altijd chronologisch
+                    .slice(0, 20);
 
-                // LEADERBOARD EXTRACTIE (Officiële PGA Score mapping)
+                // LEADERBOARD EXTRACTIE
                 const events = data?.events || [];
                 const activeOrLastEvent = events.find(e => {
                     const status = e.status?.type?.state || e.competitions?.[0]?.status?.type?.state || '';
@@ -2004,7 +2005,6 @@ function SportsWidget({ lang }) {
                         res: competitors.map((c, i) => {
                             const rounds = c.linescores || [];
                             
-                            // Haal Total Score (-13, E, etc)
                             let tot = 'E';
                             if (typeof c.score === 'string') tot = c.score;
                             else if (c.score?.displayValue) tot = c.score.displayValue;
@@ -2013,14 +2013,12 @@ function SportsWidget({ lang }) {
                                 if (s) tot = s.displayValue;
                             }
 
-                            // Haal Today's Round (-8, etc)
                             let rnd = '-';
                             if (c.statistics) {
                                 const td = c.statistics.find(x => x.name === 'today' || x.name === 'round');
                                 if (td) rnd = td.displayValue;
                             }
 
-                            // Gebruik rounds[x].value voor pure slagen (bijv: 70) in plaats van relative scores (-1)
                             return {
                                 p: c.status?.position?.displayName || c.order || i + 1,
                                 n: c.athlete?.displayName || c.athlete?.shortName?.split('. ').pop() || c.athlete?.lastName || '?',
@@ -2236,38 +2234,24 @@ function SportsWidget({ lang }) {
                                     Tour Schema
                                 </div>
                                 <div className="divide-y divide-gray-100">
-                                    {fGc.slice(0, eGC ? 25 : 10).map((r, i) => {
+                                    {fGc.slice(0, eGC ? 20 : 10).map((r, i) => {
                                         const lowerName = r.r.toLowerCase();
-                                        let isMajor = false;
-                                        let displayName = r.r;
-                                        let displayLoc = r.loc;
-                                        let displayDate = r.d;
-
-                                        // Detecteer de 4 Majors en forceer correcte 2026 data
-                                        if (lowerName.includes('masters')) {
-                                            isMajor = true; displayName = '🏆 The Masters'; displayLoc = 'Augusta National'; displayDate = 'Apr 9-12';
-                                        } else if (lowerName.includes('pga champ')) {
-                                            isMajor = true; displayName = '🏆 PGA Championship'; displayLoc = 'Aronimink Golf Club'; displayDate = 'May 14-17';
-                                        } else if (lowerName.includes('u.s. open') || lowerName.match(/\bus open\b/)) {
-                                            isMajor = true; displayName = '🏆 U.S. Open'; displayLoc = 'Shinnecock Hills'; displayDate = 'Jun 18-21';
-                                        } else if (lowerName === 'the open championship' || lowerName === 'the open' || lowerName.includes('open championship')) {
-                                            isMajor = true; displayName = '🏆 The Open Championship'; displayLoc = 'Royal Birkdale'; displayDate = 'Jul 16-19';
-                                        }
-
+                                        const isMajor = lowerName.includes('masters') || lowerName.includes('pga champ') || lowerName.includes('u.s. open') || lowerName.includes('us open') || lowerName.includes('the open champ');
+                                        
                                         return (
                                             <div key={i} className={`flex justify-between items-center text-[10px] p-2.5 transition ${isMajor ? 'bg-[#f1f8e9] border-l-4 border-[#2e7d32]' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}>
                                                 <div className="flex flex-col w-2/3">
                                                     <span className={`font-bold line-clamp-1 ${isMajor ? 'text-[#1b5e20]' : 'text-green-800'}`}>
-                                                        {displayName}
+                                                        {isMajor ? '🏆 ' : ''}{r.r}
                                                     </span>
-                                                    <span className={`text-[9px] mt-0.5 line-clamp-1 ${isMajor ? 'text-[#388e3c]' : 'text-gray-500'}`}>{displayLoc}</span>
+                                                    <span className={`text-[9px] mt-0.5 line-clamp-1 ${isMajor ? 'text-[#388e3c]' : 'text-gray-500'}`}>{r.loc}</span>
                                                 </div>
-                                                <span className={`font-black whitespace-nowrap px-2 py-1 rounded shadow-sm ${isMajor ? 'bg-[#2e7d32] text-white' : 'bg-gray-100 text-gray-600'}`}>{displayDate}</span>
+                                                <span className={`font-black whitespace-nowrap px-2 py-1 rounded shadow-sm ${isMajor ? 'bg-[#2e7d32] text-white' : 'bg-gray-100 text-gray-600'}`}>{r.d}</span>
                                             </div>
                                         );
                                     })}
                                 </div>
-                                {fGc.length > 10 && <div className="p-1"><MoreBtn e={eGC} setE={setEGC} t1="Volledige Kalender" e1="Full Calendar" /></div>}
+                                {fGc.length > 10 && <div className="p-1"><MoreBtn e={eGC} setE={setEGC} t1="Volgende 10 Events" e1="Next 10 Events" /></div>}
                             </div>
                         )}
                     </div>
@@ -2280,6 +2264,7 @@ function SportsWidget({ lang }) {
         </div>
     );
 }
+    
 function SparkWidget({ lang }) {
     const [tab, setTab] = useState('dagvraag');
     const [dailyData, setDailyData] = useState(null);
@@ -3333,6 +3318,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
