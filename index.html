@@ -2177,11 +2177,11 @@ function SportsWidget({ lang }) {
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 text-[10px]">
                                             {fGlbRes.slice(0, eGLb ? 50 : 10).map((r, i) => (
-                                                <tr key={i} className="hover:bg-gray-50 transition">
-                                                    <td className="p-2 text-center font-black text-gray-900">{r.p}</td>
-                                                    <td className="p-2 font-bold whitespace-nowrap"><span className="mr-1">{r.fl}</span> {r.n.toUpperCase()}</td>
-                                                    <td className={`p-2 text-center font-black font-mono ${String(r.tot).includes('-') ? 'text-red-600' : String(r.tot).includes('+') ? 'text-blue-600' : 'text-green-600'}`}>{r.tot}</td>
-                                                    <td className="p-2 text-center font-mono text-gray-500 whitespace-nowrap">{r.thru}</td>
+                                                <tr key={i} className="even:bg-[#fcfcfc] hover:bg-blue-50 transition">
+                                                    <td className="p-2 text-center font-black text-gray-900 w-8">{r.p}</td>
+                                                    <td className="p-2 font-bold whitespace-nowrap text-gray-800 tracking-tight"><span className="mr-1.5 opacity-90">{r.fl}</span>{r.n.toUpperCase()}</td>
+                                                    <td className={`p-2 text-center font-black font-mono text-[11px] ${String(r.tot).includes('-') ? 'text-[#d32f2f]' : r.tot === 'E' ? 'text-[#388e3c]' : 'text-gray-500'}`}>{r.tot}</td>
+                                                    <td className="p-2 text-center font-mono font-semibold text-gray-600 whitespace-nowrap">{r.thru}</td>
                                                     <td className="p-2 text-center font-mono text-gray-500 hidden sm:table-cell">{r.rnd}</td>
                                                     <td className="p-2 text-center font-mono text-gray-400">{r.r1}</td>
                                                     <td className="p-2 text-center font-mono text-gray-400">{r.r2}</td>
@@ -2201,17 +2201,22 @@ function SportsWidget({ lang }) {
                                     Tour Schema
                                 </div>
                                 <div className="divide-y divide-gray-100">
-                                    {fGc.slice(0, eGC ? 20 : 5).map((r, i) => (
-                                        <div key={i} className="flex justify-between items-center text-[10px] p-2.5 hover:bg-gray-50 transition">
-                                            <div className="flex flex-col w-2/3">
-                                                <span className="font-bold text-green-800 line-clamp-1">{r.r}</span>
-                                                <span className="text-[9px] text-gray-500 mt-0.5 line-clamp-1">{r.loc}</span>
+                                    {fGc.slice(0, eGC ? 25 : 10).map((r, i) => {
+                                        const isMasters = r.r.toLowerCase().includes('masters');
+                                        return (
+                                            <div key={i} className={`flex justify-between items-center text-[10px] p-2.5 transition ${isMasters ? 'bg-[#f1f8e9] border-l-4 border-[#2e7d32]' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}>
+                                                <div className="flex flex-col w-2/3">
+                                                    <span className={`font-bold line-clamp-1 ${isMasters ? 'text-[#1b5e20]' : 'text-green-800'}`}>
+                                                        {isMasters ? '🏆 ' : ''}{r.r}
+                                                    </span>
+                                                    <span className={`text-[9px] mt-0.5 line-clamp-1 ${isMasters ? 'text-[#388e3c]' : 'text-gray-500'}`}>{r.loc}</span>
+                                                </div>
+                                                <span className={`font-black whitespace-nowrap px-2 py-1 rounded shadow-sm ${isMasters ? 'bg-[#2e7d32] text-white' : 'bg-gray-100 text-gray-600'}`}>{r.d}</span>
                                             </div>
-                                            <span className="font-black text-gray-600 whitespace-nowrap bg-gray-100 px-2 py-1 rounded">{r.d}</span>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
-                                {fGc.length > 5 && <div className="p-1"><MoreBtn e={eGC} setE={setEGC} t1="Volledige Kalender" e1="Full Calendar" /></div>}
+                                {fGc.length > 10 && <div className="p-1"><MoreBtn e={eGC} setE={setEGC} t1="Volledige Kalender" e1="Full Calendar" /></div>}
                             </div>
                         )}
                     </div>
@@ -3277,6 +3282,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
