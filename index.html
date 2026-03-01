@@ -1179,7 +1179,7 @@ function NewsWidget({ lang }) {
             let cleanDesc = desc.replace(/<[^>]+>/g, '').trim();
             if (cleanDesc.toLowerCase().startsWith(title.toLowerCase().substring(0, 30))) cleanDesc = '';
 
-            <!-- NIEUW: Betere artikelafbeelding-extractie -->
+           // Betere artikelafbeelding-extractie
             let img = null;
             
             // 1. Zoek <img> tags in description (Google News stopt hier de artikelafbeelding)
@@ -3061,6 +3061,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
