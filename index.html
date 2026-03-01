@@ -2840,6 +2840,21 @@ function EmailWidget({ lang }) {
         } catch (err) {}
     };
 
+    // Gmail: nieuw label aanmaken, toepassen op mail, en archiveren
+    const createAndLabelGmail = async (mail, labelName) => {
+        const token = gmailAccounts[mail.accountIdx]?.token;
+        if (!token || !labelName.trim()) return;
+        try {
+            const createRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/labels', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: labelName.trim(), labelListVisibility: 'labelShow', messageListVisibility: 'show' })
+            });
+            const newLabel = await createRes.json();
+            if (newLabel.id) { labelGmail(mail, newLabel.id); }
+        } catch (err) {}
+    };
+
     // Gmail: verwijder helper (verwijdert uit UI)
     const removeGmailFromUI = (mail) => {
         setGmailAccounts(prev => prev.map((a, i) => {
@@ -3136,6 +3151,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
