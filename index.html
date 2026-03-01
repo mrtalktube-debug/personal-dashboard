@@ -2784,24 +2784,69 @@ function EmailWidget({ lang }) {
         setSelectedMail(null); setActiveAction({id:null,type:null});
     };
 
+    // Outlook: verplaats naar Verwijderde items (niet permanent verwijderen)
     const deleteMail = async (mail) => {
         removeMailFromUI(mail);
-        try { await graphFetch(`/me/messages/${mail.id}`, tokenForMail(mail), mail.accountIdx, { method:'DELETE' }); } catch (err) {}
+        try { 
+            await graphFetch(`/me/messages/${mail.id}/move`, tokenForMail(mail), mail.accountIdx, { 
+                method:'POST', body:JSON.stringify({destinationId:'deleteditems'}) 
+            }); 
+        } catch (err) {}
     };
 
+    // Outlook: verplaats naar map
     const moveMail = async (mail, folderId) => {
         removeMailFromUI(mail);
         try { await graphFetch(`/me/messages/${mail.id}/move`, tokenForMail(mail), mail.accountIdx, { method:'POST', body:JSON.stringify({destinationId:folderId}) }); } catch (err) {}
     };
 
+    // Outlook: laad mappen voor dit specifieke account
     const loadFolders = async (mail) => {
         setDestinations([]);
         try {
-            const res = await graphFetch('/me/mailFolders?$top=20', tokenForMail(mail), mail.accountIdx);
+            const res = await graphFetch('/me/mailFolders?$top=50', tokenForMail(mail), mail.accountIdx);
             if (!res) { return; }
             const data = await res.json();
-            setDestinations((data.value||[]).map(f => { return {id:f.id, name:f.displayName}; }));
+            setDestinations((data.value||[]).filter(f => !['Inbox','Drafts','Sent Items','Junk Email'].includes(f.displayName)).map(f => ({id:f.id, name:f.displayName})));
         } catch (err) {}
+    };
+
+    // Gmail: laad labels voor dit specifieke account
+    const loadGmailLabels = async (mail) => {
+        setDestinations([]);
+        const token = gmailAccounts[mail.accountIdx]?.token;
+        if (!token) return;
+        try {
+            const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/labels', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const skip = ['INBOX','SENT','DRAFT','SPAM','TRASH','UNREAD','STARRED','IMPORTANT','CHAT','CATEGORY_PERSONAL','CATEGORY_SOCIAL','CATEGORY_PROMOTIONS','CATEGORY_UPDATES','CATEGORY_FORUMS'];
+            setDestinations((data.labels||[]).filter(l => !skip.includes(l.id) && l.type !== 'system').map(l => ({id:l.id, name:l.name})).sort((a,b) => a.name.localeCompare(b.name)));
+        } catch (err) {}
+    };
+
+    // Gmail: label toevoegen + automatisch archiveren (verwijder uit inbox)
+    const labelGmail = async (mail, labelId) => {
+        const token = gmailAccounts[mail.accountIdx]?.token;
+        if (!token) return;
+        removeGmailFromUI(mail);
+        try {
+            await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${mail.id}/modify`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ addLabelIds: [labelId], removeLabelIds: ['INBOX'] })
+            });
+        } catch (err) {}
+    };
+
+    // Gmail: verwijder helper (verwijdert uit UI)
+    const removeGmailFromUI = (mail) => {
+        setGmailAccounts(prev => prev.map((a, i) => {
+            if (i === mail.accountIdx) return { ...a, emails: a.emails.filter(m => m.id !== mail.id) };
+            return a;
+        }));
+        setSelectedMail(null); setActiveAction({id:null,type:null});
     };
 
     const sendReply = async (mail) => {
@@ -2832,7 +2877,13 @@ function EmailWidget({ lang }) {
         } else { 
             setActiveAction({id,type}); 
             setReplyText(''); 
-            if (type === 'move') { loadFolders(selectedMail); }
+            if (type === 'move') {
+                if (selectedMail.source === 'gmail') {
+                    loadGmailLabels(selectedMail);
+                } else {
+                    loadFolders(selectedMail);
+                }
+            }
         }
     };
 
@@ -2899,8 +2950,8 @@ function EmailWidget({ lang }) {
                             <div className="flex gap-1 mt-2">
                                 <button onClick={() => toggleAction(selectedMail.id,'reply')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='reply'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Beantwoorden</button>
                                 <button onClick={() => toggleAction(selectedMail.id,'forward')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='forward'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Doorsturen</button>
-                                <button onClick={() => toggleAction(selectedMail.id,'move')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='move'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Verplaatsen</button>
-                                <button onClick={() => { if(mail.source === 'gmail') { deleteGmail(selectedMail); } else { deleteMail(selectedMail); } }} className="text-[8px] font-bold px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100 transition">Verwijderen</button>
+                                <button onClick={() => toggleAction(selectedMail.id,'move')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='move'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{selectedMail.source==='gmail' ? 'Labelen' : 'Verplaatsen'}</button>
+                                <button onClick={() => { if(selectedMail.source === 'gmail') { deleteGmail(selectedMail); } else { deleteMail(selectedMail); } }} className="text-[8px] font-bold px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100 transition">Verwijderen</button>
                             </div>
                             {activeAction.type==='reply' && (
                                 <div className="mt-2 flex gap-1">
@@ -2917,8 +2968,8 @@ function EmailWidget({ lang }) {
                             {activeAction.type==='move' && (
                                 <div className="mt-2">
                                     {destinations.length===0 ? <span className="text-[9px] text-gray-400 animate-pulse">Laden...</span> : (
-                                        <select onChange={e=>{if(e.target.value){moveMail(selectedMail,e.target.value);}}} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
-                                            <option value="" disabled>Kies map...</option>
+                                        <select onChange={e=>{if(e.target.value){ selectedMail.source==='gmail' ? labelGmail(selectedMail,e.target.value) : moveMail(selectedMail,e.target.value); }}} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
+                                            <option value="" disabled>{selectedMail.source==='gmail' ? 'Kies label...' : 'Kies map...'}</option>
                                             {destinations.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
                                         </select>
                                     )}
@@ -3085,6 +3136,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
