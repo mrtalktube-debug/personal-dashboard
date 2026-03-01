@@ -1949,7 +1949,9 @@ function SportsWidget({ lang }) {
         const CACHE_TTL = 900000;
 
         const fetchGolf = async (tour, cacheKey) => {
-            const cached = sessionStorage.getItem(cacheKey);
+            // Forceer nieuwe cache v5 voor de nieuwe datamapping
+            const safeCacheKey = cacheKey + '_v5';
+            const cached = sessionStorage.getItem(safeCacheKey);
             if (cached) {
                 try { const { t, d } = JSON.parse(cached); if (Date.now() - t < CACHE_TTL) return d; } catch(e) {}
             }
@@ -1963,18 +1965,33 @@ function SportsWidget({ lang }) {
                 const data = await res.json();
 
                 const result = { c: [], lb: { title: 'Geen data', res: [] } };
-
-                const events = data?.events || [];
                 const now = new Date();
-                result.c = events
-                    .filter(e => new Date(e.endDate || e.date) >= new Date(now.getTime() - 86400000 * 3))
-                    .slice(0, 10)
-                    .map(e => ({
+
+                // KALENDER EXTRACTIE (Haalt volledige schema uit ESPN leagues-object)
+                let calItems = [];
+                if (data?.leagues?.[0]?.calendar) {
+                    calItems = data.leagues[0].calendar.map(c => ({
+                        r: c.label || c.name || '',
+                        d: fmtDateRange(c.startDate, c.endDate),
+                        loc: c.event?.locations?.[0]?.venue?.fullName || '',
+                        raw: new Date(c.endDate || c.startDate)
+                    }));
+                }
+                if (calItems.length <= 1) {
+                    calItems = (data?.events || []).map(e => ({
                         r: e.shortName || e.name || '',
                         d: fmtDateRange(e.startDate || e.date, e.endDate),
-                        loc: e.locations?.[0]?.venue?.fullName || ''
+                        loc: e.locations?.[0]?.venue?.fullName || '',
+                        raw: new Date(e.endDate || e.date)
                     }));
+                }
 
+                result.c = calItems
+                    .filter(e => e.raw >= new Date(now.getTime() - 86400000 * 3))
+                    .slice(0, 10); // Pak direct de komende 10 events
+
+                // LEADERBOARD EXTRACTIE (Officiële PGA Score mapping)
+                const events = data?.events || [];
                 const activeOrLastEvent = events.find(e => {
                     const status = e.status?.type?.state || e.competitions?.[0]?.status?.type?.state || '';
                     return status === 'in' || status === 'post';
@@ -1986,27 +2003,45 @@ function SportsWidget({ lang }) {
                         title: activeOrLastEvent.shortName || activeOrLastEvent.name || '',
                         res: competitors.map((c, i) => {
                             const rounds = c.linescores || [];
+                            
+                            // Haal Total Score (-13, E, etc)
+                            let tot = 'E';
+                            if (typeof c.score === 'string') tot = c.score;
+                            else if (c.score?.displayValue) tot = c.score.displayValue;
+                            else if (c.statistics) {
+                                const s = c.statistics.find(x => x.name === 'score');
+                                if (s) tot = s.displayValue;
+                            }
+
+                            // Haal Today's Round (-8, etc)
+                            let rnd = '-';
+                            if (c.statistics) {
+                                const td = c.statistics.find(x => x.name === 'today' || x.name === 'round');
+                                if (td) rnd = td.displayValue;
+                            }
+
+                            // Gebruik rounds[x].value voor pure slagen (bijv: 70) in plaats van relative scores (-1)
                             return {
                                 p: c.status?.position?.displayName || c.order || i + 1,
-                                n: c.athlete?.shortName?.split('. ').pop() || c.athlete?.lastName || '?',
+                                n: c.athlete?.displayName || c.athlete?.shortName?.split('. ').pop() || c.athlete?.lastName || '?',
                                 fl: getFlag(c.athlete?.flag?.alt || ''),
-                                tot: c.score?.displayValue || 'E',
+                                tot: tot,
                                 thru: c.status?.displayValue || c.status?.type?.shortDetail || '-',
-                                rnd: c.statistics?.find(s=>s.name==='score')?.displayValue || '-',
-                                r1: rounds[0]?.displayValue || '-',
-                                r2: rounds[1]?.displayValue || '-',
-                                r3: rounds[2]?.displayValue || '-',
-                                r4: rounds[3]?.displayValue || '-'
+                                rnd: rnd,
+                                r1: rounds[0]?.value || rounds[0]?.displayValue || '-',
+                                r2: rounds[1]?.value || rounds[1]?.displayValue || '-',
+                                r3: rounds[2]?.value || rounds[2]?.displayValue || '-',
+                                r4: rounds[3]?.value || rounds[3]?.displayValue || '-'
                             };
                         })
                     };
                 }
 
-                try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), d: result })); } catch(e) {}
+                try { sessionStorage.setItem(safeCacheKey, JSON.stringify({ t: Date.now(), d: result })); } catch(e) {}
                 return result;
             } catch (e) {
                 console.error(`Golf ${tour} API fout:`, e);
-                const cached = sessionStorage.getItem(cacheKey);
+                const cached = sessionStorage.getItem(safeCacheKey);
                 if (cached) { try { return JSON.parse(cached).d; } catch(e) {} }
                 return FALLBACK_GOLF;
             }
@@ -2179,14 +2214,14 @@ function SportsWidget({ lang }) {
                                             {fGlbRes.slice(0, eGLb ? 50 : 10).map((r, i) => (
                                                 <tr key={i} className="even:bg-[#fcfcfc] hover:bg-blue-50 transition">
                                                     <td className="p-2 text-center font-black text-gray-900 w-8">{r.p}</td>
-                                                    <td className="p-2 font-bold whitespace-nowrap text-gray-800 tracking-tight"><span className="mr-1.5 opacity-90">{r.fl}</span>{r.n.toUpperCase()}</td>
+                                                    <td className="p-2 font-bold whitespace-nowrap text-gray-800 tracking-tight"><span className="mr-1.5 opacity-90">{r.fl}</span>{r.n}</td>
                                                     <td className={`p-2 text-center font-black font-mono text-[11px] ${String(r.tot).includes('-') ? 'text-[#d32f2f]' : r.tot === 'E' ? 'text-[#388e3c]' : 'text-gray-500'}`}>{r.tot}</td>
                                                     <td className="p-2 text-center font-mono font-semibold text-gray-600 whitespace-nowrap">{r.thru}</td>
                                                     <td className="p-2 text-center font-mono text-gray-500 hidden sm:table-cell">{r.rnd}</td>
-                                                    <td className="p-2 text-center font-mono text-gray-400">{r.r1}</td>
-                                                    <td className="p-2 text-center font-mono text-gray-400">{r.r2}</td>
-                                                    <td className="p-2 text-center font-mono text-gray-400 hidden sm:table-cell">{r.r3}</td>
-                                                    <td className="p-2 text-center font-mono text-gray-400 hidden sm:table-cell">{r.r4}</td>
+                                                    <td className="p-2 text-center font-mono text-gray-800">{r.r1}</td>
+                                                    <td className="p-2 text-center font-mono text-gray-800">{r.r2}</td>
+                                                    <td className="p-2 text-center font-mono text-gray-800 hidden sm:table-cell">{r.r3}</td>
+                                                    <td className="p-2 text-center font-mono text-gray-800 hidden sm:table-cell">{r.r4}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -3282,6 +3317,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
