@@ -2429,6 +2429,8 @@ function EmailWidget({ lang }) {
     const [activeAction, setActiveAction] = useState({ id: null, type: null });
     const [replyText, setReplyText] = useState('');
     const [destinations, setDestinations] = useState([]);
+    const [newLabelName, setNewLabelName] = useState('');
+    const [showNewLabel, setShowNewLabel] = useState(false);
     const [selectedMail, setSelectedMail] = useState(null);
     const [mailBody, setMailBody] = useState('');
     const [bodyLoading, setBodyLoading] = useState(false);
@@ -2983,10 +2985,23 @@ function EmailWidget({ lang }) {
                             {activeAction.type==='move' && (
                                 <div className="mt-2">
                                     {destinations.length===0 ? <span className="text-[9px] text-gray-400 animate-pulse">Laden...</span> : (
-                                        <select onChange={e=>{if(e.target.value){ selectedMail.source==='gmail' ? labelGmail(selectedMail,e.target.value) : moveMail(selectedMail,e.target.value); }}} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
-                                            <option value="" disabled>{selectedMail.source==='gmail' ? 'Kies label...' : 'Kies map...'}</option>
-                                            {destinations.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
-                                        </select>
+                                        <>
+                                            <select onChange={e=>{
+                                                if(e.target.value === '__new__') { setShowNewLabel(true); setNewLabelName(''); }
+                                                else if(e.target.value){ selectedMail.source==='gmail' ? labelGmail(selectedMail,e.target.value) : moveMail(selectedMail,e.target.value); }
+                                            }} defaultValue="" className="w-full p-2 border rounded text-[10px] bg-white outline-none focus:border-blue-400">
+                                                <option value="" disabled>{selectedMail.source==='gmail' ? 'Kies label...' : 'Kies map...'}</option>
+                                                {destinations.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+                                                {selectedMail.source==='gmail' && <option value="__new__">＋ Nieuw label aanmaken...</option>}
+                                            </select>
+                                            {showNewLabel && selectedMail.source==='gmail' && (
+                                                <div className="mt-1 flex gap-1">
+                                                    <input value={newLabelName} onChange={e=>setNewLabelName(e.target.value)} placeholder="Labelnaam..." className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e=>{ if(e.key==='Enter' && newLabelName.trim()){ createAndLabelGmail(selectedMail, newLabelName); setShowNewLabel(false); }}} autoFocus />
+                                                    <button onClick={()=>{ if(newLabelName.trim()){ createAndLabelGmail(selectedMail, newLabelName); setShowNewLabel(false); }}} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Maak</button>
+                                                    <button onClick={()=>setShowNewLabel(false)} className="text-gray-400 text-[8px] font-bold px-2 rounded hover:bg-gray-100">✕</button>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             )}
@@ -3151,6 +3166,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
