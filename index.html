@@ -2603,14 +2603,20 @@ function EmailWidget({ lang }) {
         }
     };
 
-    const connectGmail = (selectAccount = false) => {
+    // Sla gekoppelde Gmail-adressen op zodat ze automatisch herverbinden
+    const GMAIL_STORAGE_KEY = 'gmail_linked_accounts';
+    const saveLinkedGmails = (emailList) => { try { localStorage.setItem(GMAIL_STORAGE_KEY, JSON.stringify(emailList)); } catch(e){} };
+    const loadLinkedGmails = () => { try { return JSON.parse(localStorage.getItem(GMAIL_STORAGE_KEY) || '[]'); } catch(e){ return []; } };
+
+    const connectGmail = (selectAccount = false, hintEmail = null) => {
         if (!gmailClientId) { setError('Configureer Gmail Client ID in instellingen'); return; }
         const client = window.google.accounts.oauth2.initTokenClient({
             client_id: gmailClientId,
             scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send',
             prompt: selectAccount ? 'select_account' : '',
+            login_hint: hintEmail || '',
             callback: async (tokenResponse) => {
-                if (tokenResponse.error) { setError('Gmail verbinding mislukt'); return; }
+                if (tokenResponse.error) { return; }
                 const token = tokenResponse.access_token;
                 try {
                     const profileRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
@@ -2622,15 +2628,19 @@ function EmailWidget({ lang }) {
 
                     setGmailAccounts(prev => {
                         const exists = prev.findIndex(a => a.email === email);
+                        let newList;
                         if (exists >= 0) {
                             const updated = [...prev];
                             updated[exists] = { ...updated[exists], token: token };
                             fetchGmail(token, exists, label, updated);
-                            return updated;
+                            newList = updated;
+                        } else {
+                            newList = [...prev, { email: email, token: token, emails: [], label: label }];
+                            fetchGmail(token, newList.length - 1, label, newList);
                         }
-                        const newArr = [...prev, { email: email, token: token, emails: [], label: label }];
-                        fetchGmail(token, newArr.length - 1, label, newArr);
-                        return newArr;
+                        // Sla alle gekoppelde emails op
+                        saveLinkedGmails(newList.map(a => a.email));
+                        return newList;
                     });
                 } catch (err) { setError('Gmail profiel ophalen mislukt'); }
             }
@@ -3061,6 +3071,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
