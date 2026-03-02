@@ -2616,6 +2616,12 @@ function EmailWidget({ lang }) {
             const r = await instance.acquireTokenSilent({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount });
             return r.accessToken;
         } catch (e) {
+            // <!-- NIEUW --> Alleen popup bij echte interactie-vereiste fouten, niet bij netwerk/timeout
+            const interactionRequired = e?.name === 'InteractionRequiredAuthError' || 
+                                        e?.errorCode === 'interaction_required' ||
+                                        e?.errorCode === 'consent_required' ||
+                                        e?.errorCode === 'login_required';
+            if (!interactionRequired) { return null; } // Stil falen, geen popup
             try {
                 const r = await instance.acquireTokenPopup({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount });
                 return r.accessToken;
@@ -2766,14 +2772,51 @@ function EmailWidget({ lang }) {
     const saveGmailTokens = (accounts) => { try { localStorage.setItem(GMAIL_STORE, JSON.stringify(accounts.map(a => ({ email: a.email, token: a.token, label: a.label, exp: a.exp || (Date.now() + 3500000) })))); } catch(e){} };
     const loadGmailTokens = () => { try { return JSON.parse(localStorage.getItem(GMAIL_STORE) || '[]'); } catch(e){ return []; } };
 
+    // <!-- NIEUW --> Silent Gmail refresh zonder popup (gebruikt actieve Google-browsersessie)
+    const silentRefreshGmail = (email, label) => {
+        if (!gmailClientId || !window.google?.accounts?.oauth2) return;
+        try {
+            const client = window.google.accounts.oauth2.initTokenClient({
+                client_id: gmailClientId,
+                scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send',
+                hint: email,
+                prompt: '',
+                callback: async (tokenResponse) => {
+                    if (tokenResponse.error || !tokenResponse.access_token) {
+                        // Silent refresh mislukt (Google-sessie verlopen) → toon subtiele melding
+                        setError('Gmail sessie verlopen — klik + om opnieuw te verbinden');
+                        return;
+                    }
+                    const token = tokenResponse.access_token;
+                    const exp = Date.now() + ((tokenResponse.expires_in || 3600) * 1000) - 60000;
+                    setGmailAccounts(prev => {
+                        const idx = prev.findIndex(a => a.email === email);
+                        if (idx < 0) return prev;
+                        const newList = [...prev];
+                        newList[idx] = { ...newList[idx], token, exp };
+                        saveGmailTokens(newList);
+                        fetchGmail(token, idx, label, newList);
+                        return newList;
+                    });
+                }
+            });
+            client.requestAccessToken({ prompt: '' });
+        } catch(e) { console.error('Silent Gmail refresh fout:', e); }
+    };
+
     const restoreGmailAccounts = () => {
         const saved = loadGmailTokens();
         if (saved.length === 0) return;
         const restored = saved.map(s => ({ email: s.email, token: s.token, label: s.label, exp: s.exp, emails: [] }));
         setGmailAccounts(restored);
-        restored.forEach((a, i) => {
+        restored.forEach((a) => {
             if (a.exp > Date.now()) {
-                fetchGmail(a.token, i, a.label, restored);
+                // Token nog geldig → direct laden
+                const idx = restored.indexOf(a);
+                fetchGmail(a.token, idx, a.label, restored);
+            } else {
+                // Token verlopen → silent refresh proberen <!-- NIEUW -->
+                silentRefreshGmail(a.email, a.label);
             }
         });
     };
@@ -2826,6 +2869,13 @@ function EmailWidget({ lang }) {
             const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&labelIds=INBOX&q=category:primary', {
                 headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
             });
+            // <!-- NIEUW --> Bij 401: token verlopen → silent refresh triggeren en stoppen
+            if (res.status === 401) {
+                const savedAccounts = loadGmailTokens();
+                const acct = savedAccounts[idx];
+                if (acct) silentRefreshGmail(acct.email, acct.label);
+                return;
+            }
             if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
             const data = await res.json();
             const messages = data.messages || [];
@@ -3318,6 +3368,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
