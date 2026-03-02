@@ -1249,7 +1249,12 @@ function NewsWidget({ lang }) {
                 } catch(e) {}
             }
 
-            out.push({ title: title, link: link, pubDate: pubDate, source: source, desc: cleanDesc, img: img, cat: cat });
+            // <!-- NIEUW --> Extraheer echte artikel-URL uit description <a href="...">
+            let realUrl = link;
+            const aMatch = desc.match(/<a[^>]+href=["'](https?:\/\/(?!news\.google\.com)[^"']+)["']/i);
+            if (aMatch) realUrl = aMatch[1];
+            // <!-- /NIEUW -->
+            out.push({ title: title, link: link, pubDate: pubDate, source: source, desc: cleanDesc, img: img, cat: cat, realUrl: realUrl });
         }
         return out;
     };
@@ -1298,44 +1303,35 @@ function NewsWidget({ lang }) {
 
         return () => { alive = false; };
     }, [cols, lang]);
+    
 
-    // <!-- NIEUW --> Fetch og:image voor artikelen zonder afbeelding
+   // <!-- NIEUW --> Fetch og:image voor artikelen zonder afbeelding (v4 - realUrl)
     useEffect(() => {
         if (!feedReady || allArticles.length === 0) return;
-
-        const ogCacheKey = 'nws_ogimg_v3';
+        const ogCacheKey = 'nws_ogimg_v4';
         let ogCache = {};
         try { ogCache = JSON.parse(sessionStorage.getItem(ogCacheKey) || '{}'); } catch(e) {}
-
-        // Pas gecachte og:images toe
-        let hasCacheUpdates = false;
+        let changed = false;
         const withCached = allArticles.map(a => {
-            if (!a.img && ogCache[a.link]) { hasCacheUpdates = true; return { ...a, img: ogCache[a.link] }; }
+            const key = a.realUrl || a.link;
+            if (!a.img && ogCache[key]) { changed = true; return { ...a, img: ogCache[key] }; }
             return a;
         });
-        if (hasCacheUpdates) {
-            setAllArticles(withCached);
-            try { sessionStorage.setItem(`nws_cache_v15_${lang}`, JSON.stringify({ t: Date.now(), d: withCached })); } catch(e) {}
-        }
-
-        // Verzamel artikelen die nog geen afbeelding hebben
-        const needFetch = (hasCacheUpdates ? withCached : allArticles).filter(a => !a.img).slice(0, 15);
+        if (changed) { setAllArticles(withCached); return; }
+        const needFetch = allArticles.filter(a => !a.img && a.realUrl).slice(0, 15);
         if (needFetch.length === 0) return;
-
         fetch('/api/ogimage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ urls: needFetch.map(a => a.link) })
+            body: JSON.stringify({ urls: needFetch.map(a => a.realUrl) })
         })
         .then(r => r.ok ? r.json() : {})
         .then(imageMap => {
-            if (Object.keys(imageMap).length === 0) return;
-            // Sla op in og:image cache
+            if (!imageMap || Object.keys(imageMap).length === 0) return;
             Object.assign(ogCache, imageMap);
             try { sessionStorage.setItem(ogCacheKey, JSON.stringify(ogCache)); } catch(e) {}
-            // Update artikelen met gevonden afbeeldingen
             setAllArticles(prev => {
-                const updated = prev.map(a => (!a.img && imageMap[a.link]) ? { ...a, img: imageMap[a.link] } : a);
+                const updated = prev.map(a => (!a.img && a.realUrl && imageMap[a.realUrl]) ? { ...a, img: imageMap[a.realUrl] } : a);
                 try { sessionStorage.setItem(`nws_cache_v15_${lang}`, JSON.stringify({ t: Date.now(), d: updated })); } catch(e) {}
                 return updated;
             });
