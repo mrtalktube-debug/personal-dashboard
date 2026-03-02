@@ -27,6 +27,12 @@ export default async function handler(req, res) {
 
         if (!scoreboardRes.ok) throw new Error(`ESPN scoreboard returned ${scoreboardRes.status}`);
 
+        let usdToEur = 0.92;
+        try {
+            const fxRes = await fetch('https://open.er-api.com/v6/latest/USD');
+            if (fxRes.ok) { const fx = await fxRes.json(); usdToEur = fx.rates?.EUR || 0.92; }
+        } catch(e) {}
+
         const data = await scoreboardRes.json();
 
         if (leaderboardRes && leaderboardRes.ok) {
@@ -53,6 +59,7 @@ export default async function handler(req, res) {
             }
         }
 
+        data._usdToEur = usdToEur;
         res.status(200).json(data);
     } catch (error) {
         console.error(`Golf API error (${selectedTour}):`, error.message);
