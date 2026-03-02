@@ -2672,6 +2672,7 @@ function EmailWidget({ lang }) {
     const [activeTab, setActiveTab] = useState('outlook');
     const [gmailLoading, setGmailLoading] = useState(false);
     
+    const DASHBOARD_URL = 'https://personal-dashboard-black-delta.vercel.app';
     const gmailClientId = S.load('gmail_client_id', GOOGLE_CLIENT_ID);
     const msClientId = S.load('ms_client_id', '');
 
@@ -2685,11 +2686,10 @@ function EmailWidget({ lang }) {
             const tokens = await res.json();
             if (tokens.google) await fetchGmail(tokens.google);
             if (tokens.ms) await fetchOutlook(tokens.ms);
-        } catch (e) { setError('Fout bij ophalen cloud sessies'); }
+        } catch (e) { setError('Backend onbereikbaar'); }
         setInitializing(false);
     };
 
-    // Vang de Microsoft Redirect op bij het inladen van het dashboard
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
@@ -2697,7 +2697,7 @@ function EmailWidget({ lang }) {
 
         if (code && state === 'ms_auth') {
             setInitializing(true);
-            window.history.replaceState({}, document.title, window.location.pathname); // Maak URL weer schoon
+            window.history.replaceState({}, document.title, window.location.pathname);
             
             fetch('/api/auth-email', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2708,7 +2708,7 @@ function EmailWidget({ lang }) {
                 if (data.error) setError(data.error);
                 fetchCloudTokens();
             }).catch(() => {
-                setError('Verbindingsfout met backend');
+                setError('Verbindingsfout met server');
                 fetchCloudTokens();
             });
         } else {
@@ -2737,9 +2737,9 @@ function EmailWidget({ lang }) {
     };
 
     const connectGmailCloud = async () => {
-        if (!gmailClientId) return setError('Configureer Gmail Client ID in instellingen');
+        if (!gmailClientId) return setError('Configureer Gmail ID');
         const gisReady = await waitForScript(() => !!window.google?.accounts?.oauth2, 10000);
-        if (!gisReady) return setError('Google script niet geladen');
+        if (!gisReady) return setError('Google script fout');
 
         const client = window.google.accounts.oauth2.initCodeClient({
             client_id: gmailClientId,
@@ -2761,10 +2761,8 @@ function EmailWidget({ lang }) {
     };
 
     const connectOutlookCloud = () => {
-        if (!msClientId) return setError('Configureer MS Client ID in instellingen');
-        const redirectUri = encodeURIComponent(window.location.origin);
-        // We sturen de gebruiker via dezelfde pagina weg en komen terug. Geen popup, geen COOP errors.
-        const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${msClientId}&response_type=code&redirect_uri=${redirectUri}&response_mode=query&scope=offline_access%20Mail.ReadWrite%20Mail.Send&state=ms_auth`;
+        if (!msClientId) return setError('Configureer MS ID');
+        const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${msClientId}&response_type=code&redirect_uri=${encodeURIComponent(DASHBOARD_URL)}&response_mode=query&scope=offline_access%20Mail.ReadWrite%20Mail.Send&state=ms_auth`;
         window.location.href = authUrl; 
     };
 
@@ -2992,7 +2990,7 @@ function EmailWidget({ lang }) {
                     {selectedMail && <button onClick={() => { setSelectedMail(null); setActiveAction({id:null,type:null}); }} className="p-1 rounded hover:bg-gray-200 transition"><svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg></button>}
                     <Ico.Mail /> <span className="text-[11px] font-black tracking-widest uppercase">Cloud Mail</span>
                 </div>
-                {error && <span className="text-[9px] text-red-500 font-bold truncate max-w-[200px]" onClick={()=>setError('')}>{error}</span>}
+                {error && <span className="text-[9px] text-red-500 font-bold max-w-[200px]" onClick={()=>setError('')}>{error}</span>}
             </div>
 
             {!selectedMail && (
