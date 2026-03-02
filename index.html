@@ -1849,14 +1849,16 @@ function SportsWidget({ lang }) {
     const FLAGS = { dutch:'🇳🇱',british:'🇬🇧',german:'🇩🇪',spanish:'🇪🇸',mexican:'🇲🇽',australian:'🇦🇺',french:'🇫🇷',canadian:'🇨🇦',monegasque:'🇲🇨',thai:'🇹🇭',japanese:'🇯🇵',chinese:'🇨🇳',finnish:'🇫🇮',danish:'🇩🇰',american:'🇺🇸',italian:'🇮🇹',polish:'🇵🇱',brazilian:'🇧🇷',norwegian:'🇳🇴',swedish:'🇸🇪',swiss:'🇨🇭','new zealander':'🇳🇿',argentine:'🇦🇷',korean:'🇰🇷',irish:'🇮🇪','south african':'🇿🇦',belgian:'🇧🇪',austrian:'🇦🇹',colombian:'🇨🇴',portuguese:'🇵🇹',indian:'🇮🇳' };
     const getFlag = (nat) => FLAGS[(nat||'').toLowerCase()] || '🏁';
 
-    const fmtDate = (iso) => { if(!iso) return ''; const d = new Date(iso); const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${String(d.getDate()).padStart(2,'0')} ${m[d.getMonth()]}`; };
+    const fmtDate = (iso) => { if(!iso) return ''; const d = new Date(iso); const mEN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; const mNL = ['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec']; const m = lang === 'nl' ? mNL : mEN; return `${String(d.getDate()).padStart(2,'0')} ${m[d.getMonth()]}`; };
     const fmtTimeNL = (iso) => { if(!iso) return ''; const d = new Date(iso); return d.toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Amsterdam' }); };
     
     const fmtDateRange = (isoStart, isoEnd) => {
         if(!isoStart) return '';
         const s = new Date(isoStart);
         const e = isoEnd ? new Date(isoEnd) : s;
-        const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const mEN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const mNL = ['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+        const m = lang === 'nl' ? mNL : mEN;
         if(s.getMonth() === e.getMonth()) return `${m[s.getMonth()]} ${s.getDate()}-${e.getDate()}`;
         return `${m[s.getMonth()]} ${s.getDate()} - ${m[e.getMonth()]} ${e.getDate()}`;
     };
@@ -1896,10 +1898,10 @@ function SportsWidget({ lang }) {
                         .slice(0, 10)
                         .map(r => ({
                             r: `GP ${r.raceName.replace(' Grand Prix', '')}`,
-                            rd: fmtDate(r.date),
-                            rt: fmtTimeNL(r.date + 'T' + (r.time || '14:00:00Z')),
-                            qd: r.Qualifying ? fmtDate(r.Qualifying.date) : '',
-                            qt: r.Qualifying ? fmtTimeNL(r.Qualifying.date + 'T' + (r.Qualifying.time || '14:00:00Z')) : ''
+                            rDate: r.date,
+                            rTime: r.date + 'T' + (r.time || '14:00:00Z'),
+                            qDate: r.Qualifying ? r.Qualifying.date : '',
+                            qTime: r.Qualifying ? r.Qualifying.date + 'T' + (r.Qualifying.time || '14:00:00Z') : ''
                         }));
                 }
 
@@ -1981,7 +1983,8 @@ function SportsWidget({ lang }) {
                 if (data?.leagues?.[0]?.calendar) {
                     calItems = data.leagues[0].calendar.map(c => ({
                         r: c.label || c.name || '',
-                        d: fmtDateRange(c.startDate, c.endDate),
+                        startDate: c.startDate,
+                        endDate: c.endDate,
                         loc: c.event?.locations?.[0]?.venue?.fullName || '',
                         raw: new Date(c.startDate || c.endDate)
                     }));
@@ -1989,7 +1992,8 @@ function SportsWidget({ lang }) {
                 if (calItems.length <= 1) {
                     calItems = (data?.events || []).map(e => ({
                         r: e.shortName || e.name || '',
-                        d: fmtDateRange(e.startDate || e.date, e.endDate),
+                        startDate: e.startDate || e.date,
+                        endDate: e.endDate,
                         loc: e.locations?.[0]?.venue?.fullName || '',
                         raw: new Date(e.startDate || e.date)
                     }));
@@ -2028,6 +2032,14 @@ function SportsWidget({ lang }) {
                                 if (td) rnd = td.displayValue;
                             }
 
+                            let earnings = '';
+                            if (c.earnings?.value) earnings = c.earnings.value;
+                            else if (c.prize) earnings = typeof c.prize === 'object' ? (c.prize.value || c.prize.amount || '') : c.prize;
+                            else if (c.statistics) {
+                                const ep = c.statistics.find(x => x.name === 'earnings' || x.name === 'prize' || x.name === 'prizeMoney');
+                                if (ep) earnings = ep.value || ep.displayValue || '';
+                            }
+
                             return {
                                 p: c.status?.position?.displayName || c.order || i + 1,
                                 n: c.athlete?.displayName || c.athlete?.shortName?.split('. ').pop() || c.athlete?.lastName || '?',
@@ -2035,6 +2047,7 @@ function SportsWidget({ lang }) {
                                 tot: tot,
                                 thru: c.status?.displayValue || c.status?.type?.shortDetail || '-',
                                 rnd: rnd,
+                                earn: earnings,
                                 r1: rounds[0]?.value || rounds[0]?.displayValue || '-',
                                 r2: rounds[1]?.value || rounds[1]?.displayValue || '-',
                                 r3: rounds[2]?.value || rounds[2]?.displayValue || '-',
@@ -2169,18 +2182,18 @@ function SportsWidget({ lang }) {
                         {tab === 'cal' && (
                             <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                                 <div className="bg-gray-50 p-2 font-bold text-[10px] uppercase text-gray-700 border-b flex justify-between">
-                                    <span>RACE</span><span>KWALIFICATIE</span>
+                                    <span className="text-green-700">{lang==='nl'?'KWALIFICATIE':'QUALIFYING'}</span><span className="text-blue-800">RACE</span>
                                 </div>
                                 <div className="divide-y divide-gray-100">
                                     {fF1c.slice(0, eF1C ? 24 : 5).map((r) => (
-                                        <div key={r.r} className="flex justify-between items-center text-[10px] p-2 hover:bg-gray-50 transition">
+                                        <div key={r.r} className="flex justify-between items-center p-2 hover:bg-gray-50 transition">
                                             <div className="flex flex-col w-1/2">
-                                                <span className="font-bold text-blue-800">{r.r}</span>
-                                                <span className="font-black text-gray-500 mt-0.5">{r.rd} <span className="font-mono ml-1 text-gray-800">{r.rt}</span></span>
+                                                <span className="text-[9px] font-bold text-green-700">Quali</span>
+                                                <span className="text-[10px] text-gray-500 mt-0.5">{fmtDate(r.qDate)} <span className="font-mono ml-1 text-gray-700">{fmtTimeNL(r.qTime)}</span></span>
                                             </div>
                                             <div className="flex flex-col w-1/2 text-right">
-                                                <span className="font-bold text-gray-400">Quali</span>
-                                                <span className="font-black text-gray-500 mt-0.5">{r.qd} <span className="font-mono ml-1 text-gray-800">{r.qt}</span></span>
+                                                <span className="text-[12px] font-black text-blue-800">{r.r}</span>
+                                                <span className="text-[11px] font-bold text-gray-600 mt-0.5">{fmtDate(r.rDate)} <span className="font-mono ml-1 text-gray-900">{fmtTimeNL(r.rTime)}</span></span>
                                             </div>
                                         </div>
                                     ))}
@@ -2203,32 +2216,35 @@ function SportsWidget({ lang }) {
                                     <span className="truncate pr-2">{gData.lb.title}</span>
                                 </div>
                                 <div className="overflow-x-auto hide-scroll">
-                                    <table className="w-full text-left border-collapse">
+                                    <table className="text-left border-collapse" style={{minWidth:'580px',width:'100%'}}>
                                         <thead>
                                             <tr className="bg-gray-100 text-[8px] uppercase text-gray-500 font-black border-b border-gray-200">
                                                 <th className="p-2 w-8 text-center">POS</th>
-                                                <th className="p-2">SPELER</th>
+                                                <th className="p-2">{lang==='nl'?'SPELER':'PLAYER'}</th>
                                                 <th className="p-2 text-center">TOT</th>
                                                 <th className="p-2 text-center">THRU</th>
-                                                <th className="p-2 text-center hidden sm:table-cell">RND</th>
+                                                <th className="p-2 text-center">RND</th>
                                                 <th className="p-2 text-center text-gray-400">R1</th>
                                                 <th className="p-2 text-center text-gray-400">R2</th>
-                                                <th className="p-2 text-center text-gray-400 hidden sm:table-cell">R3</th>
-                                                <th className="p-2 text-center text-gray-400 hidden sm:table-cell">R4</th>
+                                                <th className="p-2 text-center text-gray-400">R3</th>
+                                                <th className="p-2 text-center text-gray-400">R4</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 text-[10px]">
                                             {fGlbRes.slice(0, eGLb ? 50 : 10).map((r, i) => (
                                                 <tr key={i} className="even:bg-[#fcfcfc] hover:bg-blue-50 transition">
                                                     <td className="p-2 text-center font-black text-gray-900 w-8">{r.p}</td>
-                                                    <td className="p-2 font-bold whitespace-nowrap text-gray-800 tracking-tight"><span className="mr-1.5 opacity-90">{r.fl}</span>{r.n}</td>
+                                                    <td className="p-2 whitespace-nowrap tracking-tight">
+                                                        <div className="font-bold text-gray-800"><span className="mr-1.5 opacity-90">{r.fl}</span>{r.n}</div>
+                                                        {r.earn ? <div className="text-[8px] text-green-700 font-semibold mt-0.5">€{Number(r.earn).toLocaleString('nl-NL')}</div> : null}
+                                                    </td>
                                                     <td className={`p-2 text-center font-black font-mono text-[11px] ${String(r.tot).includes('-') ? 'text-[#d32f2f]' : r.tot === 'E' ? 'text-[#388e3c]' : 'text-gray-500'}`}>{r.tot}</td>
                                                     <td className="p-2 text-center font-mono font-semibold text-gray-600 whitespace-nowrap">{r.thru}</td>
-                                                    <td className="p-2 text-center font-mono text-gray-500 hidden sm:table-cell">{r.rnd}</td>
+                                                    <td className="p-2 text-center font-mono text-gray-500">{r.rnd}</td>
                                                     <td className="p-2 text-center font-mono text-gray-800">{r.r1}</td>
                                                     <td className="p-2 text-center font-mono text-gray-800">{r.r2}</td>
-                                                    <td className="p-2 text-center font-mono text-gray-800 hidden sm:table-cell">{r.r3}</td>
-                                                    <td className="p-2 text-center font-mono text-gray-800 hidden sm:table-cell">{r.r4}</td>
+                                                    <td className="p-2 text-center font-mono text-gray-800">{r.r3}</td>
+                                                    <td className="p-2 text-center font-mono text-gray-800">{r.r4}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -2255,7 +2271,7 @@ function SportsWidget({ lang }) {
                                                     </span>
                                                     <span className={`text-[9px] mt-0.5 line-clamp-1 ${isMajor ? 'text-[#388e3c]' : 'text-gray-500'}`}>{r.loc}</span>
                                                 </div>
-                                                <span className={`font-black whitespace-nowrap px-2 py-1 rounded shadow-sm ${isMajor ? 'bg-[#2e7d32] text-white' : 'bg-gray-100 text-gray-600'}`}>{r.d}</span>
+                                                <span className={`font-black whitespace-nowrap px-2 py-1 rounded shadow-sm ${isMajor ? 'bg-[#2e7d32] text-white' : 'bg-gray-100 text-gray-600'}`}>{fmtDateRange(r.startDate, r.endDate)}</span>
                                             </div>
                                         );
                                     })}
@@ -3341,7 +3357,7 @@ function App() {
                 <div className="bg-white/10 p-10 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center backdrop-blur-md">
                     <Ico.Lock />
                     <h1 className="text-2xl font-black mt-4 mb-2 tracking-widest uppercase">Secured Access</h1>
-                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 5.7'}</p>
+                    <p className="text-xs text-gray-400 mb-8">{isSyncing ? 'Synchroniseren met cloud database...' : 'Personal Dashboard ver. 5.8'}</p>
                     {!isSyncing && <div id="google-btn"></div>}
                 </div>
             </div>
