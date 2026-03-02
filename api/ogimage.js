@@ -41,24 +41,27 @@ export default async function handler(req, res) {
             const headEnd = html.indexOf('</head>');
             const head = headEnd > 0 ? html.substring(0, headEnd + 7) : html.substring(0, 50000);
 
+            // Helper: filter Google/platform logos eruit
+            const isLogo = (u) => /news\.google\.com|google\.com\/logos|gstatic\.com\/generate_204|googleusercontent\.com.*=s\d{2,3}$/i.test(u);
+
             // 1. og:image
             let match = head.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
                 || head.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-            if (match?.[1]?.startsWith('http')) return match[1];
+            if (match?.[1]?.startsWith('http') && !isLogo(match[1])) return match[1];
 
             // 2. twitter:image
             match = head.match(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i)
                 || head.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image(?::src)?["']/i);
-            if (match?.[1]?.startsWith('http')) return match[1];
+            if (match?.[1]?.startsWith('http') && !isLogo(match[1])) return match[1];
 
             // 3. Schema.org image
             match = head.match(/<meta[^>]+itemprop=["']image["'][^>]+content=["']([^"']+)["']/i);
-            if (match?.[1]?.startsWith('http')) return match[1];
+            if (match?.[1]?.startsWith('http') && !isLogo(match[1])) return match[1];
 
             // 4. Link rel image_src
             match = head.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i);
-            if (match?.[1]?.startsWith('http')) return match[1];
-
+            if (match?.[1]?.startsWith('http') && !isLogo(match[1])) return match[1];
+            
             return null;
         } catch (e) {
             return null;
