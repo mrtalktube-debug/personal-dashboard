@@ -1,6 +1,6 @@
-// /api/ogimage.js — Vercel Serverless Function
+// /api/ogimage.js — Vercel Serverless Function v2
 // Haalt og:image meta tags op van artikelpagina's (batch)
-// Gebruikt door de nieuws-widget om afbeeldingen te tonen
+// Volgt redirects en handelt Google News URLs af
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,13 +19,13 @@ export default async function handler(req, res) {
     const fetchOgImage = async (url) => {
         try {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 4000);
+            const timeout = setTimeout(() => controller.abort(), 5000);
 
             const r = await fetch(url, {
                 signal: controller.signal,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml',
+                    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language': 'nl,en;q=0.9',
                 },
                 redirect: 'follow'
@@ -34,23 +34,30 @@ export default async function handler(req, res) {
 
             if (!r.ok) return null;
 
-            const html = await r.text();
-            // Zoek alleen in de eerste 50KB (og:image zit in <head>)
-            const head = html.substring(0, 50000);
+            const contentType = r.headers.get('content-type') || '';
+            if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) return null;
 
-            // 1. og:image (beide attribuut-volgordes)
-            const ogMatch = head.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+            const html = await r.text();
+            const headEnd = html.indexOf('</head>');
+            const head = headEnd > 0 ? html.substring(0, headEnd + 7) : html.substring(0, 50000);
+
+            // 1. og:image
+            let match = head.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
                 || head.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-            if (ogMatch && ogMatch[1] && ogMatch[1].startsWith('http')) return ogMatch[1];
+            if (match?.[1]?.startsWith('http')) return match[1];
 
             // 2. twitter:image
-            const twMatch = head.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
-                || head.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
-            if (twMatch && twMatch[1] && twMatch[1].startsWith('http')) return twMatch[1];
+            match = head.match(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i)
+                || head.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image(?::src)?["']/i);
+            if (match?.[1]?.startsWith('http')) return match[1];
 
-            // 3. Eerste grote afbeelding in de pagina (laatste redmiddel)
-            const imgMatch = head.match(/<img[^>]+src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)["']/i);
-            if (imgMatch) return imgMatch[1];
+            // 3. Schema.org image
+            match = head.match(/<meta[^>]+itemprop=["']image["'][^>]+content=["']([^"']+)["']/i);
+            if (match?.[1]?.startsWith('http')) return match[1];
+
+            // 4. Link rel image_src
+            match = head.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i);
+            if (match?.[1]?.startsWith('http')) return match[1];
 
             return null;
         } catch (e) {
@@ -58,15 +65,17 @@ export default async function handler(req, res) {
         }
     };
 
-    // Alle URLs parallel ophalen voor maximale snelheid
-    const batchResults = await Promise.allSettled(urlsToProcess.map(fetchOgImage));
-
-    urlsToProcess.forEach((url, idx) => {
-        const result = batchResults[idx];
-        if (result.status === 'fulfilled' && result.value) {
-            results[url] = result.value;
-        }
-    });
+    // Parallel ophalen in batches van 5
+    const batchSize = 5;
+    for (let i = 0; i < urlsToProcess.length; i += batchSize) {
+        const batch = urlsToProcess.slice(i, i + batchSize);
+        const batchResults = await Promise.allSettled(batch.map(fetchOgImage));
+        batch.forEach((url, idx) => {
+            if (batchResults[idx].status === 'fulfilled' && batchResults[idx].value) {
+                results[url] = batchResults[idx].value;
+            }
+        });
+    }
 
     res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate');
     return res.status(200).json(results);
