@@ -2033,12 +2033,7 @@ function SportsWidget({ lang }) {
                             }
 
                             let earnings = '';
-                            if (c.earnings?.value) earnings = c.earnings.value;
-                            else if (c.prize) earnings = typeof c.prize === 'object' ? (c.prize.value || c.prize.amount || '') : c.prize;
-                            else if (c.statistics) {
-                                const ep = c.statistics.find(x => x.name === 'earnings' || x.name === 'prize' || x.name === 'prizeMoney');
-                                if (ep) earnings = ep.value || ep.displayValue || '';
-                            }
+                            if (typeof c.earnings === 'number' && c.earnings > 0) earnings = c.earnings;
 
                             return {
                                 p: c.status?.position?.displayName || c.order || i + 1,
