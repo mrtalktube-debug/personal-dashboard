@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     try {
         const [scoreboardRes, leaderboardRes] = await Promise.all([
             fetch(`https://site.api.espn.com/apis/site/v2/sports/golf/${selectedTour}/scoreboard`, { headers }),
-            fetch(`https://site.api.espn.com/apis/site/v2/sports/golf/${selectedTour}/leaderboard`, { headers }).catch(() => null)
+            fetch(`https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=${selectedTour}`, { headers }).catch(() => null)
         ]);
 
         if (!scoreboardRes.ok) throw new Error(`ESPN scoreboard returned ${scoreboardRes.status}`);
