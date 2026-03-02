@@ -2657,6 +2657,7 @@ function Settings({ isOpen, onClose, layout, setLayout }) {
 
 function EmailWidget({ lang }) {
     const [accounts, setAccounts] = useState([]);
+    const [gmailAccounts, setGmailAccounts] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [activeAction, setActiveAction] = useState({ id: null, type: null });
@@ -2668,327 +2669,143 @@ function EmailWidget({ lang }) {
     const [mailBody, setMailBody] = useState('');
     const [bodyLoading, setBodyLoading] = useState(false);
     const [initializing, setInitializing] = useState(true);
-
-    const [gmailAccounts, setGmailAccounts] = useState([]);
     const [activeTab, setActiveTab] = useState('outlook');
     const [gmailLoading, setGmailLoading] = useState(false);
     
     const gmailClientId = S.load('gmail_client_id', GOOGLE_CLIENT_ID);
     const msClientId = S.load('ms_client_id', '');
-    const msalRef = useRef(null);
-    const msalRedirectHandled = useRef(false);
 
-    const initMsal = async () => {
-        if (!msClientId) { return null; }
-        const ready = await waitForScript(() => !!window.msal, 12000);
-        if (!ready) { setError('MSAL script niet geladen — herlaad de pagina'); return null; }
-        if (!msalRef.current) {
-            msalRef.current = new window.msal.PublicClientApplication({
-                auth: { clientId: msClientId, authority: "https://login.microsoftonline.com/common", redirectUri: window.location.origin + window.location.pathname },
-                cache: { cacheLocation: "localStorage" }
+    // 1. Haal cloud tokens op via de backend
+    const fetchCloudTokens = async () => {
+        setInitializing(true);
+        try {
+            const res = await fetch('/api/auth-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'get_access_tokens', email: ALLOWED_EMAIL })
             });
-            await msalRef.current.initialize();
-        }
-        if (!msalRedirectHandled.current) {
-            msalRedirectHandled.current = true;
-            try { const rr = await msalRef.current.handleRedirectPromise(); if (rr) return { instance: msalRef.current, redirectResult: rr }; } catch(e) { console.warn('Redirect handle:', e); }
-        }
-        return { instance: msalRef.current, redirectResult: null };
-    };
-
-    const acquireTokenForAccount = async (msalAccount) => {
-        const result = await initMsal();
-        if (!result) { return null; }
-        const instance = result.instance;
-        try {
-            const r = await instance.acquireTokenSilent({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount });
-            return r.accessToken;
-        } catch (e) {
-            if (isMobileDevice()) {
-                try { instance.acquireTokenRedirect({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount }); } catch(err) {}
-                return null;
-            }
-            try {
-                const r = await instance.acquireTokenPopup({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount });
-                return r.accessToken;
-            } catch (err) {
-                try { instance.acquireTokenRedirect({ scopes: ["Mail.ReadWrite","Mail.Send"], account: msalAccount }); } catch(err2) {}
-                return null;
-            }
-        }
-    };
-
-    const accountLabel = (msalAccount) => {
-        if (!msalAccount) { return '?'; }
-        const email = msalAccount.username || '';
-        const local = email.split('@')[0];
-        const pretty = local.replace(/[._-]/g, '-').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('-');
-        return pretty.length > 12 ? pretty.slice(0, 12) : pretty;
-    };
-
-    useEffect(() => {
-        let isMounted = true;
-        const autoConnect = async () => {
-            if (isMounted) { setInitializing(true); }
-            const timer = setTimeout(() => { 
-                if (isMounted) { setInitializing(false); } 
-            }, 12000); 
-
-            try {
-                const result = await initMsal();
-                if (!result) { return; }
-                const instance = result.instance;
-
-                if (result.redirectResult) {
-                    const rr = result.redirectResult;
-                    const label = accountLabel(rr.account);
-                    if (isMounted) {
-                        setAccounts(prev => {
-                            const exists = prev.some(a => a.msalAccount.username.toLowerCase() === rr.account.username.toLowerCase());
-                            if (exists) return prev;
-                            const newArr = [...prev, { msalAccount: rr.account, token: rr.accessToken, emails: [], label }];
-                            fetchMailsForAccount(rr.accessToken, newArr.length - 1, label);
-                            return newArr;
-                        });
-                    }
-                }
-
-                const cached = instance.getAllAccounts();
-                if (cached.length === 0) { return; }
-
-                const loaded = [];
-                for (let i = 0; i < cached.length; i++) {
-                    const c = cached[i];
-                    const token = await acquireTokenForAccount(c);
-                    loaded.push({ msalAccount: c, token: token, emails: [], label: accountLabel(c) });
-                }
-                
-                if (isMounted) { setAccounts(prev => {
-                    const merged = [...prev];
-                    loaded.forEach(l => {
-                        const exists = merged.findIndex(m => m.msalAccount.username.toLowerCase() === l.msalAccount.username.toLowerCase());
-                        if (exists >= 0) { merged[exists] = { ...merged[exists], token: l.token || merged[exists].token }; }
-                        else { merged.push(l); }
-                    });
-                    return merged;
-                }); }
-                
-                loaded.forEach((a, i) => { 
-                    if (a.token) { fetchMailsForAccount(a.token, i, a.label); } 
-                });
-            } catch (error) {
-                console.error(error);
-            } finally {
-                clearTimeout(timer);
-                if (isMounted) { setInitializing(false); }
-            }
-        };
-        autoConnect();
-        return () => { isMounted = false; };
-    }, []);
-
-    const addAccount = async () => {
-        try {
-            setError('');
-            const result = await initMsal();
-            if (!result) { return; }
-            const instance = result.instance;
-
-            if (isMobileDevice()) {
-                instance.loginRedirect({ scopes: ["Mail.ReadWrite","Mail.Send"], prompt: "select_account" });
-                return;
-            }
-
-            await instance.handleRedirectPromise();
-            const r = await instance.loginPopup({ scopes: ["Mail.ReadWrite","Mail.Send"], prompt: "select_account" });
+            const tokens = await res.json();
             
-            setAccounts(prev => {
-                const exists = prev.some(a => a.msalAccount.username.toLowerCase() === r.account.username.toLowerCase());
-                if (exists) { setError('Account al toegevoegd'); return prev; }
-                const label = accountLabel(r.account);
-                const newArr = [...prev, { msalAccount: r.account, token: r.accessToken, emails: [], label: label }];
-                fetchMailsForAccount(r.accessToken, newArr.length - 1, label);
-                return newArr;
-            });
+            if (tokens.google) await fetchGmail(tokens.google);
+            if (tokens.ms) await fetchOutlook(tokens.ms);
         } catch (e) {
-            console.error('Add account error:', e);
-            if (e.errorCode === 'interaction_in_progress') {
-                setError('Wacht tot vorige actie klaar is');
-            } else {
-                setError('Account toevoegen mislukt');
-            }
+            setError('Fout bij ophalen cloud sessies');
         }
+        setInitializing(false);
     };
 
-    const graphFetch = async (url, token, accountIdx, options = {}) => {
-        const res = await fetch(`https://graph.microsoft.com/v1.0${url}`, {
+    useEffect(() => { fetchCloudTokens(); }, []);
+
+    // Helper: Graph API fetch met automatische token refresh via backend bij 401
+    const graphFetch = async (url, token, options = {}) => {
+        let res = await fetch(`https://graph.microsoft.com/v1.0${url}`, {
             ...options,
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers||{}) }
         });
         if (res.status === 401) {
-            const acct = accounts[accountIdx];
-            if (acct) {
-                const newToken = await acquireTokenForAccount(acct.msalAccount);
-                if (newToken) {
-                    setAccounts(prev => {
-                        return prev.map((a, i) => {
-                            if (i === accountIdx) { return { ...a, token: newToken }; }
-                            return a;
-                        });
-                    });
-                    return fetch(`https://graph.microsoft.com/v1.0${url}`, {
-                        ...options,
-                        headers: { Authorization: `Bearer ${newToken}`, 'Content-Type': 'application/json', ...(options.headers||{}) }
-                    });
-                }
+            const refreshRes = await fetch('/api/auth-email', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'get_access_tokens', email: ALLOWED_EMAIL })
+            });
+            const tokens = await refreshRes.json();
+            if (tokens.ms) {
+                setAccounts(prev => prev.map(a => ({ ...a, token: tokens.ms })));
+                res = await fetch(`https://graph.microsoft.com/v1.0${url}`, {
+                    ...options,
+                    headers: { Authorization: `Bearer ${tokens.ms}`, 'Content-Type': 'application/json', ...(options.headers||{}) }
+                });
+            } else {
+                setError('Sessie verlopen'); return null;
             }
-            setError('Sessie verlopen'); return null;
         }
         return res;
     };
 
-    const fetchMailsForAccount = async (token, idx, label) => {
-        setLoading(true);
-        const timer = setTimeout(() => { setLoading(false); }, 10000);
-        try {
-            const controller = new AbortController();
-            setTimeout(() => { controller.abort(); }, 10000);
-            
-            const res = await graphFetch('/me/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification', token, idx, { signal: controller.signal });
-            if (!res || !res.ok) { return; }
-            
-            const data = await res.json();
-            const rawMails = data.value || [];
-            const emails = rawMails.filter(m => m.inferenceClassification === 'focused').slice(0, 20).map(m => {
-                return {
-                    id: m.id, accountIdx: idx, accountLabel: label,
-                    subject: m.subject || '(geen onderwerp)',
-                    fromStr: m.sender?.emailAddress?.name || m.sender?.emailAddress?.address || 'Onbekend',
-                    snippet: m.bodyPreview || '',
-                    date: m.receivedDateTime, webLink: m.webLink || ''
-                };
-            });
-            
-            setAccounts(prev => {
-                return prev.map((a, i) => {
-                    if (i === idx) { return { ...a, emails: emails }; }
-                    return a;
-                });
-            });
-        } catch (error) {
-            console.error(error);
-        } finally {
-            clearTimeout(timer);
-            setLoading(false);
-        }
-    };
-
-    // Sla gekoppelde Gmail-adressen op zodat ze automatisch herverbinden
-    const GMAIL_STORAGE_KEY = 'gmail_linked_accounts';
-    const saveLinkedGmails = (emailList) => { try { localStorage.setItem(GMAIL_STORAGE_KEY, JSON.stringify(emailList)); } catch(e){} };
-    const loadLinkedGmails = () => { try { return JSON.parse(localStorage.getItem(GMAIL_STORAGE_KEY) || '[]'); } catch(e){ return []; } };
-
-    const GMAIL_STORE = 'gmail_tokens_v2';
-    const saveGmailTokens = (accounts) => { try { localStorage.setItem(GMAIL_STORE, JSON.stringify(accounts.map(a => ({ email: a.email, token: a.token, label: a.label, exp: a.exp || (Date.now() + 3500000) })))); } catch(e){} };
-    const loadGmailTokens = () => { try { return JSON.parse(localStorage.getItem(GMAIL_STORE) || '[]'); } catch(e){ return []; } };
-
-    const restoreGmailAccounts = async () => {
-        const saved = loadGmailTokens();
-        if (saved.length === 0) return;
-        const restored = saved.map(s => ({ email: s.email, token: s.token, label: s.label, exp: s.exp, emails: [] }));
-        setGmailAccounts(restored);
-
+    // 2. Google Auth (Eenmalig koppelen via backend)
+    const connectGmailCloud = async () => {
+        if (!gmailClientId) return setError('Configureer Gmail Client ID in instellingen');
         const gisReady = await waitForScript(() => !!window.google?.accounts?.oauth2, 10000);
+        if (!gisReady) return setError('Google script niet geladen');
 
-        for (let i = 0; i < restored.length; i++) {
-            const a = restored[i];
-            if (a.exp > Date.now()) {
-                fetchGmail(a.token, i, a.label, restored);
-            } else if (gisReady && gmailClientId) {
-                try {
-                    await new Promise((resolve, reject) => {
-                        const client = window.google.accounts.oauth2.initTokenClient({
-                            client_id: gmailClientId,
-                            scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send',
-                            hint: a.email,
-                            prompt: '',
-                            callback: (tokenResponse) => {
-                                if (tokenResponse.error) { reject(tokenResponse.error); return; }
-                                const newToken = tokenResponse.access_token;
-                                const newExp = Date.now() + ((tokenResponse.expires_in || 3600) * 1000) - 60000;
-                                setGmailAccounts(prev => {
-                                    const updated = prev.map((acc, idx) => idx === i ? { ...acc, token: newToken, exp: newExp } : acc);
-                                    saveGmailTokens(updated);
-                                    return updated;
-                                });
-                                fetchGmail(newToken, i, a.label, restored);
-                                resolve();
-                            }
-                        });
-                        client.requestAccessToken({ prompt: '' });
-                    });
-                } catch (err) {
-                    console.warn('Gmail silent refresh failed for', a.email, '- user may need to reconnect');
-                }
-            }
-        }
-    };
-
-    const connectGmail = async (selectAccount = false) => {
-        if (!gmailClientId) { setError('Configureer Gmail Client ID in instellingen'); return; }
-        const gisReady = await waitForScript(() => !!window.google?.accounts?.oauth2, 10000);
-        if (!gisReady) { setError('Google script niet geladen — herlaad de pagina'); return; }
-        const client = window.google.accounts.oauth2.initTokenClient({
+        const client = window.google.accounts.oauth2.initCodeClient({
             client_id: gmailClientId,
             scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send',
-            prompt: selectAccount ? 'select_account' : '',
-            callback: async (tokenResponse) => {
-                if (tokenResponse.error) { return; }
-                const token = tokenResponse.access_token;
-                const exp = Date.now() + ((tokenResponse.expires_in || 3600) * 1000) - 60000;
-                try {
-                    const profileRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
-                    const profile = await profileRes.json();
-                    const email = profile.emailAddress || 'Gmail';
-                    const label = email.split('@')[0].replace(/[._-]/g, '-').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('-').slice(0, 12);
-
-                    setGmailAccounts(prev => {
-                        const exists = prev.findIndex(a => a.email === email);
-                        let newList;
-                        if (exists >= 0) {
-                            newList = [...prev];
-                            newList[exists] = { ...newList[exists], token, exp };
-                            fetchGmail(token, exists, label, newList);
-                        } else {
-                            newList = [...prev, { email, token, exp, emails: [], label }];
-                            fetchGmail(token, newList.length - 1, label, newList);
-                        }
-                        saveGmailTokens(newList);
-                        return newList;
-                    });
-                } catch (err) { setError('Gmail profiel ophalen mislukt'); }
-            }
+            ux_mode: 'popup',
+            callback: async (response) => {
+                if (response.error) return setError('Google login afgebroken');
+                setInitializing(true);
+                await fetch('/api/auth-email', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'save_code', provider: 'google', code: response.code, email: ALLOWED_EMAIL })
+                });
+                await fetchCloudTokens();
+            },
         });
-        client.requestAccessToken({ prompt: selectAccount ? 'select_account' : '' });
+        client.requestCode();
     };
 
-    const fetchGmail = async (token, idx, label, currentAccounts) => {
-        setGmailLoading(true);
-        const timer = setTimeout(() => { setGmailLoading(false); }, 10000);
+    // 3. Outlook Auth (Eenmalig koppelen via backend)
+    const connectOutlookCloud = () => {
+        if (!msClientId) return setError('Configureer MS Client ID in instellingen');
+        const redirectUri = encodeURIComponent(window.location.origin);
+        const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${msClientId}&response_type=code&redirect_uri=${redirectUri}&response_mode=query&scope=offline_access%20Mail.ReadWrite%20Mail.Send`;
+        
+        const popup = window.open(authUrl, 'MSLogin', 'width=600,height=600');
+        const checkPopup = setInterval(async () => {
+            try {
+                if (popup.closed) { clearInterval(checkPopup); return; }
+                const url = popup.location.href;
+                if (url.includes('code=')) {
+                    clearInterval(checkPopup);
+                    const code = new URLSearchParams(popup.location.search).get('code');
+                    popup.close();
+                    
+                    setInitializing(true);
+                    await fetch('/api/auth-email', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'save_code', provider: 'ms', code: code, email: ALLOWED_EMAIL })
+                    });
+                    await fetchCloudTokens();
+                }
+            } catch (e) {}
+        }, 1000);
+    };
+
+    const fetchOutlook = async (token) => {
+        setLoading(true);
         try {
             const controller = new AbortController();
-            setTimeout(() => { controller.abort(); }, 10000);
+            setTimeout(() => controller.abort(), 10000);
+            
+            const res = await graphFetch('/me/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$top=50&$select=subject,sender,bodyPreview,receivedDateTime,webLink,inferenceClassification', token, { signal: controller.signal });
+            if (!res || !res.ok) return;
+            
+            const data = await res.json();
+            const emails = (data.value || []).filter(m => m.inferenceClassification === 'focused').slice(0, 20).map(m => ({
+                id: m.id, accountIdx: 0, accountLabel: 'Outlook Cloud', source: 'outlook',
+                subject: m.subject || '(geen onderwerp)',
+                fromStr: m.sender?.emailAddress?.name || m.sender?.emailAddress?.address || 'Onbekend',
+                snippet: m.bodyPreview || '',
+                date: m.receivedDateTime, webLink: m.webLink || ''
+            }));
+            setAccounts([{ label: 'Outlook Cloud', emails, token }]);
+        } catch (error) { console.error(error); } 
+        finally { setLoading(false); }
+    };
+
+    const fetchGmail = async (token) => {
+        setGmailLoading(true);
+        try {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), 10000);
             
             const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&labelIds=INBOX&q=category:primary', {
                 headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
             });
-            if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            const messages = data.messages || [];
 
-            const details = await Promise.all(messages.slice(0, 20).map(async m => {
+            const details = await Promise.all((data.messages || []).map(async m => {
                 const r = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`, {
                     headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
                 }).catch(() => null);
@@ -2996,13 +2813,9 @@ function EmailWidget({ lang }) {
             }));
 
             const emails = details.filter(Boolean).map(m => {
-                const headers = m.payload?.headers || [];
-                const getH = (name) => {
-                    const found = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
-                    return found ? found.value : '';
-                };
+                const getH = (name) => m.payload?.headers?.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
                 return {
-                    id: m.id, accountIdx: idx, accountLabel: label, source: 'gmail',
+                    id: m.id, accountIdx: 0, accountLabel: 'Gmail Cloud', source: 'gmail',
                     subject: getH('Subject') || '(geen onderwerp)',
                     fromStr: getH('From').replace(/<.*>/, '').trim() || 'Onbekend',
                     snippet: m.snippet || '',
@@ -3010,31 +2823,15 @@ function EmailWidget({ lang }) {
                     threadId: m.threadId
                 };
             });
-
-            setGmailAccounts(prev => {
-                return prev.map((a, i) => {
-                    if (i === idx) { return { ...a, emails: emails }; }
-                    return a;
-                });
-            });
-        } catch (error) {
-            console.error('Gmail fetch:', error);
-        } finally {
-            clearTimeout(timer);
-            setGmailLoading(false);
-        }
+            setGmailAccounts([{ label: 'Gmail Cloud', emails, token }]);
+        } catch (error) { console.error(error); } 
+        finally { setGmailLoading(false); }
     };
-
-    useEffect(() => {
-        if (gmailClientId && gmailAccounts.length === 0 && !initializing) {
-            restoreGmailAccounts();
-        }
-    }, [initializing]);
 
     const openGmailMail = async (mail) => {
         setSelectedMail(mail); setMailBody(''); setBodyLoading(true);
         setActiveAction({ id: null, type: null }); setReplyText('');
-        const token = gmailAccounts[mail.accountIdx]?.token;
+        const token = gmailAccounts[0]?.token;
         try {
             const res = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${mail.id}?format=full`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -3049,13 +2846,8 @@ function EmailWidget({ lang }) {
     };
 
     const deleteGmail = async (mail) => {
-        const token = gmailAccounts[mail.accountIdx]?.token;
-        setGmailAccounts(prev => {
-            return prev.map((a, i) => {
-                if (i === mail.accountIdx) { return { ...a, emails: a.emails.filter(m => m.id !== mail.id) }; }
-                return a;
-            });
-        });
+        const token = gmailAccounts[0]?.token;
+        removeGmailFromUI(mail);
         try { await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${mail.id}/trash`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch (err) {}
     };
 
@@ -3069,17 +2861,14 @@ function EmailWidget({ lang }) {
         return all.sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [accounts, gmailAccounts, activeTab]);
 
-    const tokenForMail = (mail) => {
-        const acct = accounts[mail?.accountIdx];
-        return acct ? acct.token : null;
-    };
+    const tokenForMail = (mail) => accounts[0]?.token;
 
     const openMail = async (mail) => {
         setSelectedMail(mail); setMailBody(''); setBodyLoading(true);
         setActiveAction({ id:null, type:null }); setReplyText('');
         try {
-            const res = await graphFetch(`/me/messages/${mail.id}?$select=body`, tokenForMail(mail), mail.accountIdx);
-            if (!res) { return; }
+            const res = await graphFetch(`/me/messages/${mail.id}?$select=body`, tokenForMail(mail));
+            if (!res) return;
             const data = await res.json();
             setMailBody(data.body?.content || 'Geen inhoud');
         } catch (err) { setMailBody('Kon mail niet laden'); }
@@ -3087,60 +2876,44 @@ function EmailWidget({ lang }) {
     };
 
     const removeMailFromUI = (mail) => {
-        setAccounts(prev => {
-            return prev.map((a, i) => {
-                if (i === mail.accountIdx) { return { ...a, emails: a.emails.filter(m => m.id !== mail.id) }; }
-                return a;
-            });
-        });
+        setAccounts(prev => prev.map(a => ({ ...a, emails: a.emails.filter(m => m.id !== mail.id) })));
         setSelectedMail(null); setActiveAction({id:null,type:null});
     };
 
-    // Outlook: verplaats naar Verwijderde items (niet permanent verwijderen)
     const deleteMail = async (mail) => {
         removeMailFromUI(mail);
-        try { 
-            await graphFetch(`/me/messages/${mail.id}/move`, tokenForMail(mail), mail.accountIdx, { 
-                method:'POST', body:JSON.stringify({destinationId:'deleteditems'}) 
-            }); 
-        } catch (err) {}
+        try { await graphFetch(`/me/messages/${mail.id}/move`, tokenForMail(mail), { method:'POST', body:JSON.stringify({destinationId:'deleteditems'}) }); } catch (err) {}
     };
 
-    // Outlook: verplaats naar map
     const moveMail = async (mail, folderId) => {
         removeMailFromUI(mail);
-        try { await graphFetch(`/me/messages/${mail.id}/move`, tokenForMail(mail), mail.accountIdx, { method:'POST', body:JSON.stringify({destinationId:folderId}) }); } catch (err) {}
+        try { await graphFetch(`/me/messages/${mail.id}/move`, tokenForMail(mail), { method:'POST', body:JSON.stringify({destinationId:folderId}) }); } catch (err) {}
     };
 
-    // Outlook: laad mappen voor dit specifieke account
     const loadFolders = async (mail) => {
         setDestinations([]);
         try {
-            const res = await graphFetch('/me/mailFolders?$top=50', tokenForMail(mail), mail.accountIdx);
-            if (!res) { return; }
+            const res = await graphFetch('/me/mailFolders?$top=50', tokenForMail(mail));
+            if (!res) return;
             const data = await res.json();
             setDestinations((data.value||[]).filter(f => !['Inbox','Drafts','Sent Items','Junk Email'].includes(f.displayName)).map(f => ({id:f.id, name:f.displayName})));
         } catch (err) {}
     };
 
-    // Gmail: laad labels voor dit specifieke account
     const loadGmailLabels = async (mail) => {
         setDestinations([]);
-        const token = gmailAccounts[mail.accountIdx]?.token;
+        const token = gmailAccounts[0]?.token;
         if (!token) return;
         try {
-            const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/labels', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/labels', { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             const skip = ['INBOX','SENT','DRAFT','SPAM','TRASH','UNREAD','STARRED','IMPORTANT','CHAT','CATEGORY_PERSONAL','CATEGORY_SOCIAL','CATEGORY_PROMOTIONS','CATEGORY_UPDATES','CATEGORY_FORUMS'];
             setDestinations((data.labels||[]).filter(l => !skip.includes(l.id) && l.type !== 'system').map(l => ({id:l.id, name:l.name})).sort((a,b) => a.name.localeCompare(b.name)));
         } catch (err) {}
     };
 
-    // Gmail: label toevoegen + automatisch archiveren (verwijder uit inbox)
     const labelGmail = async (mail, labelId) => {
-        const token = gmailAccounts[mail.accountIdx]?.token;
+        const token = gmailAccounts[0]?.token;
         if (!token) return;
         removeGmailFromUI(mail);
         try {
@@ -3152,9 +2925,8 @@ function EmailWidget({ lang }) {
         } catch (err) {}
     };
 
-    // Gmail: nieuw label aanmaken, toepassen op mail, en archiveren
     const createAndLabelGmail = async (mail, labelName) => {
-        const token = gmailAccounts[mail.accountIdx]?.token;
+        const token = gmailAccounts[0]?.token;
         if (!token || !labelName.trim()) return;
         try {
             const createRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/labels', {
@@ -3163,37 +2935,47 @@ function EmailWidget({ lang }) {
                 body: JSON.stringify({ name: labelName.trim(), labelListVisibility: 'labelShow', messageListVisibility: 'show' })
             });
             const newLabel = await createRes.json();
-            if (newLabel.id) { labelGmail(mail, newLabel.id); }
+            if (newLabel.id) labelGmail(mail, newLabel.id);
         } catch (err) {}
     };
 
-    // Gmail: verwijder helper (verwijdert uit UI)
     const removeGmailFromUI = (mail) => {
-        setGmailAccounts(prev => prev.map((a, i) => {
-            if (i === mail.accountIdx) return { ...a, emails: a.emails.filter(m => m.id !== mail.id) };
-            return a;
-        }));
+        setGmailAccounts(prev => prev.map(a => ({ ...a, emails: a.emails.filter(m => m.id !== mail.id) })));
         setSelectedMail(null); setActiveAction({id:null,type:null});
     };
 
     const sendReply = async (mail) => {
-        if (!replyText.trim()) { return; }
+        if (!replyText.trim()) return;
         try {
-            await graphFetch(`/me/messages/${mail.id}/reply`, tokenForMail(mail), mail.accountIdx, {
-                method:'POST', body:JSON.stringify({message:{body:{contentType:"Text",content:`${replyText}\n\n\nGroeten, Michael`}}})
-            });
+            if (mail.source === 'gmail') {
+                const token = gmailAccounts[0]?.token;
+                const emailContent = `To: ${mail.fromStr}\r\nSubject: Re: ${mail.subject}\r\nIn-Reply-To: ${mail.id}\r\nReferences: ${mail.id}\r\n\r\n${replyText}\n\nGroeten, Michael`;
+                const base64EncodedEmail = btoa(emailContent).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
+                    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ raw: base64EncodedEmail, threadId: mail.threadId })
+                });
+            } else {
+                await graphFetch(`/me/messages/${mail.id}/reply`, tokenForMail(mail), {
+                    method:'POST', body:JSON.stringify({message:{body:{contentType:"Text",content:`${replyText}\n\n\nGroeten, Michael`}}})
+                });
+            }
             setActiveAction({id:null,type:null}); setReplyText(''); setError('');
         } catch (err) { setError('Versturen mislukt'); }
     };
 
     const forwardMail = async (mail) => {
-        if (!replyText.trim()) { return; }
+        if (!replyText.trim()) return;
         const parts = replyText.split(',').map(s=>s.trim()).filter(p=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p));
-        if (!parts.length) { setError('Voer een geldig e-mailadres in'); return; }
+        if (!parts.length) return setError('Voer een geldig e-mailadres in');
         try {
-            await graphFetch(`/me/messages/${mail.id}/forward`, tokenForMail(mail), mail.accountIdx, {
-                method:'POST', body:JSON.stringify({ toRecipients:parts.map(a=>{ return {emailAddress:{address:a}}; }), comment:'\n\nGroeten, Michael' })
-            });
+            if (mail.source === 'gmail') {
+                setError('Doorsturen via Gmail API momenteel niet ondersteund in deze versie'); return; // Vereist complexe MIME formatting voor forwards
+            } else {
+                await graphFetch(`/me/messages/${mail.id}/forward`, tokenForMail(mail), {
+                    method:'POST', body:JSON.stringify({ toRecipients:parts.map(a=>({emailAddress:{address:a}})), comment:'\n\nGroeten, Michael' })
+                });
+            }
             setActiveAction({id:null,type:null}); setReplyText(''); setError('');
         } catch (err) { setError('Doorsturen mislukt'); }
     };
@@ -3205,34 +2987,28 @@ function EmailWidget({ lang }) {
             setActiveAction({id,type}); 
             setReplyText(''); 
             if (type === 'move') {
-                if (selectedMail.source === 'gmail') {
-                    loadGmailLabels(selectedMail);
-                } else {
-                    loadFolders(selectedMail);
-                }
+                selectedMail.source === 'gmail' ? loadGmailLabels(selectedMail) : loadFolders(selectedMail);
             }
         }
     };
 
-    const MailRow = ({ mail }) => {
-        return (
-            <div className="relative overflow-hidden border-b border-gray-100">
-                <div className="relative bg-white">
-                    <div className="px-4 py-3 cursor-pointer hover:bg-gray-50/60 transition" onClick={() => { if(mail.source === 'gmail'){ openGmailMail(mail); } else { openMail(mail); } }}>
-                        <div className="flex justify-between items-start gap-2">
-                            <span className="text-[12px] font-semibold text-gray-900 truncate flex-1" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.fromStr}</span>
-                            <div className="text-right shrink-0">
-                                <div className="text-[9px] font-bold text-red-400">{mail.accountLabel}</div>
-                                <div className="text-[9px] text-gray-400">{new Date(mail.date).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
-                            </div>
+    const MailRow = ({ mail }) => (
+        <div className="relative overflow-hidden border-b border-gray-100">
+            <div className="relative bg-white">
+                <div className="px-4 py-3 cursor-pointer hover:bg-gray-50/60 transition" onClick={() => mail.source === 'gmail' ? openGmailMail(mail) : openMail(mail)}>
+                    <div className="flex justify-between items-start gap-2">
+                        <span className="text-[12px] font-semibold text-gray-900 truncate flex-1" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.fromStr}</span>
+                        <div className="text-right shrink-0">
+                            <div className="text-[9px] font-bold text-red-400">{mail.accountLabel}</div>
+                            <div className="text-[9px] text-gray-400">{new Date(mail.date).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
                         </div>
-                        <div className="text-[11px] text-blue-700 font-medium truncate mt-0.5" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.subject}</div>
-                        <div className="text-[10px] text-gray-400 truncate mt-0.5">{mail.snippet}</div>
                     </div>
+                    <div className="text-[11px] text-blue-700 font-medium truncate mt-0.5" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{mail.subject}</div>
+                    <div className="text-[10px] text-gray-400 truncate mt-0.5">{mail.snippet}</div>
                 </div>
             </div>
-        );
-    };
+        </div>
+    );
 
     return (
         <div className="widget h-[500px] flex flex-col bg-white">
@@ -3244,7 +3020,7 @@ function EmailWidget({ lang }) {
                         </button>
                     )}
                     <Ico.Mail />
-                    <span className="text-[11px] font-black tracking-widest uppercase">Mail</span>
+                    <span className="text-[11px] font-black tracking-widest uppercase">Cloud Mail</span>
                 </div>
                 {error && <span className="text-[9px] text-red-500 font-bold truncate max-w-[200px]">{error}</span>}
             </div>
@@ -3252,16 +3028,12 @@ function EmailWidget({ lang }) {
             {!selectedMail && (
                 <div className="shrink-0 border-b">
                     <div className="flex">
-                        <button className={`tab-btn flex-1 ${activeTab==='outlook'?'active':''}`} onClick={()=>{setActiveTab('outlook');}}>OUTLOOK</button>
-                        <button className={`tab-btn flex-1 ${activeTab==='gmail'?'active':''}`} onClick={()=>{setActiveTab('gmail');}}>GMAIL</button>
+                        <button className={`tab-btn flex-1 ${activeTab==='outlook'?'active':''}`} onClick={()=>setActiveTab('outlook')}>OUTLOOK</button>
+                        <button className={`tab-btn flex-1 ${activeTab==='gmail'?'active':''}`} onClick={()=>setActiveTab('gmail')}>GMAIL</button>
                     </div>
                     <div className="flex items-center px-4 py-1.5 gap-2 bg-gray-50/50">
-                        {(activeTab==='outlook'?accounts:gmailAccounts).map((a,i) => (
-                            <span key={i} className="text-[8px] font-bold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" title={a.msalAccount?.username||a.email||''}>
-                                {a.label}
-                            </span>
-                        ))}
-                        <button onClick={()=>{ activeTab==='outlook' ? addAccount() : connectGmail(true); }} className="ml-auto w-5 h-5 flex items-center justify-center rounded-full bg-blue-50 text-blue-500 hover:bg-blue-100 transition" title="Account toevoegen">
+                        {initializing ? <span className="text-[9px] font-bold text-blue-600 animate-pulse">Sessies laden...</span> : (activeTab==='outlook'?accounts:gmailAccounts).length > 0 ? <span className="text-[9px] font-bold text-green-600">Gekoppeld</span> : <span className="text-[9px] font-bold text-gray-500">Niet gekoppeld</span>}
+                        <button onClick={() => activeTab==='outlook' ? connectOutlookCloud() : connectGmailCloud()} className="ml-auto w-5 h-5 flex items-center justify-center rounded-full bg-blue-50 text-blue-500 hover:bg-blue-100 transition" title="Account toevoegen/vernieuwen">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14m-7-7h14"/></svg>
                         </button>
                     </div>
@@ -3278,18 +3050,18 @@ function EmailWidget({ lang }) {
                                 <button onClick={() => toggleAction(selectedMail.id,'reply')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='reply'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Beantwoorden</button>
                                 <button onClick={() => toggleAction(selectedMail.id,'forward')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='forward'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Doorsturen</button>
                                 <button onClick={() => toggleAction(selectedMail.id,'move')} className={`text-[8px] font-bold px-2 py-1 rounded transition ${activeAction.type==='move'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{selectedMail.source==='gmail' ? 'Labelen' : 'Verplaatsen'}</button>
-                                <button onClick={() => { if(selectedMail.source === 'gmail') { deleteGmail(selectedMail); } else { deleteMail(selectedMail); } }} className="text-[8px] font-bold px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100 transition">Verwijderen</button>
+                                <button onClick={() => selectedMail.source === 'gmail' ? deleteGmail(selectedMail) : deleteMail(selectedMail)} className="text-[8px] font-bold px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100 transition">Verwijderen</button>
                             </div>
                             {activeAction.type==='reply' && (
                                 <div className="mt-2 flex gap-1">
-                                    <input value={replyText} onChange={e=>{setReplyText(e.target.value);}} placeholder="Typ antwoord..." className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e=>{ if (e.key==='Enter') { sendReply(selectedMail); } }} />
-                                    <button onClick={()=>{sendReply(selectedMail);}} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
+                                    <input value={replyText} onChange={e=>setReplyText(e.target.value)} placeholder="Typ antwoord..." className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e=>{ if (e.key==='Enter') sendReply(selectedMail); }} />
+                                    <button onClick={()=>sendReply(selectedMail)} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
                                 </div>
                             )}
                             {activeAction.type==='forward' && (
                                 <div className="mt-2 flex gap-1">
-                                    <input value={replyText} onChange={e=>{setReplyText(e.target.value);}} placeholder="email@voorbeeld.nl" className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e=>{ if (e.key==='Enter') { forwardMail(selectedMail); } }} />
-                                    <button onClick={()=>{forwardMail(selectedMail);}} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
+                                    <input value={replyText} onChange={e=>setReplyText(e.target.value)} placeholder="email@voorbeeld.nl" className="flex-1 text-[10px] border rounded px-2 py-1 outline-none focus:border-blue-400" onKeyDown={e=>{ if (e.key==='Enter') forwardMail(selectedMail); }} />
+                                    <button onClick={()=>forwardMail(selectedMail)} className="bg-blue-600 text-white text-[8px] font-bold px-3 rounded hover:bg-blue-700">Stuur</button>
                                 </div>
                             )}
                             {activeAction.type==='move' && (
@@ -3323,14 +3095,9 @@ function EmailWidget({ lang }) {
                     </div>
                 ) : (
                     <>
-                        {initializing && (
-                            <div className="flex items-center justify-center h-full">
-                                <span className="text-[10px] font-bold text-blue-600 uppercase animate-pulse">Verbinden...</span>
-                            </div>
-                        )}
                         {!initializing && accounts.length===0 && gmailAccounts.length===0 && (
                             <div className="flex items-center justify-center h-full">
-                                <span className="text-[10px] text-gray-400">Geen accounts — klik + om toe te voegen</span>
+                                <span className="text-[10px] text-gray-400">Klik + om via de cloud in te loggen</span>
                             </div>
                         )}
                         {!initializing && (loading || gmailLoading) && mergedEmails.length===0 && (
