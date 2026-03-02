@@ -2033,8 +2033,7 @@ function SportsWidget({ lang }) {
                             }
 
                             let earnings = '';
-                            if (typeof c.earnings === 'number' && c.earnings > 0) earnings = c.earnings;
-
+                            if (typeof c.earnings === 'number' && c.earnings > 0) earnings = Math.round(c.earnings * (data._usdToEur || 0.92));
                             return {
                                 p: c.status?.position?.displayName || c.order || i + 1,
                                 n: c.athlete?.displayName || c.athlete?.shortName?.split('. ').pop() || c.athlete?.lastName || '?',
