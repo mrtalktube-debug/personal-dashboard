@@ -1871,7 +1871,7 @@ function SportsWidget({ lang }) {
     const [golfDp, setGolfDp] = useState(FALLBACK_GOLF);
 
     useEffect(() => {
-        const CACHE_KEY = 'sports_f1_v4';
+        const CACHE_KEY = 'sports_f1_v5';
         const CACHE_TTL = 1800000;
 
         const fetchF1 = async () => {
@@ -1961,7 +1961,7 @@ function SportsWidget({ lang }) {
 
         const fetchGolf = async (tour, cacheKey) => {
             // Forceer cache v7 om de verkeerde kalender data te overschrijven
-            const safeCacheKey = cacheKey + '_v7';
+            const safeCacheKey = cacheKey + '_v8';
             const cached = sessionStorage.getItem(safeCacheKey);
             if (cached) {
                 try { const { t, d } = JSON.parse(cached); if (Date.now() - t < CACHE_TTL) return d; } catch(e) {}
