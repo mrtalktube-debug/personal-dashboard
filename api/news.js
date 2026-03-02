@@ -1,14 +1,14 @@
 export default async function handler(req, res) {
-    const { q, hl = 'nl', gl = 'NL' } = req.query;
+    const { q, hl = 'nl', gl = 'NL', ceid = 'NL:nl' } = req.query;
     
     if (!q) {
         return res.status(400).json({ error: 'Missing query parameter' });
     }
 
     // Als de app om 'ALGEMEEN' vraagt, pak de landelijke hoofdpagina in plaats van te zoeken
-    let url = `https://news.google.com/rss?hl=${hl}&gl=${gl}`;
+    let url = `https://news.google.com/rss?hl=${hl}&gl=${gl}&ceid=${ceid}`;
     if (q !== 'ALGEMEEN') {
-        url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${hl}&gl=${gl}`;
+        url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
     }
     
     try {
