@@ -1217,10 +1217,20 @@ function NewsWidget({ lang }) {
                 }
             }
             
-            // 5. media:content tag
+            // 5. media:content en media:thumbnail tags (namespace-aware)
             if (!img) {
-                const mediaContent = item.querySelector('media\\:content, content');
+                const mediaNS = 'http://search.yahoo.com/mrss/';
+                const mediaContent = item.getElementsByTagNameNS(mediaNS, 'content')[0]
+                    || item.getElementsByTagNameNS(mediaNS, 'thumbnail')[0]
+                    || item.getElementsByTagNameNS(mediaNS, 'group')?.[0]?.getElementsByTagNameNS(mediaNS, 'content')[0];
                 if (mediaContent) img = mediaContent.getAttribute('url');
+            }
+            
+            // 5b. media:thumbnail als apart element (Google News RSS)
+            if (!img) {
+                const mediaNS = 'http://search.yahoo.com/mrss/';
+                const thumb = item.getElementsByTagNameNS(mediaNS, 'thumbnail')[0];
+                if (thumb) img = thumb.getAttribute('url');
             }
             
             // 6. Enclosure tag (sommige feeds)
