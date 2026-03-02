@@ -1,4 +1,4 @@
-// /api/auth-email.js — Vercel Serverless Function v1.0
+// /api/auth-email.js — Vercel Serverless Function v1.2
 // Beheert cross-platform OAuth2 Refresh Tokens voor Gmail & Outlook via Vercel KV
 
 export default async function handler(req, res) {
@@ -12,8 +12,8 @@ export default async function handler(req, res) {
     const kvUrl = process.env.KV_REST_API_URL;
     const kvToken = process.env.KV_REST_API_TOKEN;
 
-    if (!kvUrl || !kvToken) return res.status(500).json({ error: "KV database niet geconfigureerd." });
-    if (!email) return res.status(400).json({ error: "Gebruikers-email ontbreekt." });
+    if (!kvUrl || !kvToken) return res.status(500).json({ error: "Database niet verbonden." });
+    if (!email) return res.status(400).json({ error: "Email ontbreekt." });
 
     const dbKey = `user_${email}_email_tokens`;
 
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
         const kvRes = await fetch(`${kvUrl}/get/${dbKey}`, { headers: { Authorization: `Bearer ${kvToken}` } });
         const kvData = await kvRes.json();
         if (kvData.result) savedTokens = typeof kvData.result === 'string' ? JSON.parse(kvData.result) : kvData.result;
-    } catch (e) { console.error("KV Read Error:", e); }
+    } catch (e) { console.error("KV Read Error"); }
 
     // ACTION: Opslaan van nieuwe auth codes (Login)
     if (action === 'save_code') {
@@ -37,11 +37,12 @@ export default async function handler(req, res) {
                         code,
                         client_id: process.env.GOOGLE_CLIENT_ID,
                         client_secret: process.env.GOOGLE_CLIENT_SECRET,
-                        redirect_uri: 'postmessage', // Vereist voor Google Identity Services
+                        redirect_uri: 'postmessage', 
                         grant_type: 'authorization_code'
                     })
                 });
                 tokenData = await r.json();
+                if (tokenData.error) throw new Error(tokenData.error_description || tokenData.error);
                 if (tokenData.refresh_token) savedTokens.google = tokenData.refresh_token;
             } 
             else if (provider === 'ms') {
@@ -57,10 +58,11 @@ export default async function handler(req, res) {
                     })
                 });
                 tokenData = await r.json();
+                if (tokenData.error) throw new Error(tokenData.error_description || tokenData.error);
                 if (tokenData.refresh_token) savedTokens.ms = tokenData.refresh_token;
             }
 
-            // Sla nieuwe refresh tokens op in KV
+            // Opslaan in database
             await fetch(`${kvUrl}/set/${dbKey}`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
@@ -69,11 +71,11 @@ export default async function handler(req, res) {
 
             return res.status(200).json({ success: true, provider });
         } catch (error) {
-            return res.status(500).json({ error: 'Token exchange mislukt', details: error.message });
+            return res.status(500).json({ error: `Koppeling mislukt: ${error.message}` });
         }
     }
 
-    // ACTION: Ophalen van tijdelijke Access Tokens voor de frontend
+    // ACTION: Ophalen van tijdelijke Access Tokens voor mail
     if (action === 'get_access_tokens') {
         const accessTokens = { google: null, ms: null };
 
@@ -90,7 +92,7 @@ export default async function handler(req, res) {
                     })
                 });
                 const d = await r.json();
-                accessTokens.google = d.access_token;
+                if (d.access_token) accessTokens.google = d.access_token;
             } catch(e) {}
         }
 
@@ -107,7 +109,7 @@ export default async function handler(req, res) {
                     })
                 });
                 const d = await r.json();
-                accessTokens.ms = d.access_token;
+                if (d.access_token) accessTokens.ms = d.access_token;
             } catch(e) {}
         }
 
