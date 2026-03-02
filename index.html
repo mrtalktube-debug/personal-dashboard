@@ -1250,9 +1250,20 @@ function NewsWidget({ lang }) {
             }
 
             // <!-- NIEUW --> Extraheer echte artikel-URL uit description <a href="...">
-            let realUrl = link;
-            const aMatch = desc.match(/<a[^>]+href=["'](https?:\/\/(?!news\.google\.com)[^"']+)["']/i);
-            if (aMatch) realUrl = aMatch[1];
+           // <!-- NIEUW v2 --> Extraheer echte artikel-URL
+            let realUrl = null;
+            // 1. Zoek niet-Google links in description
+            const allLinks = [...desc.matchAll(/<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi)];
+            for (const m of allLinks) {
+                if (!m[1].includes('news.google.com') && !m[1].includes('google.com/news')) {
+                    realUrl = m[1]; break;
+                }
+            }
+            // 2. Gebruik source URL + pad als fallback
+            if (!realUrl && srcUrl && !srcUrl.includes('google.com')) {
+                realUrl = srcUrl;
+            }
+            // <!-- /NIEUW v2 -->
             // <!-- /NIEUW -->
             out.push({ title: title, link: link, pubDate: pubDate, source: source, desc: cleanDesc, img: img, cat: cat, realUrl: realUrl });
         }
