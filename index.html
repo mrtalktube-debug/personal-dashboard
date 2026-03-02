@@ -2861,12 +2861,12 @@ function EmailWidget({ lang }) {
 
     const fetchGmail = async (token, idx, label, currentAccounts) => {
         setGmailLoading(true);
-        const timer = setTimeout(() => { setGmailLoading(false); }, 2000);
+        const timer = setTimeout(() => { setGmailLoading(false); }, 15000); // <!-- NIEUW --> was 2000
         try {
             const controller = new AbortController();
-            setTimeout(() => { controller.abort(); }, 2000);
-            
-            const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&labelIds=INBOX&q=category:primary', {
+            setTimeout(() => { controller.abort(); }, 15000); // <!-- NIEUW --> was 2000
+
+            const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&labelIds=INBOX', { // <!-- NIEUW --> q=category:primary verwijderd
                 headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
             });
             // <!-- NIEUW --> Bij 401: token verlopen → silent refresh triggeren en stoppen
@@ -2881,8 +2881,11 @@ function EmailWidget({ lang }) {
             const messages = data.messages || [];
 
             const details = await Promise.all(messages.slice(0, 20).map(async m => {
+                // <!-- NIEUW --> Eigen AbortController per detail-fetch zodat 1 trage call niet alles doodt
+                const detailCtrl = new AbortController();
+                setTimeout(() => detailCtrl.abort(), 8000);
                 const r = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`, {
-                    headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
+                    headers: { Authorization: `Bearer ${token}` }, signal: detailCtrl.signal
                 }).catch(() => null);
                 return (r && r.ok) ? r.json() : null;
             }));
@@ -3368,6 +3371,7 @@ root.render(<App />);
 </body>
 
 </html>
+
 
 
 
